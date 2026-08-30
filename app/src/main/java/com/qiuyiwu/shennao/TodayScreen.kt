@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 fun TodayScreen(
     today: Today,
     onOpenTranscript: (String) -> Unit,
+    onRecord: () -> Unit,
     onRefresh: () -> Unit,
 ) {
     LazyColumn(
@@ -34,6 +35,10 @@ fun TodayScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item { Header(today) }
+
+        // 「录」放在最上面、在所有内容之前。手机端的录音是随手发生的——
+        // 掏出来就要能按下去，不该先滚过三段判断才找得到它。
+        item { RecordBar(onRecord) }
 
         if (today.commitments.isNotEmpty()) {
             item { SectionTitle("下文", "别人说出口、还没有下文的事") }
@@ -84,6 +89,30 @@ private fun Header(t: Today) {
         Text(line, style = MaterialTheme.typography.bodyMedium,
              color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(6.dp))
+    }
+}
+
+@Composable
+private fun RecordBar(onRecord: () -> Unit) {
+    val live = com.qiuyiwu.shennao.record.RecordingService.recording
+    Card(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(if (live) "正在录音" else "录这场会",
+                     style = MaterialTheme.typography.titleSmall,
+                     fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (live) "点进去看时长、或者停止"
+                    else "录完自动推到深脑，转写和分析在那边跑",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Button(onClick = onRecord) { Text(if (live) "查看" else "开始") }
+        }
     }
 }
 

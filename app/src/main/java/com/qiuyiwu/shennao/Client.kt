@@ -27,6 +27,20 @@ interface Http {
         headers: Map<String, String>,
         body: String? = null,
     ): HttpResponse
+
+    /**
+     * 传二进制。直传 COS 用。
+     *
+     * 不能复用上面那个：String 版发的时候按 UTF-8 编码，而音频是任意字节——
+     * 任何一个不是合法 UTF-8 的字节序列都会在编码时被替换成 U+FFFD，
+     * 传上去的音频将静默损坏，而 HTTP 会返回 200。
+     */
+    fun requestBytes(
+        method: String,
+        url: String,
+        headers: Map<String, String>,
+        body: ByteArray,
+    ): HttpResponse
 }
 
 /** 登录凭证。refreshToken 长期存，accessToken 用完即弃。 */
@@ -136,6 +150,23 @@ class DeepBrainClient(
         ),
     )
 
+    /**
+     * 拿一个当前可用的 access token，必要时续一次。
+     *
+     * 给录音上传器用。它跑在服务里、跟界面不共享调用栈，但必须共享同一份
+     * token 缓存——各续各的会让 refresh token 轮换互相作废。
+     */
+    @Synchronized
+    fun validAccessToken(force: Boolean = false): String? {
+        // force=true 是「刚才那个被服务端拒了」。必须先丢掉旧的再续——
+        // 不丢的话下面那个判空会直接把已经作废的 token 又还回去。
+        if (force) accessToken = null
+        if (accessToken == null) refresh()
+        return accessToken
+    }
+
+    fun orgId(): String? = store.load()?.orgId
+
     fun signedInEmail(): String? = store.load()?.email
     fun signOut() { accessToken = null; store.clear() }
 }
@@ -147,6 +178,20 @@ class UrlHttp(private val timeoutMs: Int = 30_000) : Http {
         url: String,
         headers: Map<String, String>,
         body: String?,
+    ): HttpResponse = send(method, url, headers, body?.toByteArray())
+
+    override fun requestBytes(
+        method: String,
+        url: String,
+        headers: Map<String, String>,
+        body: ByteArray,
+    ): HttpResponse = send(method, url, headers, body)
+
+    private fun send(
+        method: String,
+        url: String,
+        headers: Map<String, String>,
+        body: ByteArray?,
     ): HttpResponse {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = method
@@ -156,7 +201,7 @@ class UrlHttp(private val timeoutMs: Int = 30_000) : Http {
             if (body != null) { doOutput = true }
         }
         return try {
-            if (body != null) conn.outputStream.use { it.write(body.toByteArray()) }
+            if (body != null) conn.outputStream.use { it.write(body) }
             val code = conn.responseCode
             // 4xx/5xx 的正文在 errorStream 里。只读 inputStream 的话，
             // 服务端辛辛苦苦返回的错误说明会被整个丢掉，界面只剩一个数字。

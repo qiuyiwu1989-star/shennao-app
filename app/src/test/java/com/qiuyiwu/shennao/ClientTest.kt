@@ -16,6 +16,10 @@ private class FakeHttp(
         calls += Triple(method, url, headers)
         return handler(method, url, headers, body)
     }
+    override fun requestBytes(method: String, url: String, headers: Map<String, String>, body: ByteArray): HttpResponse {
+        calls += Triple(method, url, headers)
+        return handler(method, url, headers, null)
+    }
 }
 
 private class MemStore(var c: Credentials? = null) : CredentialStore {

@@ -1,6 +1,5 @@
 package com.qiuyiwu.shennao
 
-import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,38 +27,18 @@ import kotlinx.coroutines.withContext
  * 不用另外设计「看完该干嘛」。
  */
 
-/** 凭证存在 SharedPreferences。第一版先这样，上真机验通之后换 EncryptedSharedPreferences。 */
-private class PrefsStore(ctx: Context) : CredentialStore {
-    private val p = ctx.getSharedPreferences("shennao", Context.MODE_PRIVATE)
-    override fun load(): Credentials? {
-        val rt = p.getString("refresh", null) ?: return null
-        val org = p.getString("org", null) ?: return null
-        return Credentials(rt, org, p.getString("email", "") ?: "")
-    }
-    override fun save(c: Credentials) {
-        p.edit().putString("refresh", c.refreshToken)
-            .putString("org", c.orgId).putString("email", c.email).apply()
-    }
-    override fun clear() { p.edit().clear().apply() }
-}
-
 private sealed class Screen {
     object Loading : Screen()
     data class Login(val error: String? = null, val busy: Boolean = false) : Screen()
     data class Feed(val today: Today) : Screen()
+    object Record : Screen()
     data class Broken(val message: String) : Screen()
 }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val client = DeepBrainClient(
-            http = UrlHttp(),
-            store = PrefsStore(this),
-            apiBase = BuildConfig.API_BASE,
-            supabaseUrl = BuildConfig.SUPABASE_URL,
-            supabaseAnonKey = BuildConfig.SUPABASE_ANON_KEY,
-        )
+        val client = Session.client(this)
         setContent { MaterialTheme { App(client) } }
     }
 }
@@ -96,8 +75,11 @@ private fun App(client: DeepBrainClient) {
                 }
             }
 
+            is Screen.Record -> RecordScreen(onBack = { scope.launch { load() } })
+
             is Screen.Feed -> TodayScreen(
                 today = s.today,
+                onRecord = { screen = Screen.Record },
                 // 下钻先用外跳浏览器：那场会的完整转写、播放、认人都在网页里，
                 // 在 App 里再实现一遍是重复造，而且必然比网页那份旧。
                 // 等「录」做完、App 有了自己的内容再说。
