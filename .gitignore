@@ -1,0 +1,7 @@
+# 构建产物与本机路径，不入仓
+build/
+.gradle/
+local.properties
+*.apk
+*.aab
+.idea/
