@@ -67,7 +67,36 @@ class TodayParserTest {
     // ---- 通知判据 ----
 
     @Test fun `有逾期才推通知`() {
-        assertEquals("3 条承诺过期了", TodayParser.notification(TodayParser.parse(full)))
+        assertEquals("3 条承诺过期", TodayParser.notification(TodayParser.parse(full)))
+    }
+
+    @Test fun `预测到期也要提醒，和承诺一起说`() {
+        val t = TodayParser.parse("""
+            {"counts":{"overdue":2},"predictions":[{"id":"p1"},{"id":"p2"}]}
+        """.trimIndent())
+        assertEquals("2 条承诺过期，2 条预测该给说法", TodayParser.notification(t))
+    }
+
+    // 什么都往通知里塞，用户很快会把通知整个关掉——那时真正要紧的也送不到了。
+    @Test fun `洞察不进通知——它没有时间压力`() {
+        val t = TodayParser.parse("""
+            {"counts":{"overdue":0},"insights":[{"id":"a1"},{"id":"a2"}]}
+        """.trimIndent())
+        assertNull(TodayParser.notification(t))
+    }
+
+    @Test fun `洞察与预测都能解出来，含往回走的路`() {
+        val t = TodayParser.parse("""
+          {"insights":[{"id":"a1","statement":"设备只录音不互动","atomType":"decision",
+                        "quote":"我们决定设备只录音","epistemic":"attested",
+                        "subject":"设备","transcriptId":"t9"}],
+           "predictions":[{"id":"p1","statement":"三个月内会有人问",
+                           "observableSignal":"客户主动提","dueAt":"9月1日","overdueDays":3}]}
+        """.trimIndent())
+        assertEquals("attested", t.insights[0].epistemic)
+        assertEquals("t9", t.insights[0].transcriptId)      // 路
+        assertEquals("客户主动提", t.predictions[0].observableSignal)
+        assertEquals(3, t.predictions[0].overdueDays)
     }
 
     @Test fun `只有在途没有逾期，不推——不该半夜吵醒人`() {

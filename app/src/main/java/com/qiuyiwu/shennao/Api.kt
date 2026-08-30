@@ -36,11 +36,38 @@ data class Commitment(
     val transcriptId: String?,
 )
 
+/** 一条新洞察。带着往回走的路。 */
+data class Insight(
+    val id: String,
+    val statement: String,
+    val atomType: String,
+    /** 原话。空串 = 这条是推断的，没有直接原话支撑 */
+    val quote: String,
+    /** attested 亲证 / inferred 推断 / conjecture 猜想。
+     *  必须显示——手机是一扫而过的场景，一条猜想会被当成事实。 */
+    val epistemic: String,
+    val subject: String?,
+    val transcriptId: String?,
+)
+
+/** 一条该给说法的预测。往前走的路。 */
+data class Prediction(
+    val id: String,
+    val statement: String,
+    /** 看到什么就算应验/落空。为空说明这条当初没写清怎么算数——那本身是个信号 */
+    val observableSignal: String?,
+    val subject: String?,
+    val dueAt: String?,
+    val overdueDays: Int?,
+)
+
 data class TodayCounts(val overdue: Int, val total: Int, val awaitingSpeaker: Int)
 
 data class Today(
     val counts: TodayCounts,
     val commitments: List<Commitment>,
+    val insights: List<Insight>,
+    val predictions: List<Prediction>,
     /** 迁移没跑。必须和「没有承诺」分开——后者用户永远不会主动报告 */
     val notReady: Boolean,
     val failed: Boolean,
@@ -84,6 +111,37 @@ object TodayParser {
                 )
             }
         }
+        val insights = buildList {
+            val a = o.optJSONArray("insights")
+            for (i in 0 until (a?.length() ?: 0)) {
+                val r = a!!.optJSONObject(i) ?: continue
+                val id = r.optString("id").takeIf { it.isNotBlank() } ?: continue
+                add(Insight(
+                    id = id,
+                    statement = r.optString("statement"),
+                    atomType = r.optString("atomType"),
+                    quote = r.optString("quote"),
+                    epistemic = r.optString("epistemic"),
+                    subject = r.optString("subject").takeIf { it.isNotBlank() },
+                    transcriptId = r.optString("transcriptId").takeIf { it.isNotBlank() },
+                ))
+            }
+        }
+        val predictions = buildList {
+            val a = o.optJSONArray("predictions")
+            for (i in 0 until (a?.length() ?: 0)) {
+                val r = a!!.optJSONObject(i) ?: continue
+                val id = r.optString("id").takeIf { it.isNotBlank() } ?: continue
+                add(Prediction(
+                    id = id,
+                    statement = r.optString("statement"),
+                    observableSignal = r.optString("observableSignal").takeIf { it.isNotBlank() },
+                    subject = r.optString("subject").takeIf { it.isNotBlank() },
+                    dueAt = r.optString("dueAt").takeIf { it.isNotBlank() },
+                    overdueDays = if (r.isNull("overdueDays")) null else r.optInt("overdueDays"),
+                ))
+            }
+        }
         return Today(
             counts = TodayCounts(
                 overdue = c?.optInt("overdue") ?: 0,
@@ -91,6 +149,8 @@ object TodayParser {
                 awaitingSpeaker = c?.optInt("awaitingSpeaker") ?: 0,
             ),
             commitments = rows,
+            insights = insights,
+            predictions = predictions,
             notReady = o.optBoolean("notReady", false),
             failed = o.optBoolean("failed", false),
         )
@@ -102,9 +162,14 @@ object TodayParser {
      * 判据故意只看逾期，不看总数：在途的承诺不该半夜把人吵醒，
      * 而逾期的今天不问、明天就更难开口。返回 null = 别推。
      */
-    fun notification(t: Today): String? = when {
-        t.notReady || t.failed -> null      // 系统自己有毛病时别去烦用户
-        t.counts.overdue <= 0 -> null
-        else -> "${t.counts.overdue} 条承诺过期了"
+    fun notification(t: Today): String? {
+        if (t.notReady || t.failed) return null   // 系统自己有毛病时别去烦用户
+        val parts = buildList {
+            if (t.counts.overdue > 0) add("${t.counts.overdue} 条承诺过期")
+            if (t.predictions.isNotEmpty()) add("${t.predictions.size} 条预测该给说法")
+        }
+        // 洞察不进通知：它没有时间压力，攒着慢慢看就行。
+        // 什么都往通知里塞，用户很快就会把通知关掉——那时真正要紧的也送不到了。
+        return parts.takeIf { it.isNotEmpty() }?.joinToString("，")
     }
 }
