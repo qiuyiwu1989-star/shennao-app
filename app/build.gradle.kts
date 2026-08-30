@@ -1,7 +1,19 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+// 配置从 local.properties 读，不进仓。
+// 写死在源码里的后果不只是「不好改」——anon key 会跟着仓库到处走，
+// 而且换环境要改代码、发版才生效。
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) FileInputStream(f).use { load(it) }
+}
+fun cfg(key: String, fallback: String = "") = localProps.getProperty(key) ?: fallback
 
 android {
     namespace = "com.qiuyiwu.shennao"
@@ -14,6 +26,10 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "API_BASE", "\"${cfg("deepbrain.apiBase")}\"")
+        buildConfigField("String", "SUPABASE_URL", "\"${cfg("deepbrain.supabaseUrl")}\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${cfg("deepbrain.anonKey")}\"")
     }
 
     buildTypes {
@@ -26,7 +42,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
