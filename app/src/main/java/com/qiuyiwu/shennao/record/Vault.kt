@@ -114,6 +114,18 @@ interface Vault {
     fun sessions(): List<String>
     fun readMeta(session: String): SessionMeta?
     fun writeMeta(session: String, meta: SessionMeta)
+
+    /**
+     * 原子地改 meta 的某一个字段。
+     *
+     * 必须有这个，不能各自「读出来 → copy → 写回去」：录音线程写 finished=true
+     * 的同时，上传线程可能正拿着旧 meta 要写 serverSessionId——后写的那个会把
+     * finished 抹回 false，这场录音就再也不会收尾了。表现是「偶尔有一场
+     * 一直显示在传」，而且只在停止录音的那一两秒内触发，极难复现。
+     *
+     * 返回改完之后的值；这场录音不存在时返回 null。
+     */
+    fun updateMeta(session: String, f: (SessionMeta) -> SessionMeta): SessionMeta?
     /** 这场录音的所有分段，按序号升序 */
     fun segments(session: String): List<Segment>
     fun readSegment(session: String, seg: Segment): ByteArray?

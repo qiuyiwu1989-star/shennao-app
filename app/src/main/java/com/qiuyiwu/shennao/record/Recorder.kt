@@ -47,7 +47,7 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
         val s = session ?: return
         // 标记「用户已停止」必须在最后一段封完之后。反过来的话，上传器可能
         // 在最后一段还没封时就去冻结清单，那一段就永久进不去了。
-        vault.readMeta(s)?.let { vault.writeMeta(s, it.copy(finished = true)) }
+        vault.updateMeta(s) { it.copy(finished = true) }
         session = null
         onSegmentSealed()
     }

@@ -26,6 +26,11 @@ private class MemVault : Vault {
     override fun sessions() = files.keys.toList()
     override fun readMeta(session: String) = metas[session]
     override fun writeMeta(session: String, meta: SessionMeta) { metas[session] = meta }
+    @Synchronized
+    override fun updateMeta(session: String, f: (SessionMeta) -> SessionMeta): SessionMeta? {
+        val cur = metas[session] ?: return null
+        return f(cur).also { metas[session] = it }
+    }
     override fun segments(session: String) =
         (files[session]?.keys ?: emptySet()).mapNotNull { Segment.parse(it) }.sortedBy { it.sequence }
     override fun readSegment(session: String, seg: Segment) = files[session]?.get(seg.fileName())
@@ -292,6 +297,32 @@ class UploaderTest {
         val r = Uploader(h, v, "https://api.test") { null }.drain("s")
         assertTrue(r is DrainResult.Failed && r.retryable)
         assertEquals(emptyList<String>(), h.log)
+    }
+}
+
+class MetaRaceTest {
+    /*
+     * 录音线程写 finished=true 的同时，上传线程正拿着旧 meta 要写 serverSessionId。
+     * 各自「读→copy→写回」的话，后写的会把 finished 抹回 false，
+     * 这场录音就再也不会收尾——表现是「偶尔有一场一直显示在传」。
+     */
+    @Test fun `建会话落盘 serverSessionId 时，不许把 finished 抹回去`() {
+        val v = MemVault().apply { metas["s"] = meta(); put("s", seg(0, Segment.State.SEALED)) }
+        val h = ScriptHttp { _, url, _ ->
+            if (url.endsWith("/api/recordings")) {
+                // 模拟：就在建会话往返的这一刻，录音线程停了录音
+                v.updateMeta("s") { it.copy(finished = true) }
+                HttpResponse(200, CREATED)
+            } else when {
+                url.contains("/chunks/ticket") -> HttpResponse(200, TICKET)
+                url.startsWith("https://cos.test") -> HttpResponse(200, "")
+                url.endsWith("/complete") -> HttpResponse(200, "{}")
+                else -> HttpResponse(200, "{}")
+            }
+        }
+        uploader(v, h).drain("s")
+        assertTrue("finished 被抹掉了，这场录音永远不会收尾", v.metas["s"]!!.finished)
+        assertEquals("sess-1", v.metas["s"]!!.serverSessionId)
     }
 }
 

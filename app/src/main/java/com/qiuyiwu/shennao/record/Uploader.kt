@@ -189,7 +189,7 @@ class Uploader(
             ?: return SessionRef.Err("建会话的应答看不懂", true)
         val id = o.optString("id").takeIf { it.isNotBlank() }
             ?: return SessionRef.Err("建会话没返回 id", true)
-        if (meta.serverSessionId != id) vault.writeMeta(session, meta.copy(serverSessionId = id))
+        if (meta.serverSessionId != id) vault.updateMeta(session) { it.copy(serverSessionId = id) }
 
         val status = o.optString("status")
         return when (status) {

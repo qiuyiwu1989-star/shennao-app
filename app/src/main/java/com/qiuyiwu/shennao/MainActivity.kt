@@ -60,6 +60,12 @@ private fun App(client: DeepBrainClient) {
 
     LaunchedEffect(Unit) { load() }
 
+    // 上次没传完的录音，开 App 就接着传。服务可能在传完前就被系统杀掉了，
+    // 没有这一步，那些段会一直躺在手机上，而录音页写着「下次打开接着传」。
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) { runCatching { com.qiuyiwu.shennao.record.Resume.kick(ctx) } }
+    }
+
     Surface(Modifier.fillMaxSize()) {
         when (val s = screen) {
             is Screen.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }

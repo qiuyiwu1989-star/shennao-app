@@ -30,6 +30,15 @@ class FileVault(private val root: File) : Vault {
         File(dir(session), "meta.json").takeIf { it.isFile }
             ?.let { runCatching { SessionMeta.fromJson(it.readText()) }.getOrNull() }
 
+    @Synchronized
+    override fun updateMeta(session: String, f: (SessionMeta) -> SessionMeta): SessionMeta? {
+        val cur = readMeta(session) ?: return null
+        val next = f(cur)
+        if (next != cur) writeMeta(session, next)
+        return next
+    }
+
+    @Synchronized
     override fun writeMeta(session: String, meta: SessionMeta) {
         val d = dir(session).apply { mkdirs() }
         // 先写临时文件再改名。直接覆写的话，掉电会留下半截 json，
