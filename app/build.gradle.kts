@@ -32,9 +32,28 @@ android {
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${cfg("deepbrain.anonKey")}\"")
     }
 
+    // 外发的 APK 必须用**稳定**的签名：安卓认签名不认版本号，
+    // 换了签名就装不上去，用户只能先卸载——那会连同本地凭证一起丢掉。
+    // 口令放 local.properties，不进仓。
+    signingConfigs {
+        create("release") {
+            val ks = cfg("shennao.ksPath")
+            if (ks.isNotBlank() && file(ks).exists()) {
+                storeFile = file(ks)
+                storePassword = cfg("shennao.ksPass")
+                keyAlias = "shennao"
+                keyPassword = cfg("shennao.ksPass")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            // 没配密钥时不要静默退回 debug 签名——那种 APK 发出去，
+            // 下次换了正式签名所有人都得卸载重装。宁可构建失败。
+            signingConfig = if (cfg("shennao.ksPath").isNotBlank())
+                signingConfigs.getByName("release") else null
         }
     }
     compileOptions {
