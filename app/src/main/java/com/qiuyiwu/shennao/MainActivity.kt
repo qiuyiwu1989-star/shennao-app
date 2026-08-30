@@ -68,6 +68,7 @@ class MainActivity : ComponentActivity() {
 private fun App(client: DeepBrainClient) {
     var screen by remember { mutableStateOf<Screen>(Screen.Loading) }
     val scope = rememberCoroutineScope()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
 
     suspend fun load() {
         screen = Screen.Loading
@@ -95,7 +96,18 @@ private fun App(client: DeepBrainClient) {
                 }
             }
 
-            is Screen.Feed -> FeedScreen(s.today) { scope.launch { load() } }
+            is Screen.Feed -> TodayScreen(
+                today = s.today,
+                // 下钻先用外跳浏览器：那场会的完整转写、播放、认人都在网页里，
+                // 在 App 里再实现一遍是重复造，而且必然比网页那份旧。
+                // 等「录」做完、App 有了自己的内容再说。
+                onOpenTranscript = { tid ->
+                    ctx.startActivity(android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("${BuildConfig.API_BASE}/zh/transcript/$tid")))
+                },
+                onRefresh = { scope.launch { load() } },
+            )
 
             is Screen.Broken -> Column(
                 Modifier.fillMaxSize().padding(24.dp),
@@ -146,73 +158,5 @@ private fun LoginScreen(state: Screen.Login, onSubmit: (String, String) -> Unit)
             enabled = !state.busy && email.isNotBlank() && pw.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
         ) { Text(if (state.busy) "登录中…" else "登录") }
-    }
-}
-
-@Composable
-private fun FeedScreen(today: Today, onRefresh: () -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
-        Text("下文", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(2.dp))
-
-        // 「没有承诺」和「这块坏了」在界面上长得一样，而后者用户永远不会主动报告。
-        when {
-            today.notReady -> Hint("下文还没准备好——服务端的迁移还没跑。")
-            today.failed -> Hint("取数失败了，不是「没有承诺」。")
-            today.counts.total == 0 && today.counts.awaitingSpeaker > 0 ->
-                Hint("有 ${today.counts.awaitingSpeaker} 条问不了——还没认出是谁说的。到网页里认一下人。")
-            today.counts.total == 0 -> Hint("还没有承诺被记下来。")
-            else -> Text(
-                if (today.counts.overdue > 0) "${today.counts.overdue} 条过期，共 ${today.counts.total} 条"
-                else "共 ${today.counts.total} 条，都还没到期",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-
-        Spacer(Modifier.height(16.dp))
-        today.commitments.forEach { CommitmentCard(it); Spacer(Modifier.height(10.dp)) }
-
-        Spacer(Modifier.height(8.dp))
-        OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) { Text("刷新") }
-    }
-}
-
-@Composable
-private fun Hint(text: String) {
-    Text(text, style = MaterialTheme.typography.bodyMedium,
-         color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
-@Composable
-private fun CommitmentCard(c: Commitment) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(c.speakerName, style = MaterialTheme.typography.titleSmall,
-                     fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.weight(1f))
-                // 逾期用文字说清楚，不只用颜色——颜色在阳光下和色觉障碍面前都不可靠
-                val od = c.overdueDays
-                Text(
-                    when {
-                        od != null && od > 0 -> "过期 $od 天"
-                        c.dueDate != null -> c.dueDate
-                        else -> "期限待确认"
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (od != null && od > 0) MaterialTheme.colorScheme.error
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.height(6.dp))
-            // 原话是主角，不是摘要——「他当时是这么说的」才问得出口
-            Text("「${c.quote}」", style = MaterialTheme.typography.bodyLarge)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                listOfNotNull(c.saidDate.takeIf { it.isNotBlank() }, c.context).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 }
