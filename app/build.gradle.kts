@@ -65,6 +65,8 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true; buildConfig = true }
+    // Robolectric 要读 merged manifest 和资源
+    testOptions { unitTests { isIncludeAndroidResources = true } }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -105,6 +107,20 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     testImplementation("junit:junit:4.13.2")
+    /*
+     * 界面测试跑在 JVM 上（Robolectric），不需要模拟器。
+     *
+     * 为什么这条比模拟器优先：模拟器一次要几十秒起，没人会在每次改动后都跑；
+     * 而 JVM 上的界面测试和现有 99 个单测一起跑完只要几秒——**能被每次运行的
+     * 测试才是真的测试**。
+     *
+     * 今天用户报的四个界面缺陷里有三个（刷新压在标题上、上传错误串到录音页、
+     * 摘要没渲染 Markdown）都是这一层能抓住的。它们是我发出去的，
+     * 由用户发现——那不该是用户的活。
+     */
+    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("androidx.compose.ui:ui-test-junit4:1.6.8")
+    debugImplementation("androidx.compose.ui:ui-test-manifest:1.6.8")
     // 安卓自带 org.json，但 JVM 单测里那是个**空壳桩**——每个方法都抛
     // "Stub!" 异常。不补这一条，解析测试会全部挂掉，而且报错完全看不出原因。
     testImplementation("org.json:json:20240303")
