@@ -131,8 +131,16 @@ fun RecordScreen(onBack: () -> Unit) {
 
         // 主按钮：录音时是「停止」，否则是「开始」。
         // 用实心圆而不是矩形按钮——这一屏只有一个动作，它该长得像一个动作。
+        val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
         Surface(
             onClick = {
+                /*
+                 * 触感。开始和停止录音是**有后果**的动作——按下去之后，
+                 * 屏幕上的变化要一秒后才看得出来（服务启动、状态回传）。
+                 * 这一秒里手上没有任何确认，人会怀疑自己没按到，然后再按一次。
+                 */
+                haptics.performHapticFeedback(
+                    androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                 if (recording) RecordingService.stop(ctx)
                 else {
                     denied = false
@@ -326,6 +334,9 @@ private fun HotwordBox(sessionId: String?) {
             )
             Spacer(Modifier.width(8.dp))
             TextButton(
+                // 安卓的命中区下限是 48dp（规范 §12 明写不取交集）。
+                // TextButton 默认高度不够，用透明 padding 撑开、不改视觉尺寸。
+                modifier = Modifier.heightIn(min = 48.dp),
                 enabled = sessionId != null && !busy && text.isNotBlank(),
                 onClick = {
                     val id = sessionId ?: return@TextButton

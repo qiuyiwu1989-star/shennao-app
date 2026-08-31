@@ -2,6 +2,7 @@ package com.qiuyiwu.shennao
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -59,6 +60,16 @@ private enum class Tab(val label: String) {
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        /*
+         * 边到边 + 安全区。
+         *
+         * 不做这个，全面屏上内容会跑到状态栏和手势条底下——顶上的「返回」被刘海压住、
+         * 底部导航栏被手势条盖掉一半。这是安卓上最刺眼的一处「这不是原生应用」。
+         *
+         * enableEdgeToEdge 之后**必须自己处理 inset**（下面 Scaffold 的
+         * contentWindowInsets 和底栏），否则只是把问题从「有黑边」换成「被盖住」。
+         */
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val client = Session.client(this)
         setContent { ShennaoTheme { App(client) } }
@@ -161,6 +172,10 @@ private fun App(client: DeepBrainClient) {
                  s0 is Screen.Meeting || s0 is Screen.Person
 
     Scaffold(
+        // 内容区自己让开状态栏；底栏由 NavigationBar 让开手势条（它自带 inset）。
+        // 两处都交给系统算，不写死 dp——不同机型的刘海和手势条高度不一样。
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets.safeDrawing
+            .only(androidx.compose.foundation.layout.WindowInsetsSides.Top),
         bottomBar = {
             if (chrome) NavigationBar {
                 Tab.entries.forEach { t ->
@@ -203,7 +218,8 @@ private fun App(client: DeepBrainClient) {
 
                 is Screen.Person -> PersonScreen(client, s.personId,
                     onBack = { scope.launch { load() } },
-                    onOpen = { tid -> screen = Screen.Meeting(tid) })
+                    onOpen = { tid -> screen = Screen.Meeting(tid) },
+                    onRecord = { tab = Tab.RECORD; screen = Screen.Record })
 
                 is Screen.Feed -> when (tab) {
                     Tab.RECORD -> RecordScreen(onBack = { tab = Tab.TODAY; scope.launch { load() } })
@@ -264,6 +280,9 @@ private fun TabIcon(t: Tab) {
     }
     // 明确用 material3 的 Icon：material 和 material3 各有一个同名可组合项，
     // 不指明会是重载歧义。
+    //
+    // contentDescription 用栏目名而不是 null：底栏是这个 App 唯一的导航，
+    // 读屏用户看不到旁边的文字标签时，就只剩这一句。
     androidx.compose.material3.Icon(v, contentDescription = t.label)
 }
 

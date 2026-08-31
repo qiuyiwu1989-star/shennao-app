@@ -40,19 +40,14 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
         }
     }
 
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack) { Text("返回") }
-                Spacer(Modifier.weight(1f))
-                // 分享。走系统的分享面板，不自己做选择器——
-                // 用户已经知道怎么用它，而且我们做的那个永远比系统的少几个入口。
-                TextButton(
-                    enabled = !sharing && meeting != null,
+    DetailPage(
+        onBack = onBack,
+        actions = {
+            // 分享。走系统的分享面板，不自己做选择器——
+            // 用户已经知道怎么用它，而且我们做的那个永远比系统的少几个入口。
+            TextButton(
+                modifier = Modifier.heightIn(min = 48.dp),
+                enabled = !sharing && meeting != null,
                     onClick = {
                         sharing = true; shareNote = null
                         scope.launch {
@@ -72,13 +67,13 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                             }
                         }
                     },
-                ) { Text(if (sharing) "生成中…" else "分享") }
-            }
-            shareNote?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall,
-                     color = MaterialTheme.colorScheme.error)
-            }
-        }
+            ) { Text(if (sharing) "生成中…" else "分享") }
+        },
+    ) {
+        shareNote?.let { n -> item {
+            Text(n, style = MaterialTheme.typography.bodySmall,
+                 color = MaterialTheme.colorScheme.error)
+        } }
 
         val m = meeting
         when {

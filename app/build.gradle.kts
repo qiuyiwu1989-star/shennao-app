@@ -21,10 +21,13 @@ android {
 
     defaultConfig {
         applicationId = "com.qiuyiwu.shennao"
-        minSdk = 26          // 8.0：低于这个连 Java 8 时间 API 都要脱糖，不值得
+        // 29（Android 10）。提上来是为 Opus 编码器铺路——它是 API 29 才有的，
+        // 而真实语音实测 Opus 能省 37%（24k）到 59%（16k）的流量与存储，
+        // 那是录音应用天天在付的成本。代价是放弃 Android 8/9。
+        minSdk = 29
         targetSdk = 34
-        versionCode = 19
-        versionName = "1.3.0"
+        versionCode = 20
+        versionName = "1.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "API_BASE", "\"${cfg("deepbrain.apiBase")}\"")
@@ -63,13 +66,26 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true; buildConfig = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }
-    packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+    packaging {
+        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        /*
+         * minSdk 提到 29 之后，AGP 默认**不再压缩 dex**——Android 10+ 能直接
+         * mmap 未压缩的 dex，启动更快、内存更省。代价是安装包本身从 10.4 MB
+         * 变成 26 MB（内容一个字节没变，两边 dex 完全同样大小）。
+         *
+         * 但这个包是从网页下载的，**下载体积比冷启动那几十毫秒要紧得多**。
+         * 走商店分发时是另一回事（商店会自己重打包），那时再把这行去掉。
+         */
+        dex.useLegacyPackaging = true
+    }
 }
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
     implementation("androidx.activity:activity-compose:1.9.1")
+    // enableEdgeToEdge 在 activity-ktx 里（activity-compose 只带 setContent）
+    implementation("androidx.activity:activity-ktx:1.9.1")
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")

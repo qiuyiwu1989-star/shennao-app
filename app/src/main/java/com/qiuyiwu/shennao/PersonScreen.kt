@@ -19,7 +19,13 @@ import kotlinx.coroutines.withContext
  * 一条孤立的承诺没有分量，「他第三次这么说了」才有。
  */
 @Composable
-fun PersonScreen(client: DeepBrainClient, personId: String, onBack: () -> Unit, onOpen: (String) -> Unit) {
+fun PersonScreen(
+    client: DeepBrainClient,
+    personId: String,
+    onBack: () -> Unit,
+    onOpen: (String) -> Unit,
+    onRecord: () -> Unit,
+) {
     var person by remember { mutableStateOf<Person?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -31,23 +37,16 @@ fun PersonScreen(client: DeepBrainClient, personId: String, onBack: () -> Unit, 
         }
     }
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
-               verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { TextButton(onClick = onBack) { Text("返回") } }
-
-        val p = person
+    val p = person
+    DetailPage(onBack = onBack, title = p?.name) {
         when {
             error != null -> item { Broken(error!!) { error = null } }
             p == null -> item { Loading() }
             else -> {
-                item {
-                    Text(p.name, style = MaterialTheme.typography.headlineSmall)
-                    p.role?.let {
-                        Text(it, style = MaterialTheme.typography.bodyMedium,
-                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Spacer(Modifier.height(14.dp))
-                }
+                p.role?.let { r -> item {
+                    Text(r, style = MaterialTheme.typography.bodyMedium,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } }
 
                 item { Ledger(p) }
 
@@ -91,7 +90,9 @@ fun PersonScreen(client: DeepBrainClient, personId: String, onBack: () -> Unit, 
                 }
 
                 if (p.openCommitments.isEmpty() && p.judgments.isEmpty()) {
-                    item { Empty("还没有关于他的东西", "等他在会上说点什么。") }
+                    // 空态必须给下一步。「等他在会上说点什么」是句废话——
+                    // 用户此刻能做的是去录一场，或者回去看别的。
+                    item { Empty("还没有关于他的东西", "他还没在录过的会里出现过。", "去录一场", onRecord) }
                 }
             }
         }
