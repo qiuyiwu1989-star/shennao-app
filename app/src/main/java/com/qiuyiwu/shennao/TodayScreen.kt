@@ -5,6 +5,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -28,6 +32,8 @@ fun TodayScreen(
     onOpenTranscript: (String) -> Unit,
     onRecord: () -> Unit,
     onRefresh: () -> Unit,
+    /** 落账：兑现了 / 取消了。系统不裁定任何人，只由人落 */
+    onSettle: (String, String) -> Unit = { _, _ -> },
     /** 非空表示现在显示的是离线缓存，并说明是什么时候的 */
     staleLabel: String? = null,
 ) {
@@ -49,7 +55,7 @@ fun TodayScreen(
         if (today.commitments.isNotEmpty()) {
             item { SectionTitle("下文", "别人说出口、还没有下文的事") }
             items(today.commitments, key = { it.id }) { c ->
-                CommitmentCard(c) { c.transcriptId?.let(onOpenTranscript) }
+                CommitmentCard(c, onSettle) { c.transcriptId?.let(onOpenTranscript) }
             }
         }
 
@@ -133,7 +139,7 @@ private fun SectionTitle(title: String, hint: String) {
 }
 
 @Composable
-private fun CommitmentCard(c: Commitment, onOpen: () -> Unit) {
+private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, onOpen: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -162,6 +168,22 @@ private fun CommitmentCard(c: Commitment, onOpen: () -> Unit) {
                 canOpen = c.transcriptId != null,
                 onOpen = onOpen,
             )
+            // 落账。放在卡上而不是详情里：这件事发生在「刚问完他」那一刻，
+            // 而那一刻人站在走廊里，不会为了点两下再钻进两层页面。
+            //
+            // 只有兑现和取消两个动作——**系统不裁定任何人**，
+            // 这两件事都需要账本以外的信息，只有在场的人知道。
+            var done by remember(c.id) { mutableStateOf<String?>(null) }
+            if (done == null) {
+                Row {
+                    TextButton(onClick = { done = "kept"; onSettle(c.id, "kept") }) { Text("兑现了") }
+                    TextButton(onClick = { done = "cancelled"; onSettle(c.id, "cancelled") }) { Text("取消了") }
+                }
+            } else {
+                Text(if (done == "kept") "已记：兑现了" else "已记：取消了",
+                     style = MaterialTheme.typography.labelMedium,
+                     color = MaterialTheme.colorScheme.primary)
+            }
         }
     }
 }

@@ -10,7 +10,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Send
+import androidx.compose.material.icons.outlined.List
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,6 +37,8 @@ private sealed class Screen {
     data class Login(val error: String? = null, val busy: Boolean = false) : Screen()
     data class Feed(val today: Today) : Screen()
     object Record : Screen()
+    /** 一个人的页。从任何一条卡片走过来 */
+    data class Person(val personId: String) : Screen()
     data class Broken(val message: String) : Screen()
     /** 一场会的详情。从历史点进来 */
     data class Meeting(val transcriptId: String) : Screen()
@@ -51,7 +54,7 @@ private sealed class Screen {
  *   在路上：录的东西到了吗   我的：账号和版本
  */
 private enum class Tab(val label: String) {
-    TODAY("今天"), RECORD("录音"), HISTORY("在路上"), ME("我的")
+    TODAY("今天"), RECORD("录音"), SEARCH("搜索"), HISTORY("会议"), ME("我的")
 }
 
 class MainActivity : ComponentActivity() {
@@ -141,10 +144,12 @@ private fun App(client: DeepBrainClient) {
      * 三层退法：详情 → 历史 → 今天 → 交还给系统（此时退出才是对的）。
      */
     androidx.activity.compose.BackHandler(
-        enabled = screen is Screen.Meeting || (screen is Screen.Feed && tab != Tab.TODAY)
+        enabled = screen is Screen.Meeting || screen is Screen.Person ||
+                  (screen is Screen.Feed && tab != Tab.TODAY)
     ) {
         when {
             screen is Screen.Meeting -> { tab = Tab.HISTORY; scope.launch { load() } }
+            screen is Screen.Person -> scope.launch { load() }
             else -> tab = Tab.TODAY
         }
     }
@@ -152,7 +157,8 @@ private fun App(client: DeepBrainClient) {
     // 登录、加载、出错这三种状态不该有底栏——底栏在那时点了也没用，
     // 只会让人以为「是不是我点错地方了」。
     val s0 = screen
-    val chrome = s0 is Screen.Feed || s0 is Screen.Record || s0 is Screen.Meeting
+    val chrome = s0 is Screen.Feed || s0 is Screen.Record ||
+                 s0 is Screen.Meeting || s0 is Screen.Person
 
     Scaffold(
         bottomBar = {
@@ -195,8 +201,13 @@ private fun App(client: DeepBrainClient) {
                 is Screen.Meeting -> MeetingScreen(client, s.transcriptId,
                     onBack = { tab = Tab.HISTORY; scope.launch { load() } })
 
+                is Screen.Person -> PersonScreen(client, s.personId,
+                    onBack = { scope.launch { load() } },
+                    onOpen = { tid -> screen = Screen.Meeting(tid) })
+
                 is Screen.Feed -> when (tab) {
                     Tab.RECORD -> RecordScreen(onBack = { tab = Tab.TODAY; scope.launch { load() } })
+                    Tab.SEARCH -> SearchScreen(client) { tid -> screen = Screen.Meeting(tid) }
                     Tab.HISTORY -> HistoryScreen(
                         client = client,
                         onRecord = { tab = Tab.RECORD; screen = Screen.Record },
@@ -219,6 +230,15 @@ private fun App(client: DeepBrainClient) {
                         onRecord = { tab = Tab.RECORD; screen = Screen.Record },
                         onRefresh = { scope.launch { load() } },
                         staleLabel = stale,
+                        onSettle = { id, action ->
+                            scope.launch {
+                                val r = withContext(Dispatchers.IO) { client.settleCommitment(id, action) }
+                                // 落账失败要说出来。界面已经先显示「已记」了——
+                                // 乐观更新用起来顺手，但失败时必须收回来，
+                                // 否则账本上没有这一笔，而用户以为记过了。
+                                if (r !is ApiResult.Ok) load()
+                            }
+                        },
                     )
                 }
 
@@ -237,7 +257,8 @@ private fun TabIcon(t: Tab) {
     val v = when (t) {
         Tab.TODAY -> Icons.Outlined.Home
         Tab.RECORD -> MicOutlined
-        Tab.HISTORY -> Icons.Outlined.Send
+        Tab.SEARCH -> Icons.Outlined.Search
+        Tab.HISTORY -> Icons.Outlined.List
         Tab.ME -> Icons.Outlined.Person
     }
     // 明确用 material3 的 Icon：material 和 material3 各有一个同名可组合项，

@@ -189,6 +189,43 @@ class DeepBrainClient(
     fun sessions(): ApiResult<List<SessionCard>> =
         get("/api/mobile/sessions") { SessionsParser.parse(it) }
 
+    /** 搜索。查询串要转义，否则用户搜的东西里带 & 会把参数截断。 */
+    fun search(q: String): ApiResult<List<Hit>> =
+        get("/api/mobile/search?q=" + java.net.URLEncoder.encode(q, "UTF-8")) { SearchParser.parse(it) }
+
+    /** 这个人说过什么、兑现了多少。 */
+    fun person(id: String): ApiResult<Person> =
+        get("/api/mobile/people/$id") { PersonParser.parse(it) ?: throw IllegalStateException("看不懂") }
+
+    /**
+     * 给一条承诺落账。
+     *
+     * **系统不裁定任何人**——兑现和取消都需要账本以外的信息，只由人落。
+     * 409 不是错误，是「已经落过账了」：报成失败会让用户以为网络有问题然后反复点。
+     */
+    fun settleCommitment(id: String, action: String): ApiResult<String> {
+        val c = store.load() ?: return ApiResult.Unauthorized
+        if (accessToken == null && !refresh()) return ApiResult.Unauthorized
+        fun once() = http.request(
+            "POST", "$apiBase/api/mobile/commitments/$id",
+            mapOf(
+                "Authorization" to "Bearer ${accessToken ?: ""}",
+                "x-deepbrain-org-id" to c.orgId,
+                "Content-Type" to "application/json",
+            ),
+            JSONObject().put("action", action).toString(),
+        )
+        var r = once()
+        if (r.status == 401) {
+            if (!refresh()) return ApiResult.Unauthorized
+            r = once()
+        }
+        if (r.status == 409) return ApiResult.Failed("这条已经落过账了")
+        if (r.status >= 400) return ApiResult.Failed("落账失败（${r.status}）")
+        return runCatching { ApiResult.Ok(JSONObject(r.body).optString("status")) }
+            .getOrElse { ApiResult.Ok(action) }
+    }
+
     /** 这场会讲了什么。 */
     fun meeting(transcriptId: String): ApiResult<Meeting> =
         get("/api/mobile/transcript/$transcriptId") {

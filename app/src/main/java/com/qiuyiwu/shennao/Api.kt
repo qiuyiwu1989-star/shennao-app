@@ -277,3 +277,90 @@ object SessionsParser {
         )
     }.getOrNull()
 }
+
+
+// ---------------------------------------------------------------------------
+// 人物：他说过什么、兑现了多少
+//
+// 用户说的「路」在这一层最实：一条孤立的承诺没有分量，
+// 「他第三次这么说了」才有。
+
+data class Person(
+    val id: String,
+    val name: String,
+    val role: String?,
+    val kept: Int,
+    val broken: Int,
+    val open: Int,
+    /** null = 还没有任何一条有结论。给 0% 或 100% 都是拿数字撒谎 */
+    val keptRate: Int?,
+    val judgments: List<Insight>,
+    val openCommitments: List<Commitment>,
+)
+
+object PersonParser {
+    fun parse(body: String): Person? = runCatching {
+        val o = JSONObject(body)
+        val id = o.optString("id").takeIf { it.isNotBlank() } ?: return null
+        val js = o.optJSONArray("judgments")
+        val cs = o.optJSONArray("openCommitments")
+        Person(
+            id = id,
+            name = o.optString("name").ifBlank { "未命名" },
+            role = o.optString("role").takeIf { it.isNotBlank() && it != "null" },
+            kept = o.optInt("kept"), broken = o.optInt("broken"), open = o.optInt("open"),
+            keptRate = if (o.isNull("keptRate")) null else o.optInt("keptRate"),
+            judgments = (0 until (js?.length() ?: 0)).mapNotNull { i ->
+                val a = js!!.optJSONObject(i) ?: return@mapNotNull null
+                Insight(
+                    id = a.optString("id"), statement = a.optString("statement"),
+                    atomType = "", quote = "", epistemic = a.optString("epistemic"),
+                    subject = null,
+                    transcriptId = a.optString("transcriptId").takeIf { it.isNotBlank() && it != "null" },
+                )
+            },
+            openCommitments = (0 until (cs?.length() ?: 0)).mapNotNull { i ->
+                val a = cs!!.optJSONObject(i) ?: return@mapNotNull null
+                Commitment(
+                    id = a.optString("id"), speakerName = o.optString("name"),
+                    statement = a.optString("quote"), quote = a.optString("quote"),
+                    saidDate = "", context = null,
+                    dueDate = a.optString("dueDate").takeIf { it.isNotBlank() && it != "null" },
+                    overdueDays = null, status = "open",
+                    transcriptId = a.optString("transcriptId").takeIf { it.isNotBlank() && it != "null" },
+                )
+            },
+        )
+    }.getOrNull()
+}
+
+
+// ---------------------------------------------------------------------------
+// 搜索：你问它
+//
+// 前面几层都是「它推给你」。第二大脑真正随身，是在你想不起来的那一刻
+// 它就在口袋里——而那一刻往往发生在会议室里、路上，不在电脑前。
+
+data class Hit(
+    val kind: String,            // judgment / commitment / meeting
+    val id: String,
+    val text: String,
+    val who: String?,
+    val transcriptId: String?,
+)
+
+object SearchParser {
+    fun parse(body: String): List<Hit> = runCatching {
+        val arr = JSONObject(body).optJSONArray("hits") ?: return emptyList()
+        (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val text = o.optString("text")
+            if (text.isBlank()) return@mapNotNull null   // 空文本的命中显示出来是一行空白
+            Hit(
+                kind = o.optString("kind"), id = o.optString("id"), text = text,
+                who = o.optString("who").takeIf { it.isNotBlank() && it != "null" },
+                transcriptId = o.optString("transcriptId").takeIf { it.isNotBlank() && it != "null" },
+            )
+        }
+    }.getOrElse { emptyList() }
+}
