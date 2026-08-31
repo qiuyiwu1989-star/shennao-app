@@ -35,6 +35,15 @@ class RecordingService : Service() {
 
         /** 界面轮询这几个字段。服务活着时它是真相，服务没起来时都是默认值。 */
         @Volatile var recording: Boolean = false; private set
+        /**
+         * 录音此刻的真实状态。
+         *
+         * v0.3 只有一个 recording 布尔，而它是在「按下开始」时置真、
+         * 「按下停止」时置假的——录音线程因为来电死掉时它不会变。
+         * 表现是界面一直显示「正在录音」、计时器停在原地，其实一个字都没在录。
+         * 现在它照抄录音器的状态，不自己维护。
+         */
+        @Volatile var state: RecordState = RecordState.IDLE; private set
         @Volatile var elapsedMs: Long = 0; private set
         @Volatile var pendingSegments: Int = 0; private set
         @Volatile var lastError: String? = null; private set
@@ -81,12 +90,14 @@ class RecordingService : Service() {
                     return START_NOT_STICKY
                 }
                 recording = true
+                state = RecordState.RECORDING
                 lastError = null
                 startPump()
             }
             ACTION_STOP -> {
                 recorder.stop()
                 recording = false
+                state = RecordState.IDLE
                 // 停止之后不能立刻退出服务：还有分段没传完。
                 // 转成一条「正在上传」的通知继续跑，传完了再自己退。
                 updateNotification("正在上传", "录音已停止，正在推送到深脑")
@@ -101,7 +112,24 @@ class RecordingService : Service() {
         pump = scope.launch {
             while (isActive) {
                 elapsedMs = recorder.elapsedMs
-                updateNotification("正在录音", "已录 ${fmt(elapsedMs)}")
+                state = recorder.state
+                recording = recorder.isRecording
+                // 通知栏也要说真话。中断时还挂着「正在录音 12:34」，
+                // 用户看一眼就放心地继续开会了。
+                when (state) {
+                    RecordState.INTERRUPTED -> updateNotification(
+                        "录音中断了", "麦克风被占用，正在抢回来。已录 ${fmt(elapsedMs)} 都在")
+                    RecordState.GAVE_UP -> updateNotification(
+                        "录音已停止", "麦克风抢不回来。已录 ${fmt(elapsedMs)} 正在推送")
+                    else -> updateNotification("正在录音", "已录 ${fmt(elapsedMs)}")
+                }
+                if (state == RecordState.GAVE_UP) {
+                    // 录音线程自己放弃了。把已经录到的传完就收工——
+                    // 让服务空转着不会让麦克风回来。
+                    lastError = "麦克风被别的应用占着，录音已停止。已录到的部分会照常推送。"
+                    launch { drainUntilEmpty() }
+                    return@launch
+                }
                 drainOnce()
                 delay(15_000)
             }

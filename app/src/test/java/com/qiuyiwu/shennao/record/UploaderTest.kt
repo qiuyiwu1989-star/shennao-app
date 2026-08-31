@@ -370,3 +370,34 @@ class UploaderAuthTest {
         assertEquals("只该续一次", 2, handed)
     }
 }
+
+class InterruptionTest {
+    /*
+     * 打断是常态不是异常：来电、别的应用抢麦克风、系统回收音频资源。
+     * 这几条钉的是「退避节奏」和「什么时候该认输」——真机上不好复现，
+     * 但判据必须是对的。
+     */
+
+    @Test fun `头几次要快，多数打断只有几秒`() {
+        assertEquals(500L, Interruption.delayMsFor(1))
+        assertEquals(500L, Interruption.delayMsFor(3))
+        assertTrue("之后要拉长，别烧电", Interruption.delayMsFor(11) > Interruption.delayMsFor(3))
+    }
+
+    @Test fun `节奏必须单调不减——中间变快等于越等越急，只会更烧电`() {
+        val ds = (1..30).map { Interruption.delayMsFor(it) }
+        assertEquals(ds.sorted(), ds)
+    }
+
+    @Test fun `十分钟内不认输——一通电话比这短得多`() {
+        var attempts = 0
+        while (!Interruption.shouldGiveUp(attempts) && attempts < 10_000) attempts++
+        val waited = Interruption.elapsedAfter(attempts)
+        assertTrue("认输太早，一通电话就把录音弄没了：${waited / 1000}秒", waited >= 10 * 60 * 1000L)
+        assertTrue("认输太晚，手机会整晚亮着「正在恢复」：${waited / 1000}秒", waited < 20 * 60 * 1000L)
+    }
+
+    @Test fun `总会认输——不能永远试下去`() {
+        assertTrue(Interruption.shouldGiveUp(10_000))
+    }
+}

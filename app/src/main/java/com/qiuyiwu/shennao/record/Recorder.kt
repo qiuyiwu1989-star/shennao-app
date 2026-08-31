@@ -24,6 +24,8 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
 
     /** 界面要显示的：已经录了多久、这场的本地 id */
     @Volatile var elapsedMs: Long = 0; private set
+    /** 此刻的真实状态。界面照着念——不许自己维护一份「我以为在录」 */
+    @Volatile var state: RecordState = RecordState.IDLE; private set
     val currentSession: String? get() = session
     val isRecording: Boolean get() = running.get()
 
@@ -31,6 +33,7 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
     fun start(title: String, now: Long): String? {
         if (running.get()) return session
         val rec = Capture.open() ?: return null
+        state = RecordState.RECORDING
         val meta = SessionMeta(UUID.randomUUID().toString(), title, now)
         val s = vault.newSession(meta)
         session = s
@@ -48,14 +51,69 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
         // 标记「用户已停止」必须在最后一段封完之后。反过来的话，上传器可能
         // 在最后一段还没封时就去冻结清单，那一段就永久进不去了。
         vault.updateMeta(s) { it.copy(finished = true) }
+        state = RecordState.IDLE
         session = null
         onSegmentSealed()
     }
 
-    private fun loop(rec: AudioRecord, s: String) {
+    private fun loop(first: AudioRecord, s: String) {
         val buf = ByteArray(Capture.BYTES_PER_MS * 200)      // 200 ms 一读
         var seq = 0
         var startMs = 0L
+        var rec: AudioRecord? = first
+        var attempts = 0
+
+        while (running.get()) {
+            val device = rec ?: run {
+                // 麦克风还没抢回来。先说真话，再按退避节奏试。
+                state = RecordState.INTERRUPTED
+                if (Interruption.shouldGiveUp(attempts)) {
+                    // 试了十分钟没回来。继续亮着「正在恢复」比明说「停了」更糟——
+                    // 用户会以为还在录，而其实早就不是了。
+                    state = RecordState.GAVE_UP
+                    running.set(false)
+                    return
+                }
+                attempts++
+                // 分片睡，每 200 ms 看一眼还要不要录。一觉睡 5 秒的话，
+                // 用户按下停止之后要等满这 5 秒，而 stop() 只等 5 秒就不等了。
+                var slept = 0L
+                val want = Interruption.delayMsFor(attempts)
+                while (slept < want && running.get()) { Thread.sleep(200); slept += 200 }
+                if (!running.get()) null
+                else Capture.open()?.also { state = RecordState.RECORDING; attempts = 0 }
+            }
+            if (device == null) continue
+            // 抢回麦克风的同时用户按了停止：这台设备再也不会被用到，
+            // 不还回去就是一直占着别人的麦克风。
+            if (!running.get()) {
+                runCatching { device.release() }
+                break
+            }
+            rec = device
+
+            // 一段录音，读到断为止。返回下一段该从哪个序号、哪个毫秒开始。
+            val (nextSeq, nextStart) = readUntilBroken(device, s, seq, startMs, buf)
+            seq = nextSeq
+            startMs = nextStart
+            runCatching { device.stop() }; runCatching { device.release() }
+            rec = null
+        }
+        state = if (state == RecordState.GAVE_UP) RecordState.GAVE_UP else RecordState.IDLE
+    }
+
+    /**
+     * 一直读到读不动为止。中断时把当前这段封好再返回——
+     * 已经录到的字节必须先安全落盘，重开麦克风是之后的事。
+     *
+     * 返回：下一段的序号和起始毫秒。**起始毫秒接着走，不给中断留空洞**：
+     * 中断那几分钟本来就不在音频里，留空白只会让后面所有分片的时间往后错。
+     */
+    private fun readUntilBroken(
+        rec: AudioRecord, s: String, startSeq: Int, from: Long, buf: ByteArray,
+    ): Pair<Int, Long> {
+        var seq = startSeq
+        var startMs = from
         var open = openSegment(s, seq, startMs)
         try {
             rec.startRecording()
@@ -63,8 +121,8 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
             while (running.get()) {
                 val n = rec.read(buf, 0, buf.size)
                 if (n <= 0) {
-                    // 读不出来通常是被别的应用抢走了麦克风。硬转圈只会烧电，
-                    // 停下来让用户看到状态比假装还在录要诚实。
+                    // 读不出来 = 麦克风被抢走了（来电、别的应用、系统回收）。
+                    // 不是错误，是常态——封好这一段，交给外层去抢回来。
                     if (n == AudioRecord.ERROR_INVALID_OPERATION || n == AudioRecord.ERROR_DEAD_OBJECT) break
                     continue
                 }
@@ -83,13 +141,13 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
                 }
             }
         } catch (e: Exception) {
-            // 录音线程死掉不能把已经录到的东西一起带走
+            // 录音线程出事不能把已经录到的东西一起带走
         } finally {
-            runCatching { rec.stop() }; runCatching { rec.release() }
             val end = open.trueEndMs
             seal(s, open, seq, startMs, end)
-            running.set(false)
+            seq++; startMs = end
         }
+        return seq to startMs
     }
 
     private fun openSegment(s: String, seq: Int, startMs: Long): OpenSegment {

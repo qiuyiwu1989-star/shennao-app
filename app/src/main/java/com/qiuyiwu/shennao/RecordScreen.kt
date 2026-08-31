@@ -33,6 +33,7 @@ import kotlinx.coroutines.delay
 fun RecordScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
     var recording by remember { mutableStateOf(RecordingService.recording) }
+    var state by remember { mutableStateOf(com.qiuyiwu.shennao.record.RecordState.IDLE) }
     var elapsed by remember { mutableStateOf(0L) }
     var pending by remember { mutableStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -47,6 +48,7 @@ fun RecordScreen(onBack: () -> Unit) {
     LaunchedEffect(Unit) {
         while (true) {
             recording = RecordingService.recording
+            state = RecordingService.state
             elapsed = RecordingService.elapsedMs
             pending = RecordingService.pendingSegments
             error = RecordingService.lastError
@@ -71,10 +73,16 @@ fun RecordScreen(onBack: () -> Unit) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            when {
-                recording -> "正在录。可以切走做别的，录音不会断。"
-                pending > 0 -> "还有 $pending 段在传"
-                else -> "点一下开始录这场会"
+            when (state) {
+                // 中断必须一眼看得出来。挂着「正在录音」而其实没在录，
+                // 是这套东西能犯的最坏的错——开完会才发现，已经没法补救了。
+                com.qiuyiwu.shennao.record.RecordState.INTERRUPTED ->
+                    "麦克风被占用了，正在抢回来。已经录到的都在。"
+                com.qiuyiwu.shennao.record.RecordState.GAVE_UP ->
+                    "麦克风抢不回来，录音已停止。已录到的部分正在推送。"
+                com.qiuyiwu.shennao.record.RecordState.RECORDING ->
+                    "正在录。可以切走做别的，录音不会断。"
+                else -> if (pending > 0) "还有 $pending 段在传" else "点一下开始录这场会"
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
