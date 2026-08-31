@@ -10,8 +10,12 @@ package com.qiuyiwu.shennao.record
  * 这件事，操作系统保证是一致的。所以一段录音走到哪一步，全部编码在后缀里：
  *
  *   seg-000003-0180000-0240000.pcm   还在录（或者：录的时候被杀了）
- *   seg-000003-0180000-0240000.m4a   已封段，等着上传
+ *   seg-000003-0180000-0240000.aac   已封段，等着上传
  *   seg-000003-0180000-0240000.up    已上传并被服务端确认，音频已删
+ *
+ * 还认一个 .m4a：那是 v0.5 之前封的段。m4a 拼接会被服务端静默截断
+ * （见 Encoder 里的实测），但已经躺在手机上的不能不认——不认就是孤儿，
+ * 永远传不上去也永远删不掉。
  *
  * 没有「上传中」这个状态。上传中途死掉就退回 .m4a 重来一遍，
  * 而重来是安全的：ticket 用的幂等键由 序号 决定，不由重试次数决定。
@@ -27,20 +31,28 @@ data class Segment(
     val startMs: Long,
     val endMs: Long,
     val state: State,
+    /** 落盘后缀。只在 SEALED 时有意义（pcm/up 各只有一种） */
+    val ext: String = if (state == State.SEALED) "aac" else "",
 ) {
     enum class State { RECORDING, SEALED, UPLOADED }
+
+    /** v0.5 之前封的段是 m4a。只影响上传时报的 mimeType。 */
+    val legacyM4a: Boolean get() = state == State.SEALED && ext == "m4a"
+
+    /** 这一段该报什么 mimeType。判据只有一条：它实际是什么容器。 */
+    val mimeType: String get() = if (legacyM4a) "audio/mp4" else "audio/aac"
 
     val durationMs: Long get() = endMs - startMs
 
     fun fileName(): String = "seg-%06d-%09d-%09d.%s".format(
         sequence, startMs, endMs,
-        when (state) { State.RECORDING -> "pcm"; State.SEALED -> "m4a"; State.UPLOADED -> "up" },
+        when (state) { State.RECORDING -> "pcm"; State.SEALED -> ext.ifBlank { "aac" }; State.UPLOADED -> "up" },
     )
 
-    fun withState(s: State) = copy(state = s)
+    fun withState(s: State) = copy(state = s, ext = if (s == State.SEALED) ext.ifBlank { "aac" } else "")
 
     companion object {
-        private val RE = Regex("""^seg-(\d{6})-(\d{9})-(\d{9})\.(pcm|m4a|up)$""")
+        private val RE = Regex("""^seg-(\d{6})-(\d{9})-(\d{9})\.(pcm|aac|m4a|up)$""")
 
         /** 解析文件名。认不出的返回 null——目录里出现别的文件不该让整场录音失败。 */
         fun parse(name: String): Segment? {
@@ -55,9 +67,10 @@ data class Segment(
                 seq.toInt(), start, end,
                 when (ext) {
                     "pcm" -> State.RECORDING
-                    "m4a" -> State.SEALED
+                    "aac", "m4a" -> State.SEALED
                     else -> State.UPLOADED
                 },
+                ext = if (ext == "aac" || ext == "m4a") ext else "",
             )
         }
     }

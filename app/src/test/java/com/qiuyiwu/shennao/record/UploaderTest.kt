@@ -87,15 +87,29 @@ class UploaderTest {
 
     @Test fun `文件名能原样解析回来——序号和起止时刻都不放在内存里`() {
         val s = Segment(3, 180_000, 240_000, Segment.State.SEALED)
-        assertEquals("seg-000003-000180000-000240000.m4a", s.fileName())
+        assertEquals("seg-000003-000180000-000240000.aac", s.fileName())
         assertEquals(s, Segment.parse(s.fileName()))
+    }
+
+    @Test fun `v0点5 之前封的 m4a 仍然认，但要报自己的真实容器`() {
+        // 不认就是孤儿：永远传不上去，也永远删不掉。
+        // 而报错 mimeType 会让服务端按 aac 解一个 m4a，解出垃圾。
+        val old = Segment.parse("seg-000001-000060000-000120000.m4a")!!
+        assertEquals(Segment.State.SEALED, old.state)
+        assertEquals("audio/mp4", old.mimeType)
+        assertEquals("audio/aac", Segment.parse("seg-000001-000060000-000120000.aac")!!.mimeType)
+    }
+
+    @Test fun `封段之后后缀就定了，改状态不该把它弄丢`() {
+        val old = Segment.parse("seg-000002-000000000-000060000.m4a")!!
+        assertEquals("seg-000002-000000000-000060000.up", old.withState(Segment.State.UPLOADED).fileName())
     }
 
     @Test fun `认不出的文件名不该让整场录音失败`() {
         assertNull(Segment.parse("random.txt"))
         assertNull(Segment.parse(".nomedia"))
         // 结束早于开始 = 名字被外力改过。宁可当它不存在，也不要拿负数时长去调服务端
-        assertNull(Segment.parse("seg-000001-000240000-000180000.m4a"))
+        assertNull(Segment.parse("seg-000001-000240000-000180000.aac"))
     }
 
     // ---- 什么时候不该动服务端 ----

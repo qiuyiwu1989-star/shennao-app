@@ -175,8 +175,8 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
      */
     private fun sealPcm(s: String, truth: Segment): Boolean {
         val pcm = vault.segmentFile(s, truth)
-        val m4a = vault.segmentFile(s, truth.withState(Segment.State.SEALED))
-        if (!Encoder.pcmToM4a(pcm, m4a)) return false
+        val aac = vault.segmentFile(s, truth.withState(Segment.State.SEALED))
+        if (!Encoder.pcmToAac(pcm, aac)) return false
         pcm.delete()          // 转码确认成功之后才删。反过来一次失败就丢一分钟录音
         return true
     }

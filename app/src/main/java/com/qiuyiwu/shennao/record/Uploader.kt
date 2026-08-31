@@ -52,7 +52,6 @@ class Uploader(
      */
     private val auth: (force: Boolean) -> Pair<String, String>?,
 ) {
-    private val mime = "audio/mp4"
 
     /** 把所有会话推一遍。返回每场的结果，界面按需要挑着显示。 */
     fun drainAll(): Map<String, DrainResult> =
@@ -213,7 +212,7 @@ class Uploader(
             JSONObject(mapOf(
                 "sequence" to seg.sequence,
                 "idempotencyKey" to "${meta.clientRequestId}-${seg.sequence}",
-                "mimeType" to mime,
+                "mimeType" to seg.mimeType,   // 每段报自己的真实容器：v0.5 之前封的是 m4a
                 "byteLength" to bytes.size,
                 "startedAtMs" to seg.startMs,
                 // 服务端要求 endedAtMs ≥ 1 且大于开始。零长度的段不该走到这里，
@@ -234,7 +233,7 @@ class Uploader(
             .getOrNull()?.takeIf { it.isNotBlank() }
             ?: return StepResult.Err("第 ${seg.sequence} 段没拿到上传地址", true)
 
-        val put = http.requestBytes("PUT", url, mapOf("Content-Type" to mime), bytes)
+        val put = http.requestBytes("PUT", url, mapOf("Content-Type" to seg.mimeType), bytes)
         if (put.status >= 400) {
             return StepResult.Err("第 ${seg.sequence} 段直传失败（${put.status}）", true)
         }
