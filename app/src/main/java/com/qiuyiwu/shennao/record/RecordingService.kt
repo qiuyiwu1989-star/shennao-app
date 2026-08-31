@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.graphics.drawable.Icon
 import android.os.IBinder
 import com.qiuyiwu.shennao.BuildConfig
 import com.qiuyiwu.shennao.MainActivity
@@ -102,7 +103,7 @@ class RecordingService : Service() {
                 UploadWorker.kick(applicationContext)
                 // 停止之后不能立刻退出服务：还有分段没传完。
                 // 转成一条「正在上传」的通知继续跑，传完了再自己退。
-                updateNotification("正在上传", "录音已停止，正在推送到深脑")
+                updateNotification("正在上传", "录音已停止，正在推送到深脑", canStop = false)
                 scope.launch { drainUntilEmpty() }
             }
         }
@@ -122,7 +123,7 @@ class RecordingService : Service() {
                     RecordState.INTERRUPTED -> updateNotification(
                         "录音中断了", "麦克风被占用，正在抢回来。已录 ${fmt(elapsedMs)} 都在")
                     RecordState.GAVE_UP -> updateNotification(
-                        "录音已停止", "麦克风抢不回来。已录 ${fmt(elapsedMs)} 正在推送")
+                        "录音已停止", "麦克风抢不回来。已录 ${fmt(elapsedMs)} 正在推送", canStop = false)
                     else -> updateNotification("正在录音", "已录 ${fmt(elapsedMs)}")
                 }
                 if (state == RecordState.GAVE_UP) {
@@ -177,6 +178,18 @@ class RecordingService : Service() {
         stopSelf()
     }
 
+    /**
+     * 用户把 App 从最近任务里划走了。
+     *
+     * **什么都不做是对的**：录音是用户明确交代过的长活，划走 App 只是
+     * 「把界面收起来」，不是「停止录音」。安卓的默认行为（stopWithTask=false）
+     * 本来就不会停掉已启动的服务，这里显式写出来，是为了下一个人不会
+     * 顺手加个 stopSelf() 来「清理」——那会让整场会在切走的一瞬间没掉。
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // 故意不调 stopSelf()
+    }
+
     override fun onDestroy() {
         recorder.stop()
         recording = false
@@ -198,24 +211,39 @@ class RecordingService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
     }
 
-    private fun notification(title: String, text: String): Notification {
+    private fun notification(title: String, text: String, canStop: Boolean = true): Notification {
         val tap = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        return Notification.Builder(this, CHANNEL)
+        val b = Notification.Builder(this, CHANNEL)
             .setContentTitle(title)
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(tap)
             .setOngoing(true)
-            .build()
+        // 通知栏里直接能停。录音时 App 是藏在后台的——没有这个按钮，
+        // 想停就得先把 App 从一堆应用里翻出来，而「开完会顺手停掉」
+        // 本该是一个动作的事。
+        if (canStop) {
+            val stop = PendingIntent.getService(
+                this, 1,
+                Intent(this, RecordingService::class.java).setAction(ACTION_STOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            b.addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(this, android.R.drawable.ic_media_pause), "停止", stop,
+                ).build()
+            )
+        }
+        return b.build()
     }
 
-    private fun updateNotification(title: String, text: String) {
+    private fun updateNotification(title: String, text: String, canStop: Boolean = true) {
         runCatching {
             getSystemService(NotificationManager::class.java)
-                .notify(NOTIF_ID, notification(title, text))
+                .notify(NOTIF_ID, notification(title, text, canStop))
         }
     }
 
