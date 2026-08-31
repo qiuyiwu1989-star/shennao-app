@@ -45,7 +45,15 @@ class RecordingService : Service() {
          * 现在它照抄录音器的状态，不自己维护。
          */
         @Volatile var state: RecordState = RecordState.IDLE; private set
-        @Volatile var elapsedMs: Long = 0; private set
+        /**
+         * 已录多久。
+         *
+         * 这个值必须**每次读都是新的**：之前它由 15 秒一轮的轮询循环复制，
+         * 于是界面上的计时器每 15 秒才跳一次，读起来像卡住了。
+         * 改成直接问录音器——它在读音频的循环里持续更新（200 毫秒一次）。
+         */
+        @Volatile private var recorderRef: Recorder? = null
+        val elapsedMs: Long get() = recorderRef?.elapsedMs ?: 0L
         @Volatile var pendingSegments: Int = 0; private set
         @Volatile var lastError: String? = null; private set
 
@@ -79,6 +87,7 @@ class RecordingService : Service() {
         super.onCreate()
         vault = FileVault(File(filesDir, "recordings"))
         recorder = Recorder(vault) { kick() }
+        recorderRef = recorder
         uploader = Uploader(
             UrlHttp(), vault, BuildConfig.API_BASE,
             auth = { force -> com.qiuyiwu.shennao.Session.authFor(applicationContext, force) },
@@ -123,8 +132,8 @@ class RecordingService : Service() {
     private fun startPump() {
         pump?.cancel()
         pump = scope.launch {
+            var tick = 0L
             while (isActive) {
-                elapsedMs = recorder.elapsedMs
                 state = recorder.state
                 recording = recorder.isRecording
                 // 通知栏也要说真话。中断时还挂着「正在录音 12:34」，
@@ -143,8 +152,11 @@ class RecordingService : Service() {
                     launch { drainUntilEmpty() }
                     return@launch
                 }
-                drainOnce()
-                delay(15_000)
+                // 推送 15 秒一轮就够了（网络往返不必更勤），
+                // 但通知栏的计时要每秒走——它是用户判断「还在录吗」的唯一依据。
+                if (tick % 15 == 0L) drainOnce()
+                tick++
+                delay(1_000)
             }
         }
     }
@@ -210,6 +222,7 @@ class RecordingService : Service() {
     override fun onDestroy() {
         recorder.stop()
         recording = false
+        recorderRef = null
         pump?.cancel()
         scope.cancel()
         super.onDestroy()

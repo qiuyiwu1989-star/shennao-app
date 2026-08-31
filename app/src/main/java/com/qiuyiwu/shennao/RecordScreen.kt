@@ -57,7 +57,7 @@ fun RecordScreen(onBack: () -> Unit) {
             pending = RecordingService.pendingSegments
             error = RecordingService.lastError
             sessionId = RecordingService.serverSessionId
-            delay(500)
+            delay(250)
         }
     }
 

@@ -78,13 +78,15 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                             Text("这场会", style = MaterialTheme.typography.titleSmall,
                                  fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.height(6.dp))
-                            Text(
+                            // 摘要是 Markdown。当纯文本显示的话，屏幕上就是一堆 ## 和 **，
+                            // 用户看到的是「这个 App 坏了」。
+                            if (m.summary != null) MarkdownText(m.summary)
+                            else Text(
                                 // 没有摘要 = 分析还没跑完。说清楚，不要显示一片空白——
                                 // 空白会被理解成「这场会什么都没讲」。
-                                m.summary ?: "分析还没跑完，等一会儿再来看。",
+                                "分析还没跑完，等一会儿再来看。",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = if (m.summary == null) MaterialTheme.colorScheme.onSurfaceVariant
-                                        else MaterialTheme.colorScheme.onSurface,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }

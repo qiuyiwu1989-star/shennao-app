@@ -178,6 +178,19 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
         val aac = vault.segmentFile(s, truth.withState(Segment.State.SEALED))
         if (!Encoder.pcmToAac(pcm, aac)) return false
         pcm.delete()          // 转码确认成功之后才删。反过来一次失败就丢一分钟录音
+
+        // **时长以产物为准，不以计划为准。**
+        //
+        // 2026-08-31 实测：一段声称 60 秒的分片，实际编出来只有 13.31 秒。
+        // 服务端拿 60 秒去拼时间轴，等于每段凭空多出 47 秒空白，整场时间全错位，
+        // 而没有任何一层会报错。编码器为什么少读是另一个要查的问题，
+        // 但无论为什么，都不该由服务端替我们承担这个谎。
+        val real = Adts.scan(runCatching { aac.readBytes() }.getOrElse { return true })
+            .durationMs(Capture.SAMPLE_RATE)
+        if (real > 0 && real != truth.durationMs) {
+            val fixed = truth.copy(endMs = truth.startMs + real).withState(Segment.State.SEALED)
+            aac.renameTo(vault.segmentFile(s, fixed))
+        }
         return true
     }
 

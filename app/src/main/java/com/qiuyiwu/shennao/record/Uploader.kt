@@ -113,21 +113,45 @@ class Uploader(
         }
         val sid = (ref as SessionRef.Ok).id
 
+        /*
+         * 一段失败**不能停掉整场**。
+         *
+         * 2026-08-31 实测：用户录了 15 段，只有第 1 段进了深脑。原因就在这里——
+         * 第 1 段的 ticket 返回了一种我没认出的 409，代码直接 return，
+         * 于是第 2 到第 15 段永远轮不到。而分片之间本来是独立的：
+         * 一段进不去，不该连累其它 14 段。
+         *
+         * 登录过期是唯一的例外：那不是「这一段」的问题，是整轮都动不了，
+         * 继续试下去只是把同一个 401 重复 15 遍。
+         */
         var done = 0
+        val stuck = mutableListOf<String>()
         for (seg in sealed) {
             when (val r = push(sid, session, seg, meta, h)) {
                 is StepResult.Ok, is StepResult.Skip -> done++
-                is StepResult.Err -> return DrainResult.Failed(r.message, r.retryable, r.authExpired)
+                is StepResult.Err -> {
+                    if (r.authExpired) return DrainResult.Failed(r.message, true, true)
+                    stuck += r.message
+                }
             }
         }
 
         val uploadedNow = segs.count { it.state == Segment.State.UPLOADED } + done
-        if (!meta.finished) return DrainResult.Progress(uploadedNow, 0)
+        if (!meta.finished) {
+            return if (stuck.isEmpty()) DrainResult.Progress(uploadedNow, 0)
+                   else DrainResult.Failed(stuck.first(), true)
+        }
 
         // 到这里：用户已停止、没有未封段、所有分段都已确认。可以冻结清单了。
         val all = vault.segments(session)
         val ready = all.filter { it.state == Segment.State.UPLOADED }
-        if (ready.size != all.size) return DrainResult.Progress(ready.size, all.size - ready.size)
+        if (ready.size != all.size) {
+            // 还有段没进去就不能冻结清单——冻结之后它们永远进不来了。
+            // 但要把卡住的原因报出去，否则界面只会一直显示「上传中」。
+            return if (stuck.isEmpty()) DrainResult.Progress(ready.size, all.size - ready.size)
+                   else DrainResult.Failed(
+                       "${all.size - ready.size} 段进不去：${stuck.first()}", true)
+        }
 
         val totalMs = ready.maxOf { it.endMs }
         val stop = http.request(
@@ -221,11 +245,22 @@ class Uploader(
                 "uploadMode" to "background",
             )).toString(),
         )
-        if (ticket.status == 409 && ticket.body.contains("CHUNK_ALREADY_VERIFIED")) {
-            vault.rename(session, seg, seg.withState(Segment.State.UPLOADED))
-            return StepResult.Skip
-        }
         if (ticket.status == 401) return StepResult.Err("登录过期", true, authExpired = true)
+        if (ticket.status == 409) {
+            // 409 有好几种，而它们对客户端的含义是同一个：**这一片服务端不再收了**。
+            // 之前只认 CHUNK_ALREADY_VERIFIED，其余 409 走到下面变成致命错误，
+            // 把整场都卡死了。
+            //
+            // 已验证 = 字节已经在服务端，改名收工；
+            // 其余（元数据对不上、状态冲突）= 重试多少次都是同一个答案，
+            // 报出来让人看见，但不要挡住别的分片。
+            if (ticket.body.contains("CHUNK_ALREADY_VERIFIED")) {
+                vault.rename(session, seg, seg.withState(Segment.State.UPLOADED))
+                return StepResult.Skip
+            }
+            return StepResult.Err(
+                "第 ${seg.sequence} 段服务端不收（${codeOf(ticket.body)}）", false)
+        }
         if (ticket.status >= 400) {
             return StepResult.Err("第 ${seg.sequence} 段要地址失败（${ticket.status}）", ticket.status >= 500)
         }
@@ -249,6 +284,10 @@ class Uploader(
         vault.rename(session, seg, seg.withState(Segment.State.UPLOADED))
         return StepResult.Ok
     }
+
+    /** 从错误应答里取 code。取不到就还回状态码本身——总比一句「失败了」强。 */
+    private fun codeOf(body: String): String =
+        runCatching { JSONObject(body).optString("code").ifBlank { "409" } }.getOrElse { "409" }
 
     private fun iso(ms: Long): String {
         val f = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
