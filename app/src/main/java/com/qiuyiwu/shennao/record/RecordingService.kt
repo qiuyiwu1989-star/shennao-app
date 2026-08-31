@@ -49,6 +49,15 @@ class RecordingService : Service() {
         @Volatile var pendingSegments: Int = 0; private set
         @Volatile var lastError: String? = null; private set
 
+        /**
+         * 当前这场在服务端的会话 id。设本场热词要用它。
+         *
+         * 它在**第一段传上去之后**才有——建会话是上传的第一步，而上传是
+         * 封完第一段（一分钟）才开始的。所以界面上这个功能会有一分钟不可用，
+         * 必须说清楚在等什么，不能只给一个灰掉的按钮。
+         */
+        @Volatile var serverSessionId: String? = null; private set
+
         fun start(ctx: Context, title: String) {
             val i = Intent(ctx, RecordingService::class.java)
                 .setAction(ACTION_START).putExtra("title", title)
@@ -99,6 +108,7 @@ class RecordingService : Service() {
                 recorder.stop()
                 recording = false
                 state = RecordState.IDLE
+                serverSessionId = null
                 // 停止这一刻最要紧：接下来这个服务就要退了，剩下的段要有人接手
                 UploadWorker.kick(applicationContext)
                 // 停止之后不能立刻退出服务：还有分段没传完。
@@ -150,9 +160,16 @@ class RecordingService : Service() {
         UploadWorker.kick(applicationContext)
     }
 
+    /** 把当前这场的服务端 id 抄到伴生对象上，供界面设热词。 */
+    private fun publishSessionId() {
+        val local = recorder.currentSession ?: return
+        serverSessionId = vault.readMeta(local)?.serverSessionId
+    }
+
     private fun drainOnce() {
         // 走同一把锁：WorkManager 那条路也在推同一批文件
         val results = runCatching { synchronized(Resume.lock) { uploader.drainAll() } }.getOrElse { return }
+        publishSessionId()
         pendingSegments = vault.sessions().sumOf { s ->
             vault.segments(s).count { it.state != Segment.State.UPLOADED }
         }

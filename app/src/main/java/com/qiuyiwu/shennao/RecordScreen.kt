@@ -19,7 +19,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.qiuyiwu.shennao.record.RecordingService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /*
  * 录音页。一个按钮，一行状态。
@@ -38,6 +41,7 @@ fun RecordScreen(onBack: () -> Unit) {
     var pending by remember { mutableStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
     var denied by remember { mutableStateOf(false) }
+    var sessionId by remember { mutableStateOf<String?>(null) }
 
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) RecordingService.start(ctx, "手机录音") else denied = true
@@ -52,6 +56,7 @@ fun RecordScreen(onBack: () -> Unit) {
             elapsed = RecordingService.elapsedMs
             pending = RecordingService.pendingSegments
             error = RecordingService.lastError
+            sessionId = RecordingService.serverSessionId
             delay(500)
         }
     }
@@ -132,6 +137,11 @@ fun RecordScreen(onBack: () -> Unit) {
                  color = MaterialTheme.colorScheme.error)
         }
 
+        if (recording) {
+            Spacer(Modifier.height(20.dp))
+            HotwordBox(sessionId)
+        }
+
         Spacer(Modifier.weight(1f))
 
         Text(
@@ -140,6 +150,82 @@ fun RecordScreen(onBack: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * 本场专有名词。
+ *
+ * 放在录音页而不是录之前：开会开到一半才发现「这个名字它一直听错」，
+ * 是这件事最常发生的时刻。而录之前先填一堆词，等于给按下录音加摩擦——
+ * 那是这个 App 最不该有摩擦的一个动作。
+ */
+@androidx.compose.runtime.Composable
+private fun HotwordBox(sessionId: String?) {
+    val ctx = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var text by remember { mutableStateOf("") }
+    var saved by remember { mutableStateOf<List<String>>(emptyList()) }
+    var busy by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf<String?>(null) }
+
+    Column(Modifier.fillMaxWidth()) {
+        Text("这场会的专有名词", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            // 「只影响之后」必须写出来。不写的话，用户会以为加了词就能把
+            // 前面已经听错的地方改过来，然后对结果失望。
+            if (sessionId == null) "等第一段传上去之后就能加（约一分钟）"
+            else "人名、项目名、生造词。加了只影响之后的识别，前面已经出的字不会回头改。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                enabled = sessionId != null && !busy,
+                placeholder = { Text("用顿号或空格分开") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(8.dp))
+            TextButton(
+                enabled = sessionId != null && !busy && text.isNotBlank(),
+                onClick = {
+                    val id = sessionId ?: return@TextButton
+                    val pins = text.split('、', ',', '，', ' ', '\n')
+                        .map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+                    if (pins.isEmpty()) return@TextButton
+                    busy = true; failed = null
+                    scope.launch {
+                        val r = withContext(Dispatchers.IO) {
+                            Session.client(ctx).setHotwordPins(id, (saved + pins).distinct())
+                        }
+                        busy = false
+                        when (r) {
+                            is ApiResult.Ok -> { saved = r.value; text = "" }
+                            is ApiResult.Failed -> failed = r.message
+                            else -> failed = "登录失效了"
+                        }
+                    }
+                },
+            ) { Text("加上") }
+        }
+        if (saved.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            // 显示服务端真正接受的那些，不是用户输入的那些——
+            // 超限或重复的词会被丢掉，照抄输入会让人以为它在起作用。
+            Text("已生效：" + saved.joinToString("、"),
+                 style = MaterialTheme.typography.bodySmall,
+                 color = MaterialTheme.colorScheme.primary)
+        }
+        failed?.let {
+            Spacer(Modifier.height(6.dp))
+            Text(it, style = MaterialTheme.typography.bodySmall,
+                 color = MaterialTheme.colorScheme.error)
+        }
     }
 }
 

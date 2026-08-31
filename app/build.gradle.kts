@@ -23,8 +23,8 @@ android {
         applicationId = "com.qiuyiwu.shennao"
         minSdk = 26          // 8.0：低于这个连 Java 8 时间 API 都要脱糖，不值得
         targetSdk = 34
-        versionCode = 9
-        versionName = "0.8.0"
+        versionCode = 10
+        versionName = "0.9.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "API_BASE", "\"${cfg("deepbrain.apiBase")}\"")

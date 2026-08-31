@@ -142,6 +142,41 @@ class DeepBrainClient(
         }
     }
 
+    /**
+     * 设置本场专有名词（0080）。
+     *
+     * 组织底表是建会话时自动合上的，不用管；这里传的是**这场会特有**的词——
+     * 底表里没有的人名、项目名、生造词。
+     *
+     * 录音中途也能改，但只影响**之后**的识别：已经出的字不会回头修正。
+     * 界面必须把这句说出来，否则用户会以为加了词就能把前面的错字改过来。
+     */
+    fun setHotwordPins(sessionId: String, pins: List<String>): ApiResult<List<String>> {
+        val c = store.load() ?: return ApiResult.Unauthorized
+        if (accessToken == null && !refresh()) return ApiResult.Unauthorized
+        fun once() = http.request(
+            "PUT", "$apiBase/api/recordings/$sessionId/hotwords",
+            mapOf(
+                "Authorization" to "Bearer ${accessToken ?: ""}",
+                "x-deepbrain-org-id" to c.orgId,
+                "Content-Type" to "application/json",
+            ),
+            JSONObject().put("pins", org.json.JSONArray(pins)).toString(),
+        )
+        var r = once()
+        if (r.status == 401) {
+            if (!refresh()) return ApiResult.Unauthorized
+            r = once()
+        }
+        if (r.status >= 400) return ApiResult.Failed("热词没存上（${r.status}）")
+        // 服务端会把超限/重复的词丢掉并回报 accepted。显示真正生效的那些，
+        // 不是用户输入的那些——否则用户会以为某个被丢掉的词在起作用。
+        return runCatching {
+            val a = JSONObject(r.body).optJSONArray("accepted")
+            ApiResult.Ok((0 until (a?.length() ?: 0)).map { a!!.getString(it) })
+        }.getOrElse { ApiResult.Ok(pins) }
+    }
+
     /** 我录过的会走到哪了。401 同样自动续一次。 */
     fun sessions(): ApiResult<List<SessionCard>> =
         get("/api/mobile/sessions") { SessionsParser.parse(it) }

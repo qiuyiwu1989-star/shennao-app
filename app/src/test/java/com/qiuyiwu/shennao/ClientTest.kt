@@ -201,3 +201,53 @@ class UpdateTest {
         assertNull(Update.parse("不是 json"))
     }
 }
+
+class HotwordTest {
+    /*
+     * 本场专有名词（0080）。组织底表是建会话时自动合上的，不用管；
+     * 这里传的是这场会特有的词。录音中途也能改。
+     */
+    private fun spy(status: Int, body: String): Pair<Http, MutableList<String?>> {
+        val bodies = mutableListOf<String?>()
+        val h = object : Http {
+            override fun request(m: String, u: String, hd: Map<String, String>, b: String?): HttpResponse {
+                if (u.contains("hotwords")) bodies += b
+                return if (u.contains("refresh_token")) HttpResponse(200, """{"access_token":"at"}""")
+                       else HttpResponse(status, body)
+            }
+            override fun requestBytes(m: String, u: String, hd: Map<String, String>, b: ByteArray) =
+                HttpResponse(status, body)
+        }
+        return h to bodies
+    }
+
+    @Test fun `词按 pins 数组发出去`() {
+        val (h, bodies) = spy(200, """{"accepted":["造物云","品焕"],"rejected":[]}""")
+        val c = client(h, MemStore(Credentials("rt", "org-1", "a@b.c")))
+        val r = c.setHotwordPins("sess-1", listOf("造物云", "品焕"))
+        assertTrue(r is ApiResult.Ok)
+        val sent = org.json.JSONObject(bodies.last()!!).getJSONArray("pins")
+        assertEquals(2, sent.length())
+        assertEquals("造物云", sent.getString(0))
+    }
+
+    @Test fun `回报的是服务端真正接受的词，不是用户输入的`() {
+        // 超限或重复会被服务端丢掉。照抄输入会让用户以为被丢的那个在起作用。
+        val (h, _) = spy(200, """{"accepted":["造物云"],"rejected":[{"term":"品焕"}]}""")
+        val r = client(h, MemStore(Credentials("rt", "org-1", "a@b.c")))
+            .setHotwordPins("sess-1", listOf("造物云", "品焕"))
+        assertEquals(listOf("造物云"), (r as ApiResult.Ok).value)
+    }
+
+    @Test fun `没登录不发请求`() {
+        val (h, bodies) = spy(200, "{}")
+        assertTrue(client(h, MemStore()).setHotwordPins("s", listOf("x")) is ApiResult.Unauthorized)
+        assertEquals(0, bodies.size)
+    }
+
+    @Test fun `存不上要说出来，不能假装成功`() {
+        val (h, _) = spy(409, """{"error":"会话已冻结"}""")
+        assertTrue(client(h, MemStore(Credentials("rt", "org-1", "a@b.c")))
+            .setHotwordPins("s", listOf("x")) is ApiResult.Failed)
+    }
+}
