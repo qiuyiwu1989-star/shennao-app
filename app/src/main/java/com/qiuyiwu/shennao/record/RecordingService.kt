@@ -98,6 +98,8 @@ class RecordingService : Service() {
                 recorder.stop()
                 recording = false
                 state = RecordState.IDLE
+                // 停止这一刻最要紧：接下来这个服务就要退了，剩下的段要有人接手
+                UploadWorker.kick(applicationContext)
                 // 停止之后不能立刻退出服务：还有分段没传完。
                 // 转成一条「正在上传」的通知继续跑，传完了再自己退。
                 updateNotification("正在上传", "录音已停止，正在推送到深脑")
@@ -136,11 +138,20 @@ class RecordingService : Service() {
         }
     }
 
-    /** 有新段封好了，立刻催一次，不用等下一个轮询周期。 */
-    private fun kick() { scope.launch { drainOnce() } }
+    /**
+     * 有新段封好了，立刻催一次，不用等下一个轮询周期。
+     *
+     * 同时排一个 WorkManager 任务：服务活不过「用户把 App 从最近任务里划走」，
+     * 而那一刻没传完的段只躺在手机上——用户以为已经进深脑了。
+     */
+    private fun kick() {
+        scope.launch { drainOnce() }
+        UploadWorker.kick(applicationContext)
+    }
 
     private fun drainOnce() {
-        val results = runCatching { uploader.drainAll() }.getOrElse { return }
+        // 走同一把锁：WorkManager 那条路也在推同一批文件
+        val results = runCatching { synchronized(Resume.lock) { uploader.drainAll() } }.getOrElse { return }
         pendingSegments = vault.sessions().sumOf { s ->
             vault.segments(s).count { it.state != Segment.State.UPLOADED }
         }

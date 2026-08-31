@@ -64,6 +64,8 @@ private fun App(client: DeepBrainClient) {
     // 没有这一步，那些段会一直躺在手机上，而录音页写着「下次打开接着传」。
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) { runCatching { com.qiuyiwu.shennao.record.Resume.kick(ctx) } }
+        // 这次没推完的交给 WorkManager：它能活过 App 被划掉，甚至活过重启
+        com.qiuyiwu.shennao.record.UploadWorker.kick(ctx)
     }
 
     Surface(Modifier.fillMaxSize()) {
