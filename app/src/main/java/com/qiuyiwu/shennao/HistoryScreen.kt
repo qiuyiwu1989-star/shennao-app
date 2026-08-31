@@ -40,6 +40,8 @@ private data class LocalSession(
 @Composable
 fun HistoryScreen(client: DeepBrainClient, onRecord: () -> Unit, onOpen: (String) -> Unit) {
     val ctx = LocalContext.current
+    val cache = remember { Cache(File(ctx.cacheDir, "mobile")) }
+    var stale by remember { mutableStateOf<String?>(null) }
     var rows by remember { mutableStateOf<List<LocalSession>>(emptyList()) }
     var served by remember { mutableStateOf<List<SessionCard>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
@@ -50,12 +52,30 @@ fun HistoryScreen(client: DeepBrainClient, onRecord: () -> Unit, onOpen: (String
             // 服务端那份查得慢一些，但它才知道转写和分析走到哪了。
             // 两份合起来才是完整的一条链：本地管「传没传出去」，服务端管「后面几站」。
             val r = withContext(Dispatchers.IO) { client.sessions() }
-            if (r is ApiResult.Ok) served = r.value
+            if (r is ApiResult.Ok) {
+                served = r.value
+                stale = null
+                withContext(Dispatchers.IO) {
+                    client.rawSessionsOrNull()?.let { cache.save(Cache.SESSIONS, it) }
+                }
+            } else if (served.isEmpty()) {
+                // 没网就拿上次的。这一页的价值是「让卡住变得看得见」，
+                // 而没网时最容易让人以为「东西都送到了」。
+                val c = withContext(Dispatchers.IO) { cache.load(Cache.SESSIONS) }
+                if (c != null) {
+                    served = SessionsParser.parse(c.body)
+                    if (served.isNotEmpty()) {
+                        stale = Cache.staleLabel(c.savedAt, System.currentTimeMillis()) ?: "离线 · 刚才的"
+                    }
+                }
+            }
             loaded = true
             delay(5000)
         }
     }
 
+    Column(Modifier.fillMaxSize()) {
+    stale?.let { StaleBanner(it) }
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
@@ -81,15 +101,11 @@ fun HistoryScreen(client: DeepBrainClient, onRecord: () -> Unit, onOpen: (String
             items(served, key = { "s" + it.sessionId }) { s -> ServedRow(s, onOpen) }
         }
 
-        if (rows.isEmpty() && served.isEmpty() && loaded) {
-            item {
-                Spacer(Modifier.height(20.dp))
-                Text("还没有录过。", style = MaterialTheme.typography.bodyMedium,
-                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(12.dp))
-                OutlinedButton(onClick = onRecord, modifier = Modifier.fillMaxWidth()) { Text("录一场") }
-            }
+        if (!loaded) item { Loading() }
+        else if (rows.isEmpty() && served.isEmpty()) item {
+            Empty("还没有录过", "录一场会，它会自己走完转写和分析。", "录一场", onRecord)
         }
+    }
     }
 }
 

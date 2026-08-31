@@ -68,16 +68,57 @@ private fun App(client: DeepBrainClient) {
     val scope = rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current
 
+    val cache = remember { Cache(java.io.File(ctx.cacheDir, "mobile")) }
+    var stale by remember { mutableStateOf<String?>(null) }
+
     suspend fun load() {
-        screen = Screen.Loading
-        screen = when (val r = withContext(Dispatchers.IO) { client.today() }) {
-            is ApiResult.Ok -> Screen.Feed(r.value)
-            is ApiResult.Unauthorized -> Screen.Login()
-            is ApiResult.Failed -> Screen.Broken(r.message)
+        val r = withContext(Dispatchers.IO) { client.today() }
+        if (r is ApiResult.Ok) {
+            stale = null
+            // 存原始 json 而不是解析后的对象：解析规则会随版本变，
+            // 存对象等于把当前这版的理解冻在磁盘上。
+            withContext(Dispatchers.IO) {
+                client.rawTodayOrNull()?.let { cache.save(Cache.TODAY, it) }
+            }
+            screen = Screen.Feed(r.value)
+            return
         }
+        if (r is ApiResult.Unauthorized) { screen = Screen.Login(); return }
+        // 取不到就拿上次的显示。地铁里、信号差的会议室——这时候一个转圈
+        // 等于这个东西在最需要它的场合不能用。
+        val c = withContext(Dispatchers.IO) { cache.load(Cache.TODAY) }
+        if (c != null) {
+            val parsed = runCatching { TodayParser.parse(c.body) }.getOrNull()
+            if (parsed != null) {
+                stale = Cache.staleLabel(c.savedAt, System.currentTimeMillis()) ?: "离线 · 刚才的"
+                screen = Screen.Feed(parsed)
+                return
+            }
+        }
+        screen = Screen.Broken((r as? ApiResult.Failed)?.message ?: "取数失败")
     }
 
     LaunchedEffect(Unit) { load() }
+
+    /*
+     * 安卓 13 起通知要用户点头。清单里声明了但从不申请，等于通知永远不显示——
+     * 而「建好了没接上」正是这一层最容易犯、又最不会被发现的错：
+     * 没有人会来报「我没收到通知」，他只会觉得这个 App 没这个功能。
+     *
+     * 在登录之后才问：一个还没登录的人不知道你要提醒他什么，
+     * 开屏就弹权限框的应用，大多数人会直接拒。
+     */
+    val askNotify = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { }
+    LaunchedEffect(screen) {
+        if (screen is Screen.Feed && android.os.Build.VERSION.SDK_INT >= 33) {
+            val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+                ctx, android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!granted) askNotify.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     // 上次没传完的录音，开 App 就接着传。服务可能在传完前就被系统杀掉了，
     // 没有这一步，那些段会一直躺在手机上，而录音页写着「下次打开接着传」。
@@ -85,9 +126,28 @@ private fun App(client: DeepBrainClient) {
         withContext(Dispatchers.IO) { runCatching { com.qiuyiwu.shennao.record.Resume.kick(ctx) } }
         // 这次没推完的交给 WorkManager：它能活过 App 被划掉，甚至活过重启
         com.qiuyiwu.shennao.record.UploadWorker.kick(ctx)
+        // 每天提醒一次。网页做不到这件事——它没法在你不打开它的时候提醒你，
+        // 而这一层内容恰恰是有时效的。
+        Remind.schedule(ctx)
     }
 
     var tab by remember { mutableStateOf(Tab.TODAY) }
+
+    /*
+     * 系统返回键。
+     *
+     * 之前没接：在会议详情里按返回会**直接退出 App**——这是安卓上最刺眼的
+     * 「不成熟」信号，用户会以为自己把东西弄丢了。
+     * 三层退法：详情 → 历史 → 今天 → 交还给系统（此时退出才是对的）。
+     */
+    androidx.activity.compose.BackHandler(
+        enabled = screen is Screen.Meeting || (screen is Screen.Feed && tab != Tab.TODAY)
+    ) {
+        when {
+            screen is Screen.Meeting -> { tab = Tab.HISTORY; scope.launch { load() } }
+            else -> tab = Tab.TODAY
+        }
+    }
 
     // 登录、加载、出错这三种状态不该有底栏——底栏在那时点了也没用，
     // 只会让人以为「是不是我点错地方了」。
@@ -158,17 +218,14 @@ private fun App(client: DeepBrainClient) {
                         },
                         onRecord = { tab = Tab.RECORD; screen = Screen.Record },
                         onRefresh = { scope.launch { load() } },
+                        staleLabel = stale,
                     )
                 }
 
-                is Screen.Broken -> Column(
-                    Modifier.fillMaxSize().padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(s.message)
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = { scope.launch { load() } }) { Text("重试") }
+                // 「取不到」和「没有内容」在屏幕上长得一样，但对用户是两件事。
+                // 统一走 Broken，绝不画成空屏。
+                is Screen.Broken -> Box(Modifier.fillMaxSize(), Alignment.Center) {
+                    Broken(s.message) { scope.launch { load() } }
                 }
             }
         }

@@ -125,21 +125,29 @@ class DeepBrainClient(
      * 401 会自动续一次 token 再试。只续一次——续不上就是真的登录失效了，
      * 反复重试只会让用户对着转圈等，而正确的做法是把他送去登录页。
      */
-    fun today(): ApiResult<Today> {
-        val c = store.load() ?: return ApiResult.Unauthorized
-        if (accessToken == null && !refresh()) return ApiResult.Unauthorized
+    fun today(): ApiResult<Today> = get("/api/mobile/today") { TodayParser.parse(it) }
 
-        var r = call(c)
+    /**
+     * 取原始应答，成功时交给调用方存进离线缓存。
+     *
+     * 缓存存的是**原始 json 而不是解析后的对象**：解析规则会随版本变，
+     * 存对象等于把当前这版的理解冻在磁盘上，升级之后旧缓存要么读不出来、
+     * 要么读成错的。存原文则永远能用当前这版的解析器重读一遍。
+     */
+    fun rawTodayOrNull(): String? = raw("/api/mobile/today")
+    fun rawSessionsOrNull(): String? = raw("/api/mobile/sessions")
+
+    private fun raw(path: String): String? {
+        val c = store.load() ?: return null
+        if (accessToken == null && !refresh()) return null
+        fun once() = http.request("GET", "$apiBase$path",
+            mapOf("Authorization" to "Bearer ${accessToken ?: ""}", "x-deepbrain-org-id" to c.orgId))
+        var r = runCatching { once() }.getOrNull() ?: return null
         if (r.status == 401) {
-            if (!refresh()) return ApiResult.Unauthorized
-            r = call(c)
+            if (!refresh()) return null
+            r = runCatching { once() }.getOrNull() ?: return null
         }
-        return when {
-            r.status == 401 -> ApiResult.Unauthorized
-            r.status >= 400 -> ApiResult.Failed("取数失败（${r.status}）")
-            else -> runCatching { ApiResult.Ok(TodayParser.parse(r.body)) }
-                .getOrElse { ApiResult.Failed("应答看不懂") }
-        }
+        return if (r.status >= 400) null else r.body
     }
 
     /**
@@ -212,14 +220,6 @@ class DeepBrainClient(
                 .getOrElse { ApiResult.Failed("应答看不懂") }
         }
     }
-
-    private fun call(c: Credentials) = http.request(
-        "GET", "$apiBase/api/mobile/today",
-        mapOf(
-            "Authorization" to "Bearer ${accessToken ?: ""}",
-            "x-deepbrain-org-id" to c.orgId,
-        ),
-    )
 
     /**
      * 拿一个当前可用的 access token，必要时续一次。

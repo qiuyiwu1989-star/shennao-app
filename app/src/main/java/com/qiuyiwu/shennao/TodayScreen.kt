@@ -28,7 +28,13 @@ fun TodayScreen(
     onOpenTranscript: (String) -> Unit,
     onRecord: () -> Unit,
     onRefresh: () -> Unit,
+    /** 非空表示现在显示的是离线缓存，并说明是什么时候的 */
+    staleLabel: String? = null,
 ) {
+    Column(Modifier.fillMaxSize()) {
+    // 离线横幅放在最上面且不遮挡内容：用户仍然能读，只是知道这是旧的。
+    // 不标时间的缓存比没有缓存更糟——他会拿三天前的数据当今天的。
+    staleLabel?.let { com.qiuyiwu.shennao.StaleBanner(it) }
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -63,6 +69,7 @@ fun TodayScreen(
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) { Text("刷新") }
         }
+    }
     }
 }
 
