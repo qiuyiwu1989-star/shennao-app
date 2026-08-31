@@ -39,9 +39,13 @@ fun Refreshable(
 
     Box(modifier.fillMaxSize().nestedScroll(state.nestedScrollConnection)) {
         content()
-        PullToRefreshContainer(
-            state = state,
-            modifier = Modifier.align(Alignment.TopCenter),
-        )
+        // 只在真的在拉或在转时才画。静止时也画一个圆圈，会和下面的内容
+        // 叠在一起——用户看到的是「刷新按钮压在标题上」，像排版坏了。
+        if (state.isRefreshing || state.verticalOffset > 0.5f) {
+            PullToRefreshContainer(
+                state = state,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        }
     }
 }

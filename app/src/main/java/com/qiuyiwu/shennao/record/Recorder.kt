@@ -26,6 +26,14 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
     @Volatile var elapsedMs: Long = 0; private set
     /** 此刻的真实状态。界面照着念——不许自己维护一份「我以为在录」 */
     @Volatile var state: RecordState = RecordState.IDLE; private set
+    /**
+     * 当前音量，0..1。
+     *
+     * 计时器只能证明「时间在走」，证明不了「录到了声音」——
+     * 一个被静音的麦克风，计时器照样走得好好的。声波是唯一能一眼看出
+     * 「它真的在听」的东西，而这正是用户最想确认的那件事。
+     */
+    @Volatile var level: Float = 0f; private set
     val currentSession: String? get() = session
     val isRecording: Boolean get() = running.get()
 
@@ -127,6 +135,7 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
                     continue
                 }
                 open.write(buf, n)
+                level = Level.of(buf, n)
                 elapsedMs = startMs + open.elapsedMs
                 sinceSync += n
                 // 每 2 秒落一次盘。不是每次都 sync——那会让磁盘一直忙；

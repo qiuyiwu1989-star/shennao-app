@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.height
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +42,9 @@ fun RecordScreen(onBack: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var denied by remember { mutableStateOf(false) }
     var sessionId by remember { mutableStateOf<String?>(null) }
+    var level by remember { mutableStateOf(0f) }
+    // 声波保留最近这些格。数量按一屏能画下的柱子数定，多了会挤成一片灰。
+    val bars = remember { mutableStateListOf<Float>() }
 
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) RecordingService.start(ctx, "手机录音") else denied = true
@@ -54,9 +58,14 @@ fun RecordScreen(onBack: () -> Unit) {
             state = RecordingService.state
             elapsed = RecordingService.elapsedMs
             pending = RecordingService.pendingSegments
-            error = RecordingService.lastError
+            error = RecordingService.micError
             sessionId = RecordingService.serverSessionId
-            delay(250)
+            level = RecordingService.level
+            if (recording) {
+                bars.add(level)
+                if (bars.size > 48) bars.removeAt(0)
+            } else if (bars.isNotEmpty()) bars.clear()
+            delay(80)
         }
     }
 
@@ -90,6 +99,11 @@ fun RecordScreen(onBack: () -> Unit) {
                 else -> MaterialTheme.colorScheme.onSurface
             },
         )
+
+        if (recording || state == com.qiuyiwu.shennao.record.RecordState.INTERRUPTED) {
+            Spacer(Modifier.height(18.dp))
+            Waveform(bars, Modifier.fillMaxWidth().height(56.dp))
+        }
 
         Spacer(Modifier.height(10.dp))
         Text(
@@ -178,6 +192,39 @@ fun RecordScreen(onBack: () -> Unit) {
             )
         }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * 声波。
+ *
+ * 计时器只能证明「时间在走」，证明不了「录到了声音」——一个被静音的麦克风，
+ * 计时器照样走得好好的。这条声波是唯一能一眼看出「它真的在听」的东西。
+ *
+ * 从右往左推，新的在右边——和录音笔、和人读时间的方向一致。
+ * 静音时保留一条细基线而不是空白：空白看起来像组件没加载出来。
+ */
+@androidx.compose.runtime.Composable
+private fun Waveform(bars: List<Float>, modifier: Modifier = Modifier) {
+    val color = MaterialTheme.colorScheme.primary
+    val idle = MaterialTheme.colorScheme.outlineVariant
+    androidx.compose.foundation.Canvas(modifier) {
+        val n = 48
+        val gap = 3f
+        val w = (size.width - gap * (n - 1)) / n
+        val mid = size.height / 2f
+        for (i in 0 until n) {
+            // 右对齐：最新的一格贴右边
+            val v = bars.getOrNull(bars.size - n + i) ?: 0f
+            val h = (v * size.height).coerceAtLeast(2f)
+            val x = i * (w + gap)
+            drawRoundRect(
+                color = if (v > 0.02f) color else idle,
+                topLeft = androidx.compose.ui.geometry.Offset(x, mid - h / 2f),
+                size = androidx.compose.ui.geometry.Size(w, h),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(w / 2f, w / 2f),
+            )
+        }
     }
 }
 

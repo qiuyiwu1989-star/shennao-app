@@ -54,8 +54,21 @@ class RecordingService : Service() {
          */
         @Volatile private var recorderRef: Recorder? = null
         val elapsedMs: Long get() = recorderRef?.elapsedMs ?: 0L
+
+        /** 当前音量 0..1。给声波用——它是「确实在录到声音」的唯一直观证据。 */
+        val level: Float get() = recorderRef?.level ?: 0f
         @Volatile var pendingSegments: Int = 0; private set
-        @Volatile var lastError: String? = null; private set
+        /**
+         * **录音本身**的问题：麦克风打不开、被抢走。只有这一类该出现在录音页。
+         *
+         * 之前它和上传失败共用一个变量，于是一按「开始录音」，屏幕上跳出来的是
+         * 某条几小时前卡住的会话的「冻结清单失败 409」——用户完全没法把它
+         * 和自己刚做的动作联系起来，只会以为是这次录音出了问题。
+         */
+        @Volatile var micError: String? = null; private set
+
+        /** **上传**的问题。属于「会议」那一栏，不该打扰正在录音的人。 */
+        @Volatile var uploadProblem: String? = null; private set
 
         /**
          * 当前这场在服务端的会话 id。设本场热词要用它。
@@ -104,13 +117,13 @@ class RecordingService : Service() {
                 scope.launch { recorder.recoverOrphans(); kick() }
                 val title = intent.getStringExtra("title") ?: "手机录音"
                 if (recorder.start(title, System.currentTimeMillis()) == null) {
-                    lastError = "麦克风打不开——检查权限，或者有别的应用正占着它"
+                    micError = "麦克风打不开——检查权限，或者有别的应用正占着它"
                     stopSelf()
                     return START_NOT_STICKY
                 }
                 recording = true
                 state = RecordState.RECORDING
-                lastError = null
+                micError = null
                 startPump()
             }
             ACTION_STOP -> {
@@ -148,7 +161,7 @@ class RecordingService : Service() {
                 if (state == RecordState.GAVE_UP) {
                     // 录音线程自己放弃了。把已经录到的传完就收工——
                     // 让服务空转着不会让麦克风回来。
-                    lastError = "麦克风被别的应用占着，录音已停止。已录到的部分会照常推送。"
+                    micError = "麦克风被别的应用占着，录音已停止。已录到的部分会照常推送。"
                     launch { drainUntilEmpty() }
                     return@launch
                 }
@@ -188,7 +201,7 @@ class RecordingService : Service() {
         // 只把不可重试的错报给界面。网络抖一下就弹一条红字，
         // 用户学会的第一件事就是无视它——那时候真出事也没人看了。
         results.values.filterIsInstance<DrainResult.Failed>()
-            .firstOrNull { !it.retryable }?.let { lastError = it.message }
+            .firstOrNull { !it.retryable }?.let { uploadProblem = it.message }
     }
 
     private suspend fun drainUntilEmpty() {

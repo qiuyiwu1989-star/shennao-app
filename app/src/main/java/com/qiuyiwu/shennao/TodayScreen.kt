@@ -65,6 +65,7 @@ fun TodayScreen(
     val pager = androidx.compose.foundation.pager.rememberPagerState { channels.size }
     val scope = rememberCoroutineScope()
 
+    val page = @Composable {
     Column(Modifier.fillMaxSize()) {
         staleLabel?.let { com.qiuyiwu.shennao.StaleBanner(it) }
 
@@ -94,8 +95,7 @@ fun TodayScreen(
             }
         }
 
-        val body = @Composable {
-            androidx.compose.foundation.pager.HorizontalPager(
+        androidx.compose.foundation.pager.HorizontalPager(
                 state = pager,
                 modifier = Modifier.fillMaxSize(),
             ) { page ->
@@ -124,13 +124,15 @@ fun TodayScreen(
                         }
                     }
                     item { Spacer(Modifier.height(24.dp)) }
-                }
             }
         }
-
-        if (onPullRefresh != null) Refreshable(onRefresh = onPullRefresh) { body() }
-        else body()
     }
+    }
+
+    // 整页下拉，而不是只有列表区域能拉——用户的手会落在标题上，
+    // 那里拉不动的话，他会以为这一页不支持刷新。
+    if (onPullRefresh != null) Refreshable(onRefresh = onPullRefresh) { page() }
+    else page()
 }
 
 private data class Channel(val title: String, val hint: String, val count: Int)

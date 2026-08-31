@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -13,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.qiuyiwu.shennao.record.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -38,13 +40,26 @@ private data class LocalSession(
 }
 
 @Composable
-fun HistoryScreen(client: DeepBrainClient, onRecord: () -> Unit, onOpen: (String) -> Unit) {
+fun HistoryScreen(
+    client: DeepBrainClient,
+    onRecord: () -> Unit,
+    onOpen: (String) -> Unit,
+) {
     val ctx = LocalContext.current
     val cache = remember { Cache(File(ctx.cacheDir, "mobile")) }
     var stale by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     var rows by remember { mutableStateOf<List<LocalSession>>(emptyList()) }
     var served by remember { mutableStateOf<List<SessionCard>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
+
+    val onDelete: (String) -> Unit = { id ->
+        scope.launch {
+            withContext(Dispatchers.IO) { client.deleteRecording(id) }
+            val r = withContext(Dispatchers.IO) { client.sessions() }
+            if (r is ApiResult.Ok) served = r.value
+        }
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -103,7 +118,7 @@ fun HistoryScreen(client: DeepBrainClient, onRecord: () -> Unit, onOpen: (String
 
         if (served.isNotEmpty()) {
             item { MiniHead("已经送到深脑") }
-            items(served, key = { "s" + it.sessionId }) { s -> ServedRow(s, onOpen) }
+            items(served, key = { "s" + it.sessionId }) { s -> ServedRow(s, onOpen, onDelete) }
         }
 
         if (!loaded) item { Loading() }
@@ -129,7 +144,7 @@ private fun MiniHead(t: String) {
  * 一条线还说了「还差几步」——而用户真正想知道的是后者。
  */
 @Composable
-private fun ServedRow(s: SessionCard, onOpen: (String) -> Unit) {
+private fun ServedRow(s: SessionCard, onOpen: (String) -> Unit, onDelete: ((String) -> Unit)? = null) {
     val failed = s.stage == Stage.FAILED
     // 可点的 Card 那个重载是 onClick 在前、modifier 在后，
     // 按 Modifier 优先的习惯写会匹配不上。
@@ -150,8 +165,22 @@ private fun ServedRow(s: SessionCard, onOpen: (String) -> Unit) {
             Chain(s.stage)
             if (failed && s.problem != null) {
                 Spacer(Modifier.height(8.dp))
-                Text(s.problem, style = MaterialTheme.typography.bodySmall,
-                     color = MaterialTheme.colorScheme.error)
+                // 失败的原因要说清楚**该怎么办**，而不只是「出错了」。
+                // 服务端已经把内部术语翻成人话了，这里照着显示。
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(s.problem, style = MaterialTheme.typography.bodySmall,
+                         color = MaterialTheme.colorScheme.onErrorContainer,
+                         modifier = Modifier.padding(10.dp))
+                }
+                if (onDelete != null) {
+                    // 给一条出路。一条救不回来的录音一直挂在列表上，
+                    // 用户每次打开都要重新判断一次「这个要不要管」。
+                    TextButton(onClick = { onDelete(s.sessionId) }) { Text("删掉这条") }
+                }
             }
             s.startedAt?.let {
                 Spacer(Modifier.height(6.dp))

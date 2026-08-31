@@ -218,6 +218,26 @@ class DeepBrainClient(
         }.getOrElse { ApiResult.Failed("应答看不懂") }
     }
 
+    /**
+     * 删掉一条录音会话。
+     *
+     * 给「救不回来」的那些用：一条永远失败的录音挂在列表上，
+     * 用户每次打开都要重新判断一次「这个要不要管」。
+     */
+    fun deleteRecording(sessionId: String): ApiResult<Unit> {
+        val c = store.load() ?: return ApiResult.Unauthorized
+        if (accessToken == null && !refresh()) return ApiResult.Unauthorized
+        fun once() = http.request(
+            "DELETE", "$apiBase/api/recordings/$sessionId",
+            mapOf("Authorization" to "Bearer ${accessToken ?: ""}", "x-deepbrain-org-id" to c.orgId),
+        )
+        var r = once()
+        if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
+        // 404 = 已经不在了，也算达成目的
+        return if (r.status < 400 || r.status == 404) ApiResult.Ok(Unit)
+               else ApiResult.Failed("删不掉（${r.status}）")
+    }
+
     /** 搜索。查询串要转义，否则用户搜的东西里带 & 会把参数截断。 */
     fun search(q: String): ApiResult<List<Hit>> =
         get("/api/mobile/search?q=" + java.net.URLEncoder.encode(q, "UTF-8")) { SearchParser.parse(it) }
