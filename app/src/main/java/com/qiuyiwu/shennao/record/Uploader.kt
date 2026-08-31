@@ -158,6 +158,31 @@ class Uploader(
             "POST", "$apiBase/api/recordings/$sid/stop", h,
             JSONObject(mapOf("durationMs" to totalMs, "expectedChunkCount" to ready.size)).toString(),
         )
+
+        /*
+         * 服务端说清单不全时，**它会告诉我们缺哪几片**（missingSequences）。
+         *
+         * 2026-08-31：一场 56 片的录音卡在这里反复 409，而服务端每次都附着
+         * 缺号清单，是客户端把它扔了——只报了一句「冻结清单失败（409）」。
+         * 手上明明有一份精确的差异，却拿去当成一个笼统的失败重试，
+         * 于是每 15 秒重复同一个错，永远不会好。
+         *
+         * 缺的那几片本地还留着音频（改名成 .up 时只改了名字，字节没删），
+         * 所以能自愈：把它们改回待传，下一轮自然会重推。
+         */
+        if (stop.status == 409 && stop.body.contains("MANIFEST_INCOMPLETE")) {
+            val missing = missingSequences(stop.body)
+            if (missing.isNotEmpty()) {
+                var revived = 0
+                for (seq in missing) {
+                    val seg = ready.firstOrNull { it.sequence == seq } ?: continue
+                    if (vault.rename(session, seg, seg.copy(state = Segment.State.SEALED))) revived++
+                }
+                return DrainResult.Progress(ready.size - revived, revived)
+            }
+            // 服务端说不全、却没说缺哪片：这时重试没有意义，报出来让人看见。
+            return DrainResult.Failed("服务端说分片不全，但没说缺哪几片", false)
+        }
         // 已经冻结过了也算成功——重跑到这一步是正常的
         if (stop.status >= 400 && !stop.body.contains("INVALID_STATE")) {
             return DrainResult.Failed("冻结清单失败（${stop.status}）", stop.status >= 500)
@@ -291,6 +316,17 @@ class Uploader(
         vault.rename(session, seg, seg.withState(Segment.State.UPLOADED))
         return StepResult.Ok
     }
+
+    /**
+     * 取服务端给的缺号清单。
+     * 结构是 {"error":{"code":"MANIFEST_INCOMPLETE","details":{"missingSequences":[...]}}}
+     */
+    private fun missingSequences(body: String): List<Int> = runCatching {
+        val e = JSONObject(body).optJSONObject("error") ?: JSONObject(body)
+        val arr = (e.optJSONObject("details") ?: e).optJSONArray("missingSequences")
+            ?: return emptyList()
+        (0 until arr.length()).map { arr.getInt(it) }
+    }.getOrElse { emptyList() }
 
     /** 从错误应答里取 code。取不到就还回状态码本身——总比一句「失败了」强。 */
     private fun codeOf(body: String): String = runCatching {

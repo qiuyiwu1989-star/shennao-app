@@ -591,3 +591,73 @@ class ChunkConflictTest {
         assertEquals(3, h.log.count { it.contains("ticket") })
     }
 }
+
+class ManifestIncompleteTest {
+    /*
+     * 2026-08-31：一场 56 片的录音卡在 stop 上反复 409，而服务端每次都附着
+     * 缺号清单，是客户端把它扔了——只报了一句「冻结清单失败（409）」。
+     * 手上明明有一份精确的差异，却当成笼统的失败去重试，于是每 15 秒
+     * 重复同一个错，永远不会好。
+     */
+    private val incomplete = """{"error":{"code":"MANIFEST_INCOMPLETE",
+        "message":"录音分片尚未完整上传","details":{"missingSequences":[1,3]}}}"""
+
+    @Test fun `服务端说缺哪几片，就把那几片改回待传`() {
+        val v = MemVault().apply {
+            metas["s"] = meta(finished = true)
+            (0..3).forEach { put("s", seg(it, Segment.State.UPLOADED)) }
+        }
+        val h = ScriptHttp { _, url, _ ->
+            when {
+                url.endsWith("/api/recordings") -> HttpResponse(200, CREATED)
+                url.endsWith("/stop") -> HttpResponse(409, incomplete)
+                else -> HttpResponse(200, "{}")
+            }
+        }
+        val r = uploader(v, h).drain("s")
+        assertTrue("$r", r is DrainResult.Progress)
+        val sealed = v.segments("s").filter { it.state == Segment.State.SEALED }.map { it.sequence }
+        assertEquals("只该复活服务端说缺的那两片", listOf(1, 3), sealed)
+        // 其余两片保持已送达，不该被牵连
+        assertEquals(2, v.segments("s").count { it.state == Segment.State.UPLOADED })
+    }
+
+    @Test fun `复活之后下一轮会重推它们`() {
+        val v = MemVault().apply {
+            metas["s"] = meta(finished = true)
+            (0..3).forEach { put("s", seg(it, Segment.State.UPLOADED)) }
+        }
+        var stopped = 0
+        val h = ScriptHttp { _, url, _ ->
+            when {
+                url.endsWith("/api/recordings") -> HttpResponse(200, CREATED)
+                url.endsWith("/stop") -> { stopped++; if (stopped == 1) HttpResponse(409, incomplete) else HttpResponse(200, "{}") }
+                url.contains("/chunks/ticket") -> HttpResponse(200, TICKET)
+                url.startsWith("https://cos.test") -> HttpResponse(200, "")
+                else -> HttpResponse(200, "{}")
+            }
+        }
+        val u = uploader(v, h)
+        u.drain("s")                       // 第一轮：复活缺的两片
+        val r = u.drain("s")               // 第二轮：重推它们，然后收尾
+        assertTrue("$r", r is DrainResult.Done)
+    }
+
+    @Test fun `说不全却没说缺哪片时，不要无限重试`() {
+        val v = MemVault().apply {
+            metas["s"] = meta(finished = true)
+            put("s", seg(0, Segment.State.UPLOADED))
+        }
+        val h = ScriptHttp { _, url, _ ->
+            when {
+                url.endsWith("/api/recordings") -> HttpResponse(200, CREATED)
+                url.endsWith("/stop") ->
+                    HttpResponse(409, """{"error":{"code":"MANIFEST_INCOMPLETE"}}""")
+                else -> HttpResponse(200, "{}")
+            }
+        }
+        val r = uploader(v, h).drain("s")
+        assertTrue(r is DrainResult.Failed)
+        assertFalse("没有可操作的信息，重试也不会好", (r as DrainResult.Failed).retryable)
+    }
+}
