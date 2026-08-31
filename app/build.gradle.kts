@@ -23,8 +23,8 @@ android {
         applicationId = "com.qiuyiwu.shennao"
         minSdk = 26          // 8.0：低于这个连 Java 8 时间 API 都要脱糖，不值得
         targetSdk = 34
-        versionCode = 18
-        versionName = "1.2.1"
+        versionCode = 19
+        versionName = "1.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "API_BASE", "\"${cfg("deepbrain.apiBase")}\"")
@@ -83,6 +83,10 @@ dependencies {
     // refresh token 现在是明文躺在 SharedPreferences 里。它能换 access token，
     // 等于长期钥匙——落盘必须加密。
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    // 实时字幕要 WebSocket。安卓没有内置的 WS 客户端（java.net.http 不在 SDK 里），
+    // 手写 RFC 6455 的握手与掩码帧不是不能做，但今天已经在协议细节上栽过两次，
+    // 这里用成熟实现更划算。
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     testImplementation("junit:junit:4.13.2")
     // 安卓自带 org.json，但 JVM 单测里那是个**空壳桩**——每个方法都抛

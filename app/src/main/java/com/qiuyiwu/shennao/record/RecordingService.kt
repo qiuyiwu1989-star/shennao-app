@@ -79,6 +79,10 @@ class RecordingService : Service() {
          */
         @Volatile var serverSessionId: String? = null; private set
 
+        /** 实时字幕：最近几句。只显示，不落盘不上传——实时稿不进长期记忆。 */
+        @Volatile var captions: List<String> = emptyList(); private set
+        @Volatile var captionState: String? = null; private set
+
         fun start(ctx: Context, title: String) {
             val i = Intent(ctx, RecordingService::class.java)
                 .setAction(ACTION_START).putExtra("title", title)
@@ -95,6 +99,7 @@ class RecordingService : Service() {
     private lateinit var uploader: Uploader
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pump: Job? = null
+    private var realtime: Realtime? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -127,6 +132,7 @@ class RecordingService : Service() {
                 startPump()
             }
             ACTION_STOP -> {
+                stopCaptions()
                 recorder.stop()
                 recording = false
                 state = RecordState.IDLE
@@ -188,7 +194,64 @@ class RecordingService : Service() {
     /** 把当前这场的服务端 id 抄到伴生对象上，供界面设热词。 */
     private fun publishSessionId() {
         val local = recorder.currentSession ?: return
-        serverSessionId = vault.readMeta(local)?.serverSessionId
+        val id = vault.readMeta(local)?.serverSessionId
+        serverSessionId = id
+        // 会话 id 一到手就开字幕。它要等第一段传上去才有（约一分钟），
+        // 所以字幕天然比录音晚一分钟起——界面上要说清楚在等什么。
+        if (id != null && realtime == null && recorder.isRecording) startCaptions(id)
+    }
+
+    /**
+     * 开实时字幕。失败一律只影响字幕。
+     *
+     * 拿不到 ticket 的情况很多（服务端没配、会话状态不对、网络不通），
+     * 每一种都不该让正在进行的录音有任何变化。
+     */
+    private fun startCaptions(sessionId: String) {
+        scope.launch {
+            val auth = com.qiuyiwu.shennao.Session.authFor(applicationContext) ?: return@launch
+            val r = runCatching {
+                UrlHttp().request(
+                    "POST", "${BuildConfig.API_BASE}/api/recordings/$sessionId/realtime-ticket",
+                    mapOf(
+                        "Authorization" to "Bearer ${auth.first}",
+                        "x-deepbrain-org-id" to auth.second,
+                        "Content-Type" to "application/json",
+                    ), "{}",
+                )
+            }.getOrNull() ?: return@launch
+            if (r.status >= 400) {
+                // 503 = 服务端没开这个功能。说清楚，不要让人以为是自己网络的问题。
+                captionState = if (r.status == 503) "这台服务器没开实时字幕" else null
+                return@launch
+            }
+            val o = runCatching { org.json.JSONObject(r.body) }.getOrNull() ?: return@launch
+            val url = o.optString("gatewayUrl").takeIf { it.isNotBlank() } ?: return@launch
+            val ticket = o.optString("ticket").takeIf { it.isNotBlank() } ?: return@launch
+
+            val rt = Realtime(
+                onSegment = { text, isFinal ->
+                    // 只留最近几句。字幕是「现在在说什么」，不是一份稿子——
+                    // 攒成长列表既占内存，也会让人去读它而不是听会。
+                    val next = captions.toMutableList()
+                    if (next.isNotEmpty() && !isFinal) next[next.lastIndex] = text else next.add(text)
+                    captions = next.takeLast(4)
+                },
+                onState = { captionState = it },
+            )
+            realtime = rt
+            recorder.realtime = rt
+            rt.start(url, ticket, System.currentTimeMillis() - recorder.elapsedMs)
+        }
+    }
+
+    /** 先关字幕再收尾录音——反了会让最后一段等在网络上。 */
+    private fun stopCaptions() {
+        recorder.realtime = null
+        realtime?.stop()
+        realtime = null
+        captions = emptyList()
+        captionState = null
     }
 
     private fun drainOnce() {
@@ -233,6 +296,7 @@ class RecordingService : Service() {
     }
 
     override fun onDestroy() {
+        stopCaptions()
         recorder.stop()
         recording = false
         recorderRef = null
