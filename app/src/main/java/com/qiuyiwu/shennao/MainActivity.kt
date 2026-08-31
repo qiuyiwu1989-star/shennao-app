@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,11 +39,24 @@ private sealed class Screen {
     data class Broken(val message: String) : Screen()
 }
 
+/**
+ * 底部四栏。
+ *
+ * 刻意只有四个，而且是网页版的**子集 + 手机独有的「录」**：
+ * 网页是铺开的（驾驶舱、记忆库、方法广场…），手机是一扫而过的场景，
+ * 原样搬过来只会让它变难用。所以每一栏都要能回答一个当下的问题——
+ *   今天：现在该看什么      录音：把这场会录下来
+ *   在路上：录的东西到了吗   我的：账号和版本
+ */
+private enum class Tab(val label: String) {
+    TODAY("今天"), RECORD("录音"), HISTORY("在路上"), ME("我的")
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val client = Session.client(this)
-        setContent { MaterialTheme { App(client) } }
+        setContent { ShennaoTheme { App(client) } }
     }
 }
 
@@ -68,48 +85,98 @@ private fun App(client: DeepBrainClient) {
         com.qiuyiwu.shennao.record.UploadWorker.kick(ctx)
     }
 
-    Surface(Modifier.fillMaxSize()) {
-        when (val s = screen) {
-            is Screen.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+    var tab by remember { mutableStateOf(Tab.TODAY) }
 
-            is Screen.Login -> LoginScreen(s) { email, pw ->
-                scope.launch {
-                    screen = Screen.Login(busy = true)
-                    when (val r = withContext(Dispatchers.IO) { client.signIn(email, pw) }) {
-                        is ApiResult.Ok -> load()
-                        is ApiResult.Failed -> screen = Screen.Login(error = r.message)
-                        else -> screen = Screen.Login(error = "登录失败")
-                    }
+    // 登录、加载、出错这三种状态不该有底栏——底栏在那时点了也没用，
+    // 只会让人以为「是不是我点错地方了」。
+    val s0 = screen
+    val chrome = s0 is Screen.Feed || s0 is Screen.Record
+
+    Scaffold(
+        bottomBar = {
+            if (chrome) NavigationBar {
+                Tab.entries.forEach { t ->
+                    NavigationBarItem(
+                        selected = tab == t,
+                        onClick = {
+                            tab = t
+                            // 「今天」要重新取数：底栏的意义是「回到那一屏」，
+                            // 而不是「回到十分钟前那一屏」。
+                            if (t == Tab.TODAY) scope.launch { load() }
+                            if (t == Tab.RECORD) screen = Screen.Record
+                            else if (screen is Screen.Record && t != Tab.RECORD) scope.launch { load() }
+                        },
+                        icon = { TabIcon(t) },
+                        label = { Text(t.label) },
+                    )
                 }
             }
+        }
+    ) { pad ->
+        Surface(Modifier.fillMaxSize().padding(pad)) {
+            when (val s = screen) {
+                is Screen.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
 
-            is Screen.Record -> RecordScreen(onBack = { scope.launch { load() } })
+                is Screen.Login -> LoginScreen(s) { email, pw ->
+                    scope.launch {
+                        screen = Screen.Login(busy = true)
+                        when (val r = withContext(Dispatchers.IO) { client.signIn(email, pw) }) {
+                            is ApiResult.Ok -> load()
+                            is ApiResult.Failed -> screen = Screen.Login(error = r.message)
+                            else -> screen = Screen.Login(error = "登录失败")
+                        }
+                    }
+                }
 
-            is Screen.Feed -> TodayScreen(
-                today = s.today,
-                onRecord = { screen = Screen.Record },
-                // 下钻先用外跳浏览器：那场会的完整转写、播放、认人都在网页里，
-                // 在 App 里再实现一遍是重复造，而且必然比网页那份旧。
-                // 等「录」做完、App 有了自己的内容再说。
-                onOpenTranscript = { tid ->
-                    ctx.startActivity(android.content.Intent(
-                        android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse("${BuildConfig.API_BASE}/zh/transcript/$tid")))
-                },
-                onRefresh = { scope.launch { load() } },
-            )
+                is Screen.Record -> RecordScreen(onBack = { tab = Tab.TODAY; scope.launch { load() } })
 
-            is Screen.Broken -> Column(
-                Modifier.fillMaxSize().padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(s.message)
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = { scope.launch { load() } }) { Text("重试") }
+                is Screen.Feed -> when (tab) {
+                    Tab.RECORD -> RecordScreen(onBack = { tab = Tab.TODAY; scope.launch { load() } })
+                    Tab.HISTORY -> HistoryScreen(onRecord = { tab = Tab.RECORD; screen = Screen.Record })
+                    Tab.ME -> MeScreen(client) {
+                        client.signOut()
+                        tab = Tab.TODAY
+                        screen = Screen.Login()
+                    }
+                    Tab.TODAY -> TodayScreen(
+                        today = s.today,
+                        // 下钻走浏览器：那场会的完整转写、播放、认人都在网页里，
+                        // 在 App 里再实现一遍是重复造，而且必然比网页那份旧。
+                        onOpenTranscript = { tid ->
+                            ctx.startActivity(android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse("${BuildConfig.API_BASE}/zh/transcript/$tid")))
+                        },
+                        onRecord = { tab = Tab.RECORD; screen = Screen.Record },
+                        onRefresh = { scope.launch { load() } },
+                    )
+                }
+
+                is Screen.Broken -> Column(
+                    Modifier.fillMaxSize().padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(s.message)
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = { scope.launch { load() } }) { Text("重试") }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun TabIcon(t: Tab) {
+    val v = when (t) {
+        Tab.TODAY -> Icons.Outlined.Home
+        Tab.RECORD -> MicOutlined
+        Tab.HISTORY -> Icons.Outlined.Send
+        Tab.ME -> Icons.Outlined.Person
+    }
+    // 明确用 material3 的 Icon：material 和 material3 各有一个同名可组合项，
+    // 不指明会是重载歧义。
+    androidx.compose.material3.Icon(v, contentDescription = t.label)
 }
 
 @Composable

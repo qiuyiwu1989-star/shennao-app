@@ -156,3 +156,48 @@ class ClientTest {
         assertNull(store.load())
     }
 }
+
+class UpdateTest {
+    private fun http(status: Int, body: String) = object : Http {
+        override fun request(method: String, url: String, headers: Map<String, String>, body2: String?) =
+            HttpResponse(status, body)
+        override fun requestBytes(method: String, url: String, headers: Map<String, String>, body2: ByteArray) =
+            HttpResponse(status, body)
+    }
+
+    private val ok = """{"versionName":"0.9.0","versionCode":12,"file":"a.apk","size":9886158,
+        "sha256":"abc","url":"https://shennao.zaowuyun.com/downloads/a.apk"}"""
+
+    @Test fun `有新版就报出来`() {
+        val s = Update.check(http(200, ok), currentCode = 7)
+        assertTrue(s is UpdateState.Available)
+        assertEquals("0.9.0", (s as UpdateState.Available).release.versionName)
+    }
+
+    @Test fun `同版本不提示`() {
+        assertTrue(Update.check(http(200, ok), currentCode = 12) is UpdateState.UpToDate)
+    }
+
+    @Test fun `服务端回滚过一版时，不该劝用户装个更旧的`() {
+        assertTrue(Update.check(http(200, ok), currentCode = 20) is UpdateState.UpToDate)
+    }
+
+    @Test fun `比的是 versionCode 不是名字——字符串比较会把 0点10 判成比 0点9 旧`() {
+        val newer = Update.parse("""{"versionName":"0.10.0","versionCode":13,"url":"u"}""")!!
+        assertTrue(Update.compare(9, newer) is UpdateState.Available)   // versionName 0.10.0 < "0.9.0" 字符串序
+    }
+
+    @Test fun `网络不通要说「查不到」，不能说「已是最新」`() {
+        val dead = object : Http {
+            override fun request(m: String, u: String, h: Map<String, String>, b: String?): HttpResponse = throw RuntimeException("no net")
+            override fun requestBytes(m: String, u: String, h: Map<String, String>, b: ByteArray): HttpResponse = throw RuntimeException("no net")
+        }
+        assertTrue(Update.check(dead, 7) is UpdateState.Unknown)
+    }
+
+    @Test fun `半个清单一律当读不出来，绝不返回半个 Release`() {
+        assertNull(Update.parse("""{"versionName":"0.9.0"}"""))          // 没有 code / url
+        assertNull(Update.parse("""{"versionCode":9,"url":"u"}"""))      // 没有名字
+        assertNull(Update.parse("不是 json"))
+    }
+}
