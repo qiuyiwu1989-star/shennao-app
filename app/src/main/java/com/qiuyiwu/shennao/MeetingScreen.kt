@@ -12,6 +12,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -21,12 +22,15 @@ import kotlinx.coroutines.withContext
  * 逐句转写不在这里——那要滚很久，而网页那份有播放对齐和认说话人，
  * 在 App 里再实现一遍必然更旧。
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var meeting by remember { mutableStateOf<Meeting?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var sharing by remember { mutableStateOf(false) }
+    var shareNote by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(transcriptId) {
         when (val r = withContext(Dispatchers.IO) { client.meeting(transcriptId) }) {
@@ -44,6 +48,35 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onBack) { Text("返回") }
+                Spacer(Modifier.weight(1f))
+                // 分享。走系统的分享面板，不自己做选择器——
+                // 用户已经知道怎么用它，而且我们做的那个永远比系统的少几个入口。
+                TextButton(
+                    enabled = !sharing && meeting != null,
+                    onClick = {
+                        sharing = true; shareNote = null
+                        scope.launch {
+                            val r = withContext(Dispatchers.IO) { client.share(transcriptId) }
+                            sharing = false
+                            when (r) {
+                                is ApiResult.Ok -> {
+                                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(android.content.Intent.EXTRA_TEXT,
+                                                 "${meeting?.title ?: "一场会"}\n${r.value}")
+                                    }
+                                    ctx.startActivity(android.content.Intent.createChooser(send, "分享给"))
+                                }
+                                is ApiResult.Failed -> shareNote = r.message
+                                else -> shareNote = "登录失效了"
+                            }
+                        }
+                    },
+                ) { Text(if (sharing) "生成中…" else "分享") }
+            }
+            shareNote?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall,
+                     color = MaterialTheme.colorScheme.error)
             }
         }
 
@@ -89,6 +122,41 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                    }
+                }
+
+                // 分析正文。这才是「深脑读出了什么」的主体——
+                // 之前只给了一段摘要，等于把大半藏起来了。
+                m.analysis?.let { a ->
+                    if (a.methods.isNotEmpty()) item {
+                        Spacer(Modifier.height(4.dp))
+                        // 一场分析常常是好几个方法合出来的。只显示一个，
+                        // 用户会以为深脑只用了一种看法。
+                        androidx.compose.foundation.layout.FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            a.methods.forEach { m2 ->
+                                AssistChip(onClick = {}, label = {
+                                    Text(m2, style = MaterialTheme.typography.labelSmall)
+                                })
+                            }
+                        }
+                        a.routingReason?.let { r ->
+                            Spacer(Modifier.height(4.dp))
+                            Text("为什么选这几个方法：$r",
+                                 style = MaterialTheme.typography.bodySmall,
+                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    if (a.markdown != null) item {
+                        SectionHead("分析", "深脑读出来的")
+                        Card(Modifier.fillMaxWidth()) {
+                            MarkdownText(a.markdown, Modifier.padding(14.dp))
+                        }
+                    } else if (a.status != "completed") item {
+                        Text("分析还在跑（${a.status}）",
+                             style = MaterialTheme.typography.bodySmall,
+                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
 

@@ -189,6 +189,35 @@ class DeepBrainClient(
     fun sessions(): ApiResult<List<SessionCard>> =
         get("/api/mobile/sessions") { SessionsParser.parse(it) }
 
+    /**
+     * 生成一条分享链接。
+     *
+     * 和网页那条走同一张表、同一种 token——收到的人看到的页面完全一样。
+     * 手机端默认**不附原文**：分享往往是随手发出去的，而原始转写里
+     * 有别人说的每一句话。要附原文请到网页里显式开。
+     */
+    fun share(transcriptId: String): ApiResult<String> {
+        val c = store.load() ?: return ApiResult.Unauthorized
+        if (accessToken == null && !refresh()) return ApiResult.Unauthorized
+        fun once() = http.request(
+            "POST", "$apiBase/api/mobile/transcript/$transcriptId/share",
+            mapOf(
+                "Authorization" to "Bearer ${accessToken ?: ""}",
+                "x-deepbrain-org-id" to c.orgId,
+                "Content-Type" to "application/json",
+            ), "{}",
+        )
+        var r = once()
+        if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
+        // 409 = 还没分析完。说清楚，用户会去等，而不是反复点。
+        if (r.status == 409) return ApiResult.Failed("这场会还没分析完，分析完才能分享")
+        if (r.status >= 400) return ApiResult.Failed("生成链接失败（${r.status}）")
+        return runCatching {
+            val u = JSONObject(r.body).optString("url")
+            if (u.isBlank()) ApiResult.Failed("没拿到链接") else ApiResult.Ok(u)
+        }.getOrElse { ApiResult.Failed("应答看不懂") }
+    }
+
     /** 搜索。查询串要转义，否则用户搜的东西里带 & 会把参数截断。 */
     fun search(q: String): ApiResult<List<Hit>> =
         get("/api/mobile/search?q=" + java.net.URLEncoder.encode(q, "UTF-8")) { SearchParser.parse(it) }

@@ -200,6 +200,14 @@ data class MeetingAtom(
     val quote: String, val epistemic: String, val subject: String?,
 )
 
+/** 一次分析的产物。一场分析常常是好几个方法合出来的。 */
+data class MeetingAnalysis(
+    val markdown: String?,
+    val methods: List<String>,
+    val routingReason: String?,
+    val status: String,
+)
+
 data class Meeting(
     val transcriptId: String,
     val title: String,
@@ -209,6 +217,8 @@ data class Meeting(
     val speakers: List<String>,
     val atoms: List<MeetingAtom>,
     val commitments: List<Commitment>,
+    /** null = 还没分析过 */
+    val analysis: MeetingAnalysis?,
 )
 
 object SessionsParser {
@@ -257,6 +267,17 @@ object SessionsParser {
                     a.optString("id"), a.optString("statement"), a.optString("atomType"),
                     a.optString("quote"), a.optString("epistemic"),
                     a.optString("subject").takeIf { it.isNotBlank() && it != "null" },
+                )
+            },
+            analysis = o.optJSONObject("analysis")?.let { a ->
+                val ms = a.optJSONArray("methods")
+                MeetingAnalysis(
+                    markdown = a.optString("markdown").takeIf { it.isNotBlank() && it != "null" },
+                    methods = (0 until (ms?.length() ?: 0)).mapNotNull {
+                        ms!!.optString(it).takeIf { m -> m.isNotBlank() }
+                    },
+                    routingReason = a.optString("routingReason").takeIf { it.isNotBlank() && it != "null" },
+                    status = a.optString("status"),
                 )
             },
             commitments = (0 until (cm?.length() ?: 0)).mapNotNull { i ->

@@ -230,6 +230,7 @@ private fun App(client: DeepBrainClient) {
                         onRecord = { tab = Tab.RECORD; screen = Screen.Record },
                         onRefresh = { scope.launch { load() } },
                         staleLabel = stale,
+                        onPullRefresh = { load() },
                         onSettle = { id, action ->
                             scope.launch {
                                 val r = withContext(Dispatchers.IO) { client.settleCommitment(id, action) }

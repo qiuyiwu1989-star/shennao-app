@@ -5,7 +5,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
@@ -62,21 +61,37 @@ fun RecordScreen(onBack: () -> Unit) {
     }
 
     Column(
-        Modifier.fillMaxSize().padding(24.dp),
+        Modifier.fillMaxSize().padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("返回") }
         }
 
         Spacer(Modifier.weight(1f))
 
+        /*
+         * 时长用等宽数字。
+         *
+         * 比例字体下「1」比「8」窄，秒数每跳一下整行都会左右抖——
+         * 一个抖动的计时器读起来像是出了问题，而这一屏唯一的职责
+         * 就是让人相信「它还在录」。
+         */
         Text(
-            if (recording) fmt(elapsed) else "准备好了",
-            fontSize = if (recording) 44.sp else 24.sp,
+            if (state == com.qiuyiwu.shennao.record.RecordState.IDLE && !recording) "准备好了"
+            else fmt(elapsed),
+            fontSize = if (recording || state != com.qiuyiwu.shennao.record.RecordState.IDLE) 52.sp else 26.sp,
             fontWeight = FontWeight.Light,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            color = when (state) {
+                com.qiuyiwu.shennao.record.RecordState.INTERRUPTED,
+                com.qiuyiwu.shennao.record.RecordState.GAVE_UP -> MaterialTheme.colorScheme.error
+                else -> MaterialTheme.colorScheme.onSurface
+            },
         )
-        Spacer(Modifier.height(8.dp))
+
+        Spacer(Modifier.height(10.dp))
         Text(
             when (state) {
                 // 中断必须一眼看得出来。挂着「正在录音」而其实没在录，
@@ -91,65 +106,78 @@ fun RecordScreen(onBack: () -> Unit) {
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
 
-        Spacer(Modifier.height(36.dp))
+        Spacer(Modifier.height(40.dp))
 
-        Box(
-            Modifier.size(96.dp).clip(CircleShape).background(
-                if (recording) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.primary
-            ),
-            contentAlignment = Alignment.Center,
-        ) {
-            TextButton(onClick = {
-                if (recording) {
-                    RecordingService.stop(ctx)
-                } else {
+        // 主按钮：录音时是「停止」，否则是「开始」。
+        // 用实心圆而不是矩形按钮——这一屏只有一个动作，它该长得像一个动作。
+        Surface(
+            onClick = {
+                if (recording) RecordingService.stop(ctx)
+                else {
                     denied = false
                     val need = Manifest.permission.RECORD_AUDIO
-                    if (ContextCompat.checkSelfPermission(ctx, need) == PackageManager.PERMISSION_GRANTED) {
+                    if (ContextCompat.checkSelfPermission(ctx, need) == PackageManager.PERMISSION_GRANTED)
                         RecordingService.start(ctx, "手机录音")
-                    } else ask.launch(need)
+                    else ask.launch(need)
                 }
-            }) {
+            },
+            shape = CircleShape,
+            color = if (recording) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(104.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
                 Text(
                     if (recording) "停止" else "开始",
+                    style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onPrimary,
                     fontWeight = FontWeight.Medium,
                 )
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        if (recording) {
+            Spacer(Modifier.height(28.dp))
+            HotwordBox(sessionId)
+        }
+
+        Spacer(Modifier.height(20.dp))
 
         if (denied) {
             Text(
                 "没有麦克风权限就录不了。到系统设置里给深脑开一下。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
         }
         // 只显示不可重试的错。网络抖一下就弹红字，用户学会的第一件事就是无视它
         error?.let {
             Spacer(Modifier.height(8.dp))
             Text(it, style = MaterialTheme.typography.bodySmall,
-                 color = MaterialTheme.colorScheme.error)
-        }
-
-        if (recording) {
-            Spacer(Modifier.height(20.dp))
-            HotwordBox(sessionId)
+                 color = MaterialTheme.colorScheme.error,
+                 textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
 
         Spacer(Modifier.weight(1f))
 
-        Text(
-            "录完自动推到深脑，转写和分析在那边跑。中途断网也不会丢——" +
-                "没传完的段留在手机上，下次打开接着传。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                "录完自动推到深脑，转写和分析在那边跑。中途断网也不会丢——" +
+                    "没传完的段留在手机上，下次打开接着传。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(14.dp),
+            )
+        }
+        Spacer(Modifier.height(24.dp))
     }
 }
 

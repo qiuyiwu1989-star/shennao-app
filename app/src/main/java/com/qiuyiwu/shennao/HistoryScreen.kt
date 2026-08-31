@@ -76,6 +76,11 @@ fun HistoryScreen(client: DeepBrainClient, onRecord: () -> Unit, onOpen: (String
 
     Column(Modifier.fillMaxSize()) {
     stale?.let { StaleBanner(it) }
+    Refreshable(onRefresh = {
+        rows = withContext(Dispatchers.IO) { scan(File(ctx.filesDir, "recordings")) }
+        val r = withContext(Dispatchers.IO) { client.sessions() }
+        if (r is ApiResult.Ok) { served = r.value; stale = null }
+    }) {
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
@@ -105,6 +110,7 @@ fun HistoryScreen(client: DeepBrainClient, onRecord: () -> Unit, onOpen: (String
         else if (rows.isEmpty() && served.isEmpty()) item {
             Empty("还没有录过", "录一场会，它会自己走完转写和分析。", "录一场", onRecord)
         }
+    }
     }
     }
 }
