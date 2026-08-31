@@ -39,7 +39,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val client = Session.client(this)
-        setContent { MaterialTheme { App(client) } }
+        setContent { ShennaoTheme { App(client) } }
     }
 }
 
