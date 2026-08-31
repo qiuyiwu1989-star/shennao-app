@@ -258,8 +258,15 @@ class Uploader(
                 vault.rename(session, seg, seg.withState(Segment.State.UPLOADED))
                 return StepResult.Skip
             }
-            return StepResult.Err(
-                "第 ${seg.sequence} 段服务端不收（${codeOf(ticket.body)}）", false)
+            val code = codeOf(ticket.body)
+            // 服务端已经收下这一片的字节、只是元数据对不上（CHUNK_CONFLICT）：
+            // 再试一百次也是同一个答案，而字节确实在服务端。认下来往前走，
+            // 否则这一场会永远卡住——用户手机每 10 秒空转一次，什么都传不上去。
+            if (code == "CHUNK_CONFLICT") {
+                vault.rename(session, seg, seg.withState(Segment.State.UPLOADED))
+                return StepResult.Skip
+            }
+            return StepResult.Err("第 ${seg.sequence} 段服务端不收（$code）", false)
         }
         if (ticket.status >= 400) {
             return StepResult.Err("第 ${seg.sequence} 段要地址失败（${ticket.status}）", ticket.status >= 500)

@@ -176,7 +176,25 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
     private fun sealPcm(s: String, truth: Segment): Boolean {
         val pcm = vault.segmentFile(s, truth)
         val aac = vault.segmentFile(s, truth.withState(Segment.State.SEALED))
-        if (!Encoder.pcmToAac(pcm, aac)) return false
+
+        /*
+         * **先编到临时名，编完才改成 .aac。**
+         *
+         * 2026-08-31 的丢数据事故就出在这里：编码器直接写最终文件名，
+         * 而 .aac 这个后缀在本设计里的含义是「已封段、可以上传」。
+         * 于是编码进行到一半时，磁盘上已经存在一个叫 .aac 的半成品，
+         * 上传器每 15 秒扫一次目录，扫到就传——传上去的是 13.3 秒，
+         * 而那一段实际有 60 秒。**服务端不会报错，用户也看不出来。**
+         *
+         * 这违背的正是本文件开头那条「名字即状态」：既然名字就是状态，
+         * 那么在东西没到那个状态之前，就一个字节都不能叫那个名字。
+         * meta.json 那里写对了（先写临时文件再改名），这里当初漏了。
+         */
+        val part = java.io.File(aac.parentFile, aac.name + ".part")
+        part.delete()
+        if (!Encoder.pcmToAac(pcm, part)) { part.delete(); return false }
+        // 改名是原子的：要么还没有 .aac，要么就是完整的 .aac，不存在中间态。
+        if (!part.renameTo(aac)) { part.delete(); return false }
         pcm.delete()          // 转码确认成功之后才删。反过来一次失败就丢一分钟录音
 
         // **时长以产物为准，不以计划为准。**

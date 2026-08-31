@@ -513,3 +513,81 @@ class MarkdownTest {
         assertEquals("", Markdown.inline("").text)
     }
 }
+
+class HalfWrittenSegmentTest {
+    /*
+     * 2026-08-31 丢数据事故：编码器直接写最终的 .aac 文件名，而 .aac 在本设计里
+     * 的含义是「已封段、可以上传」。上传器每 15 秒扫一次目录，扫到半成品就传——
+     * 一段 60 秒的录音传上去只有 13.3 秒，服务端不报错，用户看不出来。
+     *
+     * 这两条钉的是「名字即状态」这条不变量本身。
+     */
+
+    @Test fun `临时后缀不能被当成可上传的分段`() {
+        // .aac.part 是编码中的半成品。它必须解析不出来，否则上传器会去传它。
+        assertNull(Segment.parse("seg-000000-000000000-000060000.aac.part"))
+        assertNotNull(Segment.parse("seg-000000-000000000-000060000.aac"))
+    }
+
+    @Test fun `目录里混着半成品时，只挑出真正封好的那些`() {
+        val v = MemVault().apply {
+            metas["s"] = meta()
+            put("s", seg(0, Segment.State.SEALED))
+            // 直接塞一个半成品文件名进去，模拟编码进行到一半
+            files["s"]!!["seg-000001-000060000-000120000.aac.part"] = ByteArray(100)
+        }
+        val segs = v.segments("s")
+        assertEquals("半成品不该出现在待传清单里", 1, segs.size)
+        assertEquals(0, segs[0].sequence)
+    }
+}
+
+class ChunkConflictTest {
+    /*
+     * 服务端已经收下这一片的字节、只是元数据对不上。再试一百次也是同一个答案，
+     * 而用户手机每 10 秒空转一次——烧电烧流量，什么都传不上去。
+     */
+    @Test fun `CHUNK_CONFLICT 认下来往前走，不要无限重试`() {
+        val v = MemVault().apply {
+            metas["s"] = meta(finished = true)
+            put("s", seg(0, Segment.State.SEALED))
+            put("s", seg(1, Segment.State.SEALED))
+        }
+        var tickets = 0
+        val h = ScriptHttp { _, url, _ ->
+            when {
+                url.endsWith("/api/recordings") -> HttpResponse(200, CREATED)
+                url.contains("/chunks/ticket") -> {
+                    tickets++
+                    // 第 0 片冲突，第 1 片正常
+                    if (tickets == 1) HttpResponse(409, """{"error":{"code":"CHUNK_CONFLICT"}}""")
+                    else HttpResponse(200, TICKET)
+                }
+                url.startsWith("https://cos.test") -> HttpResponse(200, "")
+                else -> HttpResponse(200, "{}")
+            }
+        }
+        val r = uploader(v, h).drain("s")
+        // 第 0 片被认下来、第 1 片正常传完 → 整场能收尾
+        assertTrue("$r", r is DrainResult.Done)
+        assertTrue(v.segments("s").all { it.state == Segment.State.UPLOADED })
+    }
+
+    @Test fun `一段真的失败也不能挡住其它段`() {
+        val v = MemVault().apply {
+            metas["s"] = meta()
+            (0..2).forEach { put("s", seg(it, Segment.State.SEALED)) }
+        }
+        val h = ScriptHttp { _, url, _ ->
+            when {
+                url.endsWith("/api/recordings") -> HttpResponse(200, CREATED)
+                // 每一片要地址都失败
+                url.contains("/chunks/ticket") -> HttpResponse(409, """{"error":{"code":"INVALID_STATE"}}""")
+                else -> HttpResponse(200, "{}")
+            }
+        }
+        uploader(v, h).drain("s")
+        // 三片都试过了，而不是第一片失败就 return
+        assertEquals(3, h.log.count { it.contains("ticket") })
+    }
+}
