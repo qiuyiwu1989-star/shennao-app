@@ -286,8 +286,14 @@ class Uploader(
     }
 
     /** 从错误应答里取 code。取不到就还回状态码本身——总比一句「失败了」强。 */
-    private fun codeOf(body: String): String =
-        runCatching { JSONObject(body).optString("code").ifBlank { "409" } }.getOrElse { "409" }
+    private fun codeOf(body: String): String = runCatching {
+        // 服务端的错误体是 {"error":{"code":...}}，**code 是嵌在里面的**。
+        // 按平铺去取会永远拿到空串，然后界面上显示一个「服务端不收（409）」，
+        // 等于什么都没说。
+        val o = JSONObject(body)
+        (o.optJSONObject("error")?.optString("code") ?: o.optString("code"))
+            .ifBlank { "409" }
+    }.getOrElse { "409" }
 
     private fun iso(ms: Long): String {
         val f = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
