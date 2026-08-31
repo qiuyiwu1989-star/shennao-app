@@ -26,8 +26,8 @@ android {
         // 那是录音应用天天在付的成本。代价是放弃 Android 8/9。
         minSdk = 29
         targetSdk = 34
-        versionCode = 20
-        versionName = "1.4.0"
+        versionCode = 21
+        versionName = "1.4.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "API_BASE", "\"${cfg("deepbrain.apiBase")}\"")

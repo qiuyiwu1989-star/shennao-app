@@ -661,3 +661,55 @@ class ManifestIncompleteTest {
         assertFalse("没有可操作的信息，重试也不会好", (r as DrainResult.Failed).retryable)
     }
 }
+
+class TimelineContiguityTest {
+    /*
+     * 服务端冻结清单时要求**时间轴逐片严丝合缝**：
+     * 每片的 started_at_ms 必须等于上一片的 ended_at_ms（0065 的 RPC 里那条
+     * `q.started_at_ms = q.previous_ended_at_ms`）。差一毫秒，整场都传不上去。
+     *
+     * 2026-08-31 我改成「时长以产物为准」时只改了这一片的名字、没改下一片的起点，
+     * 结果从那天起**一条录音都没成功过**：AAC 一帧固定 1024 个样本，编出来的时长
+     * 几乎不可能和按 PCM 字节数算的正好相等，实测每片差 160 毫秒。
+     *
+     * 这一条钉的就是那个不变量。
+     */
+
+    private fun seg(seq: Int, start: Long, end: Long) =
+        Segment(seq, start, end, Segment.State.UPLOADED)
+
+    /** 服务端那条判据，照抄成断言 */
+    private fun assertContiguous(segs: List<Segment>) {
+        segs.sortedBy { it.sequence }.forEachIndexed { i, s ->
+            if (i == 0) assertEquals("第一片必须从 0 开始", 0L, s.startMs)
+            else assertEquals(
+                "第 ${s.sequence} 片的起点必须等于上一片的终点",
+                segs[i - 1].endMs, s.startMs,
+            )
+        }
+    }
+
+    @Test fun `时间轴接得上时通过`() {
+        assertContiguous(listOf(seg(0, 0, 60160), seg(1, 60160, 120320)))
+    }
+
+    @Test fun `差 160 毫秒就该被抓住——这正是当初漏掉的那个缺口`() {
+        // 片 0 按 ADTS 算结束在 60160，片 1 却按 PCM 从 60000 开始
+        var caught = false
+        try {
+            assertContiguous(listOf(seg(0, 0, 60160), seg(1, 60000, 120000)))
+        } catch (e: AssertionError) { caught = true }
+        assertTrue("这种缺口必须被断言抓住，否则整场都传不上去", caught)
+    }
+
+    @Test fun `ADTS 帧数算出的时长本来就和 PCM 对不上`() {
+        // 60 秒 PCM = 1,920,000 字节；按 16kHz 算是 60000 毫秒
+        assertEquals(60000L, Capture.durationMsOf(1_920_000))
+        // 而 AAC 每帧 1024 样本：938 帧 = 60032 毫秒，939 帧 = 60096
+        // —— 没有任何一个帧数正好落在 60000 上。这就是为什么两边必须以产物为准。
+        val f938 = Adts.Scan(938, 0, 0).durationMs(16000)
+        val f939 = Adts.Scan(939, 0, 0).durationMs(16000)
+        assertTrue("$f938 / $f939 之间不该存在 60000", f938 != 60000L && f939 != 60000L)
+        assertTrue(f938 < 60000L || f939 > 60000L)
+    }
+}

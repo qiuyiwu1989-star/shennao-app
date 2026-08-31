@@ -152,18 +152,19 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
                 if (sinceSync >= Capture.BYTES_PER_MS * 2000) { open.sync(); sinceSync = 0 }
 
                 if (open.elapsedMs >= Capture.SEGMENT_MS) {
-                    val end = open.trueEndMs
-                    seal(s, open, seq, startMs, end)
-                    seq++; startMs = end
+                    // **下一片的起点必须是上一片的真实结束**，不是按 PCM 算的那个。
+                    // 服务端要求时间轴逐片严丝合缝（每片 started_at_ms 必须等于
+                    // 上一片的 ended_at_ms），差一毫秒清单就不合法。
+                    startMs = seal(s, open, seq, startMs, open.trueEndMs)
+                    seq++
                     open = openSegment(s, seq, startMs)
                 }
             }
         } catch (e: Exception) {
             // 录音线程出事不能把已经录到的东西一起带走
         } finally {
-            val end = open.trueEndMs
-            seal(s, open, seq, startMs, end)
-            seq++; startMs = end
+            startMs = seal(s, open, seq, startMs, open.trueEndMs)
+            seq++
         }
         return seq to startMs
     }
@@ -175,15 +176,27 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
         return OpenSegment(vault.segmentFile(s, planned), seq, startMs)
     }
 
-    private fun seal(s: String, open: OpenSegment, seq: Int, startMs: Long, endMs: Long) {
+    /**
+     * 封一段，返回**下一段该从哪个毫秒开始**。
+     *
+     * 返回值不是 `endMs` 而是转码之后的真实结束：AAC 一帧固定 1024 个样本，
+     * 编出来的时长几乎不可能和按 PCM 字节数算的那个正好相等（实测差 160 毫秒）。
+     * 而服务端要求逐片严丝合缝——2026-08-31 我改成「时长以产物为准」时
+     * 只改了这一片的名字，没改下一片的起点，结果**从那天起一条都传不上去**：
+     * 每片都差那 160 毫秒，清单永远不合法。
+     */
+    private fun seal(s: String, open: OpenSegment, seq: Int, startMs: Long, endMs: Long): Long {
         open.close()
         val planned = Segment(seq, startMs, startMs + Capture.SEGMENT_MS, Segment.State.RECORDING)
         val pcm = vault.segmentFile(s, planned)
-        if (!pcm.isFile || pcm.length() < Capture.BYTES_PER_MS * 10) { pcm.delete(); return }
+        // 太短、封不成的：下一段仍从这一段声称的结束开始，不留空洞。
+        if (!pcm.isFile || pcm.length() < Capture.BYTES_PER_MS * 10) { pcm.delete(); return endMs }
         val truth = Segment(seq, startMs, endMs, Segment.State.RECORDING)
         val truthFile = vault.segmentFile(s, truth)
         if (pcm.absolutePath != truthFile.absolutePath) pcm.renameTo(truthFile)
-        if (sealPcm(s, truth)) onSegmentSealed()
+        val real = sealPcm(s, truth)
+        if (real != null) { onSegmentSealed(); return real }
+        return endMs
     }
 
     /**
@@ -191,7 +204,7 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
      * 独立出来是因为启动时的孤儿回收也走它——两条路必须是同一段代码，
      * 不然「录音时封的段」和「崩溃后补封的段」会有细微差别而没人发现。
      */
-    private fun sealPcm(s: String, truth: Segment): Boolean {
+    private fun sealPcm(s: String, truth: Segment): Long? {
         val pcm = vault.segmentFile(s, truth)
         val aac = vault.segmentFile(s, truth.withState(Segment.State.SEALED))
 
@@ -210,9 +223,9 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
          */
         val part = java.io.File(aac.parentFile, aac.name + ".part")
         part.delete()
-        if (!Encoder.pcmToAac(pcm, part)) { part.delete(); return false }
+        if (!Encoder.pcmToAac(pcm, part)) { part.delete(); return null }
         // 改名是原子的：要么还没有 .aac，要么就是完整的 .aac，不存在中间态。
-        if (!part.renameTo(aac)) { part.delete(); return false }
+        if (!part.renameTo(aac)) { part.delete(); return null }
         pcm.delete()          // 转码确认成功之后才删。反过来一次失败就丢一分钟录音
 
         // **时长以产物为准，不以计划为准。**
@@ -221,13 +234,16 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
         // 服务端拿 60 秒去拼时间轴，等于每段凭空多出 47 秒空白，整场时间全错位，
         // 而没有任何一层会报错。编码器为什么少读是另一个要查的问题，
         // 但无论为什么，都不该由服务端替我们承担这个谎。
-        val real = Adts.scan(runCatching { aac.readBytes() }.getOrElse { return true })
+        val real = Adts.scan(runCatching { aac.readBytes() }.getOrElse { return truth.endMs })
             .durationMs(Capture.SAMPLE_RATE)
-        if (real > 0 && real != truth.durationMs) {
-            val fixed = truth.copy(endMs = truth.startMs + real).withState(Segment.State.SEALED)
-            aac.renameTo(vault.segmentFile(s, fixed))
+        if (real <= 0) return truth.endMs
+        val trueEnd = truth.startMs + real
+        if (trueEnd != truth.endMs) {
+            val fixed = truth.copy(endMs = trueEnd).withState(Segment.State.SEALED)
+            if (!aac.renameTo(vault.segmentFile(s, fixed))) return truth.endMs
         }
-        return true
+        // 返回真实结束——调用方拿它当下一段的起点，时间轴才接得上。
+        return trueEnd
     }
 
     /**
@@ -247,7 +263,7 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
                 val truth = seg.copy(endMs = seg.startMs + real)
                 if (real < 10) { f.delete(); continue }
                 if (truth != seg) f.renameTo(vault.segmentFile(s, truth))
-                sealPcm(s, truth)
+                sealPcm(s, truth)   // 孤儿是整场的最后一段，没有「下一段」要对齐
             }
         }
     }
