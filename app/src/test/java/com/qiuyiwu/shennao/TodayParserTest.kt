@@ -111,3 +111,67 @@ class TodayParserTest {
         assertNull(TodayParser.notification(notReady))
     }
 }
+
+class SessionsParserTest {
+    /*
+     * 解析器的职责是「服务端给什么都不许崩」。
+     * 认不出的状态尤其要小心：猜错会让「还在传」显示成「已送到」，
+     * 而那正是丢录音时用户看到的那句话。
+     */
+
+    @Test fun `正常一场能解出四站里的位置`() {
+        val r = SessionsParser.parse("""{"sessions":[
+            {"sessionId":"s1","title":"三方洽谈","startedAt":"2026-08-31T04:23:44Z",
+             "durationMs":60000,"stage":"analyzed","problem":null,"transcriptId":"t1"}]}""")
+        assertEquals(1, r.size)
+        assertEquals(Stage.ANALYZED, r[0].stage)
+        assertEquals("t1", r[0].transcriptId)
+    }
+
+    @Test fun `认不出的状态归 UNKNOWN，绝不猜成已送到`() {
+        val r = SessionsParser.parse("""{"sessions":[{"sessionId":"s1","stage":"某个以后才有的状态"}]}""")
+        assertEquals(Stage.UNKNOWN, r[0].stage)
+    }
+
+    @Test fun `半截应答不许崩`() {
+        assertEquals(emptyList<SessionCard>(), SessionsParser.parse("""{"sessions":[{"""))
+        assertEquals(emptyList<SessionCard>(), SessionsParser.parse("不是 json"))
+        assertEquals(emptyList<SessionCard>(), SessionsParser.parse("""{"other":1}"""))
+    }
+
+    @Test fun `没有 sessionId 的行直接丢掉，不要造一个空壳出来`() {
+        val r = SessionsParser.parse("""{"sessions":[{"title":"没有 id"},{"sessionId":"s2"}]}""")
+        assertEquals(listOf("s2"), r.map { it.sessionId })
+    }
+
+    @Test fun `json 里的 null 不能变成字符串 "null" 显示给用户`() {
+        val r = SessionsParser.parse("""{"sessions":[
+            {"sessionId":"s1","transcriptId":null,"problem":null,"startedAt":null,"durationMs":null}]}""")
+        assertNull(r[0].transcriptId)
+        assertNull(r[0].problem)
+        assertNull(r[0].startedAt)
+        assertNull(r[0].durationMs)
+    }
+
+    @Test fun `会议详情能解出摘要、判断和承诺`() {
+        val m = SessionsParser.parseMeeting("""{
+            "transcriptId":"t1","title":"三方洽谈","summary":"讲了合作框架","durationSec":3600,
+            "speakers":["邱懿武","陈总"],
+            "atoms":[{"id":"a1","statement":"决定先做试点","atomType":"decision","quote":"就先试点","epistemic":"attested","subject":null}],
+            "commitments":[{"id":"c1","speaker":"陈总","quote":"下周给方案","dueDate":"2026-09-07"}]}""")!!
+        assertEquals("讲了合作框架", m.summary)
+        assertEquals(2, m.speakers.size)
+        assertEquals("decision", m.atoms[0].atomType)
+        assertEquals("陈总", m.commitments[0].speakerName)
+    }
+
+    @Test fun `分析没跑完时摘要是 null，而不是字符串 "null"`() {
+        val m = SessionsParser.parseMeeting("""{"transcriptId":"t1","title":"x","summary":null}""")!!
+        assertNull(m.summary)
+    }
+
+    @Test fun `详情缺 transcriptId 一律当读不出来`() {
+        assertNull(SessionsParser.parseMeeting("""{"title":"没有 id"}"""))
+        assertNull(SessionsParser.parseMeeting("坏的"))
+    }
+}

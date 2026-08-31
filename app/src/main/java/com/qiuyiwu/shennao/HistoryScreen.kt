@@ -38,16 +38,21 @@ private data class LocalSession(
 }
 
 @Composable
-fun HistoryScreen(onRecord: () -> Unit) {
+fun HistoryScreen(client: DeepBrainClient, onRecord: () -> Unit, onOpen: (String) -> Unit) {
     val ctx = LocalContext.current
     var rows by remember { mutableStateOf<List<LocalSession>>(emptyList()) }
+    var served by remember { mutableStateOf<List<SessionCard>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         while (true) {
             rows = withContext(Dispatchers.IO) { scan(File(ctx.filesDir, "recordings")) }
+            // 服务端那份查得慢一些，但它才知道转写和分析走到哪了。
+            // 两份合起来才是完整的一条链：本地管「传没传出去」，服务端管「后面几站」。
+            val r = withContext(Dispatchers.IO) { client.sessions() }
+            if (r is ApiResult.Ok) served = r.value
             loaded = true
-            delay(3000)
+            delay(5000)
         }
     }
 
@@ -57,27 +62,120 @@ fun HistoryScreen(onRecord: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
-            Text("在路上", style = MaterialTheme.typography.headlineSmall)
+            Text("我录过的会", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(4.dp))
-            Text(
-                if (rows.isEmpty() && loaded) "都送到了。已经送达的会在网页版里看。"
-                else "这些还在这台手机上，没有全部送到深脑。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Text("每一场走到哪一站，都在这里。",
+                 style = MaterialTheme.typography.bodyMedium,
+                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(10.dp))
         }
 
-        items(rows, key = { it.dir }) { s -> SessionRow(s) }
+        // 还在这台手机上的排最前：它们是唯一可能丢的
+        if (rows.isNotEmpty()) {
+            item { MiniHead("还在手机上") }
+            items(rows, key = { "l" + it.dir }) { s -> SessionRow(s) }
+        }
 
-        if (rows.isEmpty() && loaded) {
+        if (served.isNotEmpty()) {
+            item { MiniHead("已经送到深脑") }
+            items(served, key = { "s" + it.sessionId }) { s -> ServedRow(s, onOpen) }
+        }
+
+        if (rows.isEmpty() && served.isEmpty() && loaded) {
             item {
                 Spacer(Modifier.height(20.dp))
+                Text("还没有录过。", style = MaterialTheme.typography.bodyMedium,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(12.dp))
                 OutlinedButton(onClick = onRecord, modifier = Modifier.fillMaxWidth()) { Text("录一场") }
             }
         }
     }
 }
+
+@Composable
+private fun MiniHead(t: String) {
+    Text(t, style = MaterialTheme.typography.labelMedium,
+         color = MaterialTheme.colorScheme.onSurfaceVariant,
+         modifier = Modifier.padding(top = 12.dp, bottom = 2.dp))
+}
+
+/**
+ * 一场已送达的会，显示它走到链路的第几站。
+ *
+ * 四站画成一条线而不是一个状态词：状态词只说「现在在哪」，
+ * 一条线还说了「还差几步」——而用户真正想知道的是后者。
+ */
+@Composable
+private fun ServedRow(s: SessionCard, onOpen: (String) -> Unit) {
+    val failed = s.stage == Stage.FAILED
+    // 可点的 Card 那个重载是 onClick 在前、modifier 在后，
+    // 按 Modifier 优先的习惯写会匹配不上。
+    Card(
+        onClick = { s.transcriptId?.let(onOpen) },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(s.title, style = MaterialTheme.typography.titleSmall,
+                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                s.durationMs?.let {
+                    Text("${it / 60000} 分钟", style = MaterialTheme.typography.labelMedium,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Chain(s.stage)
+            if (failed && s.problem != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(s.problem, style = MaterialTheme.typography.bodySmall,
+                     color = MaterialTheme.colorScheme.error)
+            }
+            s.startedAt?.let {
+                Spacer(Modifier.height(6.dp))
+                Text(day(it), style = MaterialTheme.typography.bodySmall,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun Chain(stage: Stage) {
+    val stops = listOf("录下来", "送到", "转写完", "分析完")
+    val reached = when (stage) {
+        Stage.RECORDED -> 1
+        Stage.DELIVERED -> 2
+        Stage.TRANSCRIBED -> 3
+        Stage.ANALYZED -> 4
+        else -> 0
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        stops.forEachIndexed { i, name ->
+            val on = i < reached
+            Text(
+                name,
+                style = MaterialTheme.typography.labelSmall,
+                color = when {
+                    stage == Stage.FAILED && i == reached -> MaterialTheme.colorScheme.error
+                    on -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+            if (i < stops.lastIndex) {
+                Text(" → ", style = MaterialTheme.typography.labelSmall,
+                     color = MaterialTheme.colorScheme.outline)
+            }
+        }
+    }
+}
+
+private fun day(iso: String): String = runCatching {
+    val f = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+    f.timeZone = java.util.TimeZone.getTimeZone("UTC")
+    val d = f.parse(iso.take(19))!!
+    java.text.SimpleDateFormat("M月d日 HH:mm", java.util.Locale.CHINA).format(d)
+}.getOrElse { iso.take(10) }
 
 @Composable
 private fun SessionRow(s: LocalSession) {

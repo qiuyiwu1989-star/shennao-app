@@ -142,6 +142,42 @@ class DeepBrainClient(
         }
     }
 
+    /** 我录过的会走到哪了。401 同样自动续一次。 */
+    fun sessions(): ApiResult<List<SessionCard>> =
+        get("/api/mobile/sessions") { SessionsParser.parse(it) }
+
+    /** 这场会讲了什么。 */
+    fun meeting(transcriptId: String): ApiResult<Meeting> =
+        get("/api/mobile/transcript/$transcriptId") {
+            SessionsParser.parseMeeting(it) ?: throw IllegalStateException("应答看不懂")
+        }
+
+    /**
+     * 取数的公共壳：续 token、401 重试一次、应答解析失败不崩。
+     *
+     * 抽出来是因为 today() 那套逻辑要被逐字重复三遍，而「只续一次」
+     * 这种判据一旦分叉，某个面就会在 token 过期时开始无限转圈。
+     */
+    private fun <T> get(path: String, parse: (String) -> T): ApiResult<T> {
+        val c = store.load() ?: return ApiResult.Unauthorized
+        if (accessToken == null && !refresh()) return ApiResult.Unauthorized
+        fun once() = http.request(
+            "GET", "$apiBase$path",
+            mapOf("Authorization" to "Bearer ${accessToken ?: ""}", "x-deepbrain-org-id" to c.orgId),
+        )
+        var r = once()
+        if (r.status == 401) {
+            if (!refresh()) return ApiResult.Unauthorized
+            r = once()
+        }
+        return when {
+            r.status == 401 -> ApiResult.Unauthorized
+            r.status >= 400 -> ApiResult.Failed("取数失败（${r.status}）")
+            else -> runCatching { ApiResult.Ok(parse(r.body)) }
+                .getOrElse { ApiResult.Failed("应答看不懂") }
+        }
+    }
+
     private fun call(c: Credentials) = http.request(
         "GET", "$apiBase/api/mobile/today",
         mapOf(

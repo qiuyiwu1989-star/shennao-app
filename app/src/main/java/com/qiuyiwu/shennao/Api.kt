@@ -173,3 +173,107 @@ object TodayParser {
         return parts.takeIf { it.isNotEmpty() }?.joinToString("，")
     }
 }
+
+
+// ---------------------------------------------------------------------------
+// 「我录过的会走到哪了」
+//
+// 这一层存在的理由：在此之前手机是只写不读的。录完就断了——一条卡住的录音
+// 只在服务器日志里有痕迹，而用户看到的是「我录完了」。
+
+/** 链路四站。名字按用户能理解的说法取，不用服务端的内部状态名。 */
+enum class Stage { RECORDED, DELIVERED, TRANSCRIBED, ANALYZED, FAILED, UNKNOWN }
+
+data class SessionCard(
+    val sessionId: String,
+    val title: String,
+    val startedAt: String?,
+    val durationMs: Long?,
+    val stage: Stage,
+    /** 卡住的原因。只在 FAILED 时有，且服务端保证是人话 */
+    val problem: String?,
+    val transcriptId: String?,
+)
+
+data class MeetingAtom(
+    val id: String, val statement: String, val atomType: String,
+    val quote: String, val epistemic: String, val subject: String?,
+)
+
+data class Meeting(
+    val transcriptId: String,
+    val title: String,
+    /** 没有就是分析还没跑完。界面要说清楚，不是显示一片空白 */
+    val summary: String?,
+    val durationSec: Int?,
+    val speakers: List<String>,
+    val atoms: List<MeetingAtom>,
+    val commitments: List<Commitment>,
+)
+
+object SessionsParser {
+    /** 认不出的状态归 UNKNOWN，不猜。猜错会让「还在传」显示成「已送到」。 */
+    private fun stageOf(s: String) = when (s) {
+        "recorded" -> Stage.RECORDED
+        "delivered" -> Stage.DELIVERED
+        "transcribed" -> Stage.TRANSCRIBED
+        "analyzed" -> Stage.ANALYZED
+        "failed" -> Stage.FAILED
+        else -> Stage.UNKNOWN
+    }
+
+    fun parse(body: String): List<SessionCard> = runCatching {
+        val arr = JSONObject(body).optJSONArray("sessions") ?: return emptyList()
+        (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val id = o.optString("sessionId").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            SessionCard(
+                sessionId = id,
+                title = o.optString("title").ifBlank { "未命名录音" },
+                startedAt = o.optString("startedAt").takeIf { it.isNotBlank() && it != "null" },
+                durationMs = if (o.isNull("durationMs")) null else o.optLong("durationMs"),
+                stage = stageOf(o.optString("stage")),
+                problem = o.optString("problem").takeIf { it.isNotBlank() && it != "null" },
+                transcriptId = o.optString("transcriptId").takeIf { it.isNotBlank() && it != "null" },
+            )
+        }
+    }.getOrElse { emptyList() }
+
+    fun parseMeeting(body: String): Meeting? = runCatching {
+        val o = JSONObject(body)
+        val tid = o.optString("transcriptId").takeIf { it.isNotBlank() } ?: return null
+        val sp = o.optJSONArray("speakers")
+        val at = o.optJSONArray("atoms")
+        val cm = o.optJSONArray("commitments")
+        Meeting(
+            transcriptId = tid,
+            title = o.optString("title").ifBlank { "未命名" },
+            summary = o.optString("summary").takeIf { it.isNotBlank() && it != "null" },
+            durationSec = if (o.isNull("durationSec")) null else o.optInt("durationSec"),
+            speakers = (0 until (sp?.length() ?: 0)).mapNotNull { sp!!.optString(it).takeIf { s -> s.isNotBlank() } },
+            atoms = (0 until (at?.length() ?: 0)).mapNotNull { i ->
+                val a = at!!.optJSONObject(i) ?: return@mapNotNull null
+                MeetingAtom(
+                    a.optString("id"), a.optString("statement"), a.optString("atomType"),
+                    a.optString("quote"), a.optString("epistemic"),
+                    a.optString("subject").takeIf { it.isNotBlank() && it != "null" },
+                )
+            },
+            commitments = (0 until (cm?.length() ?: 0)).mapNotNull { i ->
+                val c = cm!!.optJSONObject(i) ?: return@mapNotNull null
+                Commitment(
+                    id = c.optString("id"),
+                    speakerName = c.optString("speaker").ifBlank { "未指明" },
+                    statement = c.optString("quote"),
+                    quote = c.optString("quote"),
+                    saidDate = "",
+                    context = null,
+                    dueDate = c.optString("dueDate").takeIf { it.isNotBlank() && it != "null" },
+                    overdueDays = null,
+                    status = "open",
+                    transcriptId = tid,
+                )
+            },
+        )
+    }.getOrNull()
+}

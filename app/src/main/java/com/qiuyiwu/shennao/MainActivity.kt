@@ -37,6 +37,8 @@ private sealed class Screen {
     data class Feed(val today: Today) : Screen()
     object Record : Screen()
     data class Broken(val message: String) : Screen()
+    /** 一场会的详情。从历史点进来 */
+    data class Meeting(val transcriptId: String) : Screen()
 }
 
 /**
@@ -90,7 +92,7 @@ private fun App(client: DeepBrainClient) {
     // 登录、加载、出错这三种状态不该有底栏——底栏在那时点了也没用，
     // 只会让人以为「是不是我点错地方了」。
     val s0 = screen
-    val chrome = s0 is Screen.Feed || s0 is Screen.Record
+    val chrome = s0 is Screen.Feed || s0 is Screen.Record || s0 is Screen.Meeting
 
     Scaffold(
         bottomBar = {
@@ -130,9 +132,16 @@ private fun App(client: DeepBrainClient) {
 
                 is Screen.Record -> RecordScreen(onBack = { tab = Tab.TODAY; scope.launch { load() } })
 
+                is Screen.Meeting -> MeetingScreen(client, s.transcriptId,
+                    onBack = { tab = Tab.HISTORY; scope.launch { load() } })
+
                 is Screen.Feed -> when (tab) {
                     Tab.RECORD -> RecordScreen(onBack = { tab = Tab.TODAY; scope.launch { load() } })
-                    Tab.HISTORY -> HistoryScreen(onRecord = { tab = Tab.RECORD; screen = Screen.Record })
+                    Tab.HISTORY -> HistoryScreen(
+                        client = client,
+                        onRecord = { tab = Tab.RECORD; screen = Screen.Record },
+                        onOpen = { tid -> screen = Screen.Meeting(tid) },
+                    )
                     Tab.ME -> MeScreen(client) {
                         client.signOut()
                         tab = Tab.TODAY
