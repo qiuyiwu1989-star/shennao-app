@@ -53,15 +53,19 @@ private val LightColors = lightColorScheme(
     primaryContainer = Brand.focusSoft,
     onPrimaryContainer = Brand.focus,
     secondary = Brand.iris,
-    background = Color.White,
+    // 表面阶梯（文档 §2.5）：页面底是 ink-50，卡片才是白的。
+    // 之前两个都用白，所有东西糊在一个平面上——这正是「看着不精致」的根子。
+    background = Ink.c50,
     onBackground = Ink.c900,
     surface = Color.White,
     onSurface = Ink.c900,
-    surfaceVariant = Ink.c50,
+    surfaceVariant = Ink.c100,
     // 次要文字用 ink-500 而不是 ink-300：手机在阳光下看，
     // 更浅的灰在网页上够用，在户外就读不出来了。
     onSurfaceVariant = Ink.c500,
     outline = Ink.c200,
+    // 卡片的发丝边。文档规定 ink-100，比 ink-200 更轻——
+    // 边框重了，一屏十几张卡片会连成一张网格纸。
     outlineVariant = Ink.c100,
     error = StateColor.riskText,
     onError = Color.White,
@@ -75,6 +79,7 @@ private val DarkColors = darkColorScheme(
     primaryContainer = Ink.c700,
     onPrimaryContainer = Brand.focusSoft,
     secondary = Brand.iris,
+    // 暗色下阶梯反过来：页面底最暗，卡片抬一档
     background = Ink.c900,
     onBackground = Ink.c50,
     surface = Ink.c800,

@@ -43,7 +43,7 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -106,8 +106,8 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                 }
 
                 item {
-                    Card(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(14.dp)) {
+                    DsCard(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp)) {
                             Text("这场会", style = MaterialTheme.typography.titleSmall,
                                  fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.height(6.dp))
@@ -150,8 +150,8 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                     }
                     if (a.markdown != null) item {
                         SectionHead("分析", "深脑读出来的")
-                        Card(Modifier.fillMaxWidth()) {
-                            MarkdownText(a.markdown, Modifier.padding(14.dp))
+                        DsCard(Modifier.fillMaxWidth()) {
+                            MarkdownText(a.markdown, Modifier.padding(20.dp))
                         }
                     } else if (a.status != "completed") item {
                         Text("分析还在跑（${a.status}）",
@@ -170,8 +170,8 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                 if (m.commitments.isNotEmpty()) {
                     item { SectionHead("这场会里的承诺", "别人说出口、还没有下文的") }
                     items(m.commitments, key = { "c" + it.id }) { c ->
-                        Card(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(14.dp)) {
+                        DsCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp)) {
                                 Row {
                                     Text(c.speakerName, style = MaterialTheme.typography.titleSmall,
                                          fontWeight = FontWeight.SemiBold)
@@ -220,8 +220,8 @@ private fun SectionHead(title: String, hint: String) {
 
 @Composable
 private fun AtomCard(a: MeetingAtom) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
+    DsCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(typeLabel(a.atomType), style = MaterialTheme.typography.labelMedium,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)

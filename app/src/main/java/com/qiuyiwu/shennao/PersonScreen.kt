@@ -32,7 +32,7 @@ fun PersonScreen(client: DeepBrainClient, personId: String, onBack: () -> Unit, 
     }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
-               verticalArrangement = Arrangement.spacedBy(10.dp)) {
+               verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { TextButton(onClick = onBack) { Text("返回") } }
 
         val p = person
@@ -54,8 +54,8 @@ fun PersonScreen(client: DeepBrainClient, personId: String, onBack: () -> Unit, 
                 if (p.openCommitments.isNotEmpty()) {
                     item { Head("还欠着的", "说出口、还没有下文") }
                     items(p.openCommitments, key = { "o" + it.id }) { c ->
-                        Card(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(14.dp)) {
+                        DsCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp)) {
                                 Text("「${c.quote}」", style = MaterialTheme.typography.bodyMedium)
                                 c.dueDate?.let {
                                     Spacer(Modifier.height(4.dp))
@@ -73,8 +73,8 @@ fun PersonScreen(client: DeepBrainClient, personId: String, onBack: () -> Unit, 
                 if (p.judgments.isNotEmpty()) {
                     item { Head("关于他的判断", "深脑从这些会里读出来的") }
                     items(p.judgments, key = { "j" + it.id }) { j ->
-                        Card(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(14.dp)) {
+                        DsCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp)) {
                                 Text(j.statement, style = MaterialTheme.typography.bodyMedium)
                                 Spacer(Modifier.height(4.dp))
                                 Text(
@@ -106,7 +106,7 @@ fun PersonScreen(client: DeepBrainClient, personId: String, onBack: () -> Unit, 
  */
 @Composable
 private fun Ledger(p: Person) {
-    Card(Modifier.fillMaxWidth()) {
+    DsCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(

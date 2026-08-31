@@ -64,4 +64,23 @@ class ThemeParityTest {
         assertEquals(group("risk", "text"), androidHex("riskText"))
         assertEquals(group("info", "text"), androidHex("infoText"))
     }
+
+    /*
+     * 表面阶梯（文档 §2.5）：页面底是 ink-50，卡片才是白的。
+     * 两个都用白，所有东西会糊在一个平面上——手机端「看着不精致」的根子
+     * 就在这里，而它是一行代码的事，很容易在某次「统一一下背景色」时被改回去。
+     */
+    @Test fun `页面底和卡片不能是同一个颜色`() {
+        val t = theme()
+        val light = t.substring(t.indexOf("LightColors"), t.indexOf("DarkColors"))
+        assertTrue("页面底该是 ink-50", Regex("""background\s*=\s*Ink\.c50""").containsMatchIn(light))
+        assertTrue("卡片该是白的", Regex("""surface\s*=\s*Color\.White""").containsMatchIn(light))
+    }
+
+    @Test fun `卡片描边用 ink-100，不是更重的 ink-200`() {
+        val t = theme()
+        val light = t.substring(t.indexOf("LightColors"), t.indexOf("DarkColors"))
+        // 边框重了，一屏十几张卡片会连成一张网格纸
+        assertTrue(Regex("""outlineVariant\s*=\s*Ink\.c100""").containsMatchIn(light))
+    }
 }

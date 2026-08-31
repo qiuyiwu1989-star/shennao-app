@@ -99,7 +99,7 @@ fun HistoryScreen(
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             Text("我录过的会", style = MaterialTheme.typography.headlineSmall)
@@ -148,11 +148,11 @@ private fun ServedRow(s: SessionCard, onOpen: (String) -> Unit, onDelete: ((Stri
     val failed = s.stage == Stage.FAILED
     // 可点的 Card 那个重载是 onClick 在前、modifier 在后，
     // 按 Modifier 优先的习惯写会匹配不上。
-    Card(
-        onClick = { s.transcriptId?.let(onOpen) },
+    DsCard(
         modifier = Modifier.fillMaxWidth(),
+        onClick = { s.transcriptId?.let(onOpen) },
     ) {
-        Column(Modifier.padding(14.dp)) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(s.title, style = MaterialTheme.typography.titleSmall,
                      fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -230,8 +230,8 @@ private fun day(iso: String): String = runCatching {
 
 @Composable
 private fun SessionRow(s: LocalSession) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
+    DsCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(s.meta.title, style = MaterialTheme.typography.titleSmall,
                      fontWeight = FontWeight.SemiBold)
