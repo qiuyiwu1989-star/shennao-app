@@ -18,6 +18,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> Unit) {
 
+    /**
+     * 实时字幕的出口。可以为 null——字幕是附赠，没有它录音照常。
+     * 喂数据保证不阻塞（见 Realtime.feed），所以采集循环里直接调是安全的。
+     */
+    @Volatile var realtime: Realtime? = null
+
     @Volatile private var session: String? = null
     private val running = AtomicBoolean(false)
     private var thread: Thread? = null
@@ -135,6 +141,9 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
                     continue
                 }
                 open.write(buf, n)
+                // 顺手分一份给字幕。它内部是有界队列、塞不下就丢——
+                // 丢的是字幕，不是录音。这个顺序不能反：先落盘，再分流。
+                realtime?.feed(buf, n)
                 level = Level.of(buf, n)
                 elapsedMs = startMs + open.elapsedMs
                 sinceSync += n

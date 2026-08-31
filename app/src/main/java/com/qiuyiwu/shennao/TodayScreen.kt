@@ -1,6 +1,7 @@
 package com.qiuyiwu.shennao
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -102,7 +103,7 @@ fun TodayScreen(
                 LazyColumn(
                     Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     item {
                         Text(channels[page].hint, style = MaterialTheme.typography.bodySmall,
@@ -166,9 +167,9 @@ private fun Header(t: Today) {
 @Composable
 private fun RecordBar(onRecord: () -> Unit) {
     val live = com.qiuyiwu.shennao.record.RecordingService.recording
-    Card(Modifier.fillMaxWidth()) {
+    DsCard(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.fillMaxWidth().padding(14.dp),
+            Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
@@ -198,8 +199,8 @@ private fun SectionTitle(title: String, hint: String) {
 
 @Composable
 private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, onOpen: () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
+    DsCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(c.speakerName, style = MaterialTheme.typography.titleSmall,
                      fontWeight = FontWeight.SemiBold)
@@ -232,10 +233,27 @@ private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, on
             // 只有兑现和取消两个动作——**系统不裁定任何人**，
             // 这两件事都需要账本以外的信息，只有在场的人知道。
             var done by remember(c.id) { mutableStateOf<String?>(null) }
+            val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
             if (done == null) {
                 Row {
-                    TextButton(onClick = { done = "kept"; onSettle(c.id, "kept") }) { Text("兑现了") }
-                    TextButton(onClick = { done = "cancelled"; onSettle(c.id, "cancelled") }) { Text("取消了") }
+                    // 落账是记进账本的动作，给一次确认反馈。
+                    // 命中区 48dp：这两个按钮挨得近，误触的代价是记错一笔。
+                    TextButton(
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        onClick = {
+                            haptics.performHapticFeedback(
+                                androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            done = "kept"; onSettle(c.id, "kept")
+                        },
+                    ) { Text("兑现了") }
+                    TextButton(
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        onClick = {
+                            haptics.performHapticFeedback(
+                                androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            done = "cancelled"; onSettle(c.id, "cancelled")
+                        },
+                    ) { Text("取消了") }
                 }
             } else {
                 Text(if (done == "kept") "已记：兑现了" else "已记：取消了",
@@ -248,8 +266,8 @@ private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, on
 
 @Composable
 private fun PredictionCard(p: Prediction) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
+    DsCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(p.subject ?: "未指明对象", style = MaterialTheme.typography.titleSmall,
                      fontWeight = FontWeight.SemiBold)
@@ -276,8 +294,8 @@ private fun PredictionCard(p: Prediction) {
 
 @Composable
 private fun InsightCard(i: Insight, onOpen: () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
+    DsCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 i.subject?.let {
                     Text(it, style = MaterialTheme.typography.titleSmall,

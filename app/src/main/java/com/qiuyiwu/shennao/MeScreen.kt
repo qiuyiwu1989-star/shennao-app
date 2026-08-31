@@ -46,7 +46,7 @@ fun MeScreen(client: DeepBrainClient, onSignOut: () -> Unit) {
     ) {
         Text("我的", style = MaterialTheme.typography.headlineSmall)
 
-        Card(Modifier.fillMaxWidth()) {
+        DsCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
                 Text("账号", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))
@@ -56,7 +56,7 @@ fun MeScreen(client: DeepBrainClient, onSignOut: () -> Unit) {
             }
         }
 
-        Card(Modifier.fillMaxWidth()) {
+        DsCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -106,7 +106,7 @@ fun MeScreen(client: DeepBrainClient, onSignOut: () -> Unit) {
             }
         }
 
-        Card(Modifier.fillMaxWidth()) {
+        DsCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
                 Text("在网页里打开", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))

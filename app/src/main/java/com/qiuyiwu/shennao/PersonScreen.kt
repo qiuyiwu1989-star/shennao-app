@@ -19,7 +19,13 @@ import kotlinx.coroutines.withContext
  * 一条孤立的承诺没有分量，「他第三次这么说了」才有。
  */
 @Composable
-fun PersonScreen(client: DeepBrainClient, personId: String, onBack: () -> Unit, onOpen: (String) -> Unit) {
+fun PersonScreen(
+    client: DeepBrainClient,
+    personId: String,
+    onBack: () -> Unit,
+    onOpen: (String) -> Unit,
+    onRecord: () -> Unit,
+) {
     var person by remember { mutableStateOf<Person?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -31,31 +37,24 @@ fun PersonScreen(client: DeepBrainClient, personId: String, onBack: () -> Unit, 
         }
     }
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
-               verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { TextButton(onClick = onBack) { Text("返回") } }
-
-        val p = person
+    val p = person
+    DetailPage(onBack = onBack, title = p?.name) {
         when {
             error != null -> item { Broken(error!!) { error = null } }
             p == null -> item { Loading() }
             else -> {
-                item {
-                    Text(p.name, style = MaterialTheme.typography.headlineSmall)
-                    p.role?.let {
-                        Text(it, style = MaterialTheme.typography.bodyMedium,
-                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Spacer(Modifier.height(14.dp))
-                }
+                p.role?.let { r -> item {
+                    Text(r, style = MaterialTheme.typography.bodyMedium,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } }
 
                 item { Ledger(p) }
 
                 if (p.openCommitments.isNotEmpty()) {
                     item { Head("还欠着的", "说出口、还没有下文") }
                     items(p.openCommitments, key = { "o" + it.id }) { c ->
-                        Card(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(14.dp)) {
+                        DsCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp)) {
                                 Text("「${c.quote}」", style = MaterialTheme.typography.bodyMedium)
                                 c.dueDate?.let {
                                     Spacer(Modifier.height(4.dp))
@@ -73,8 +72,8 @@ fun PersonScreen(client: DeepBrainClient, personId: String, onBack: () -> Unit, 
                 if (p.judgments.isNotEmpty()) {
                     item { Head("关于他的判断", "深脑从这些会里读出来的") }
                     items(p.judgments, key = { "j" + it.id }) { j ->
-                        Card(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(14.dp)) {
+                        DsCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp)) {
                                 Text(j.statement, style = MaterialTheme.typography.bodyMedium)
                                 Spacer(Modifier.height(4.dp))
                                 Text(
@@ -91,7 +90,9 @@ fun PersonScreen(client: DeepBrainClient, personId: String, onBack: () -> Unit, 
                 }
 
                 if (p.openCommitments.isEmpty() && p.judgments.isEmpty()) {
-                    item { Empty("还没有关于他的东西", "等他在会上说点什么。") }
+                    // 空态必须给下一步。「等他在会上说点什么」是句废话——
+                    // 用户此刻能做的是去录一场，或者回去看别的。
+                    item { Empty("还没有关于他的东西", "他还没在录过的会里出现过。", "去录一场", onRecord) }
                 }
             }
         }
@@ -106,7 +107,7 @@ fun PersonScreen(client: DeepBrainClient, personId: String, onBack: () -> Unit, 
  */
 @Composable
 private fun Ledger(p: Person) {
-    Card(Modifier.fillMaxWidth()) {
+    DsCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(

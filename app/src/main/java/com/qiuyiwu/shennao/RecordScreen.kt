@@ -43,6 +43,8 @@ fun RecordScreen(onBack: () -> Unit) {
     var denied by remember { mutableStateOf(false) }
     var sessionId by remember { mutableStateOf<String?>(null) }
     var level by remember { mutableStateOf(0f) }
+    var captions by remember { mutableStateOf<List<String>>(emptyList()) }
+    var captionState by remember { mutableStateOf<String?>(null) }
     // 声波保留最近这些格。数量按一屏能画下的柱子数定，多了会挤成一片灰。
     val bars = remember { mutableStateListOf<Float>() }
 
@@ -61,6 +63,8 @@ fun RecordScreen(onBack: () -> Unit) {
             error = RecordingService.micError
             sessionId = RecordingService.serverSessionId
             level = RecordingService.level
+            captions = RecordingService.captions
+            captionState = RecordingService.captionState
             if (recording) {
                 bars.add(level)
                 if (bars.size > 48) bars.removeAt(0)
@@ -127,8 +131,16 @@ fun RecordScreen(onBack: () -> Unit) {
 
         // 主按钮：录音时是「停止」，否则是「开始」。
         // 用实心圆而不是矩形按钮——这一屏只有一个动作，它该长得像一个动作。
+        val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
         Surface(
             onClick = {
+                /*
+                 * 触感。开始和停止录音是**有后果**的动作——按下去之后，
+                 * 屏幕上的变化要一秒后才看得出来（服务启动、状态回传）。
+                 * 这一秒里手上没有任何确认，人会怀疑自己没按到，然后再按一次。
+                 */
+                haptics.performHapticFeedback(
+                    androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                 if (recording) RecordingService.stop(ctx)
                 else {
                     denied = false
@@ -154,7 +166,9 @@ fun RecordScreen(onBack: () -> Unit) {
         }
 
         if (recording) {
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(24.dp))
+            Captions(captions, captionState, sessionId != null)
+            Spacer(Modifier.height(24.dp))
             HotwordBox(sessionId)
         }
 
@@ -192,6 +206,59 @@ fun RecordScreen(onBack: () -> Unit) {
             )
         }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * 实时字幕。
+ *
+ * 只显示最近几句，不做成一份可滚动的稿子——字幕要回答的是「现在在说什么」，
+ * 做成稿子会让人低头去读它，而这一屏的用户正在开会。
+ *
+ * 仓规：实时稿不进长期记忆，也不能被当成亲证事实。所以这里**只显示，
+ * 不落盘不上传**——网关自己会把 final 段投影到服务端，那条路有它自己的闸门。
+ */
+@androidx.compose.runtime.Composable
+private fun Captions(lines: List<String>, state: String?, hasSession: Boolean) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = com.qiuyiwu.shennao.DS.Radius.card,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text("实时字幕", style = MaterialTheme.typography.labelMedium,
+                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            when {
+                lines.isNotEmpty() -> lines.forEachIndexed { i, t ->
+                    Text(
+                        t,
+                        style = MaterialTheme.typography.bodyMedium,
+                        // 最后一句是正在说的，前面几句压暗——
+                        // 全一样亮的话，眼睛找不到「现在说到哪」。
+                        color = if (i == lines.lastIndex) MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (i < lines.lastIndex) Spacer(Modifier.height(4.dp))
+                }
+                // 字幕要等第一段传上去才有会话 id（约一分钟）。
+                // 说清楚在等什么，不要给一片空白让人以为坏了。
+                !hasSession -> Text("等第一段传上去后开始（约一分钟）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else -> Text(state ?: "正在接通…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            // 状态里的坏消息要单独说一次，别被字幕盖过去
+            if (lines.isNotEmpty() && state != null && state.contains("断")) {
+                Spacer(Modifier.height(6.dp))
+                Text(state, style = MaterialTheme.typography.bodySmall,
+                     color = MaterialTheme.colorScheme.error)
+            }
+        }
     }
 }
 
@@ -267,6 +334,9 @@ private fun HotwordBox(sessionId: String?) {
             )
             Spacer(Modifier.width(8.dp))
             TextButton(
+                // 安卓的命中区下限是 48dp（规范 §12 明写不取交集）。
+                // TextButton 默认高度不够，用透明 padding 撑开、不改视觉尺寸。
+                modifier = Modifier.heightIn(min = 48.dp),
                 enabled = sessionId != null && !busy && text.isNotBlank(),
                 onClick = {
                     val id = sessionId ?: return@TextButton
