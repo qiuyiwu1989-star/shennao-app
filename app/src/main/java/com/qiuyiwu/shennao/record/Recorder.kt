@@ -26,6 +26,14 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
     @Volatile var elapsedMs: Long = 0; private set
     /** 此刻的真实状态。界面照着念——不许自己维护一份「我以为在录」 */
     @Volatile var state: RecordState = RecordState.IDLE; private set
+    /**
+     * 当前音量，0..1。
+     *
+     * 计时器只能证明「时间在走」，证明不了「录到了声音」——
+     * 一个被静音的麦克风，计时器照样走得好好的。声波是唯一能一眼看出
+     * 「它真的在听」的东西，而这正是用户最想确认的那件事。
+     */
+    @Volatile var level: Float = 0f; private set
     val currentSession: String? get() = session
     val isRecording: Boolean get() = running.get()
 
@@ -127,6 +135,7 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
                     continue
                 }
                 open.write(buf, n)
+                level = Level.of(buf, n)
                 elapsedMs = startMs + open.elapsedMs
                 sinceSync += n
                 // 每 2 秒落一次盘。不是每次都 sync——那会让磁盘一直忙；
@@ -175,9 +184,40 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
      */
     private fun sealPcm(s: String, truth: Segment): Boolean {
         val pcm = vault.segmentFile(s, truth)
-        val m4a = vault.segmentFile(s, truth.withState(Segment.State.SEALED))
-        if (!Encoder.pcmToM4a(pcm, m4a)) return false
+        val aac = vault.segmentFile(s, truth.withState(Segment.State.SEALED))
+
+        /*
+         * **先编到临时名，编完才改成 .aac。**
+         *
+         * 2026-08-31 的丢数据事故就出在这里：编码器直接写最终文件名，
+         * 而 .aac 这个后缀在本设计里的含义是「已封段、可以上传」。
+         * 于是编码进行到一半时，磁盘上已经存在一个叫 .aac 的半成品，
+         * 上传器每 15 秒扫一次目录，扫到就传——传上去的是 13.3 秒，
+         * 而那一段实际有 60 秒。**服务端不会报错，用户也看不出来。**
+         *
+         * 这违背的正是本文件开头那条「名字即状态」：既然名字就是状态，
+         * 那么在东西没到那个状态之前，就一个字节都不能叫那个名字。
+         * meta.json 那里写对了（先写临时文件再改名），这里当初漏了。
+         */
+        val part = java.io.File(aac.parentFile, aac.name + ".part")
+        part.delete()
+        if (!Encoder.pcmToAac(pcm, part)) { part.delete(); return false }
+        // 改名是原子的：要么还没有 .aac，要么就是完整的 .aac，不存在中间态。
+        if (!part.renameTo(aac)) { part.delete(); return false }
         pcm.delete()          // 转码确认成功之后才删。反过来一次失败就丢一分钟录音
+
+        // **时长以产物为准，不以计划为准。**
+        //
+        // 2026-08-31 实测：一段声称 60 秒的分片，实际编出来只有 13.31 秒。
+        // 服务端拿 60 秒去拼时间轴，等于每段凭空多出 47 秒空白，整场时间全错位，
+        // 而没有任何一层会报错。编码器为什么少读是另一个要查的问题，
+        // 但无论为什么，都不该由服务端替我们承担这个谎。
+        val real = Adts.scan(runCatching { aac.readBytes() }.getOrElse { return true })
+            .durationMs(Capture.SAMPLE_RATE)
+        if (real > 0 && real != truth.durationMs) {
+            val fixed = truth.copy(endMs = truth.startMs + real).withState(Segment.State.SEALED)
+            aac.renameTo(vault.segmentFile(s, fixed))
+        }
         return true
     }
 

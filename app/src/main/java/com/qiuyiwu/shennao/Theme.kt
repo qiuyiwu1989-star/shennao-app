@@ -1,126 +1,108 @@
 package com.qiuyiwu.shennao
 
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-/**
- * 深脑主题 —— 把设计系统的 token 映到 Material 3 的角色上。
+/*
+ * 深脑设计 token 在安卓这一侧的镜像。
  *
- * 为什么是「映射」而不是「照搬」：Android 用户对 Material 有肌肉记忆，
- * 把 Web 的控件形状搬过来只会让 App 显得不像 Android。
- * **所以带过来的是品牌（颜色、字阶、语气），交还给平台的是形制（控件、导航、返回、触感）。**
+ * 真源是 packages/ui/src/tokens.ts，**不是这里**。这里的每一个色值都必须
+ * 和那份文件逐字相同，有测试钉着（ThemeParityTest 直接读 tokens.ts 比对）。
  *
- * 接法也是有意选的：App 里 43 处已经在用 MaterialTheme.colorScheme.* 和 .typography.*，
- * 只要在根上换成 ShennaoTheme，那 43 处自动拿到深脑的值 —— 屏幕代码一行不用改。
- * 反过来说，**以后也不要在屏幕里写死颜色**，写死了就绕开了这一层。
- *
- * 值来自 packages/ui/src/tokens.ts。那边改了这边要跟 —— 两端各存一份是已知代价，
- * Kotlin 读不到 TS。跟的时候只改这一个文件。
+ * 为什么要镜像而不是运行时去取：安卓拿不到 Tailwind class，和图表组件是同一个
+ * 处境——那正是仓里「只出 class 不出 hex，图表就只能自己硬编码一份」那条教训。
+ * 镜像可以，但漂移不行，所以配一条护栏。
  */
 
-// ── ink：中性色 ────────────────────────────────────────────────
-private val Ink50  = Color(0xFFF6F7F9)
-private val Ink100 = Color(0xFFE8EAEF)
-private val Ink200 = Color(0xFFD3D7E0)
-private val Ink300 = Color(0xFF9096A4)
-private val Ink400 = Color(0xFF646B7D)
-private val Ink600 = Color(0xFF3F4654)
-private val Ink800 = Color(0xFF1C1C1E)
-private val Ink900 = Color(0xFF0D1117)
+object Ink {
+    val c50 = Color(0xFFF6F7F9)
+    val c100 = Color(0xFFE8EAEF)
+    val c200 = Color(0xFFD3D7E0)
+    val c300 = Color(0xFF9096A4)
+    val c400 = Color(0xFF646B7D)
+    val c500 = Color(0xFF545B6B)
+    val c600 = Color(0xFF3F4654)
+    val c700 = Color(0xFF2A2F3A)
+    val c800 = Color(0xFF1C1C1E)
+    val c900 = Color(0xFF0D1117)
+}
 
-// ── 品牌与语义 ─────────────────────────────────────────────────
-private val Focus       = Color(0xFF0052D9)
-private val FocusSoft   = Color(0xFFE8F0FF)
-private val Iris        = Color(0xFF6725FF)
-private val RiskSolid   = Color(0xFFDC2626)
-private val RiskSurface = Color(0xFFFEF2F2)
-private val RiskText    = Color(0xFFB91C1C)
+object Brand {
+    /** 链接与小字（白底 6.54:1） */
+    val focus = Color(0xFF0052D9)
+    /** 只用于焦点环、辉光与大字（4.02:1） */
+    val focusBright = Color(0xFF007AFF)
+    val focusSoft = Color(0xFFE8F0FF)
+    val iris = Color(0xFF6725FF)
+}
+
+/** 语义色。表达「发生了什么」。取每组的 text / surface / border 三档。 */
+object StateColor {
+    val okText = Color(0xFF047857);   val okSurface = Color(0xFFECFDF5);   val okBorder = Color(0xFFA7F3D0)
+    val warnText = Color(0xFFB45309); val warnSurface = Color(0xFFFFFBEB); val warnBorder = Color(0xFFFDE68A)
+    val riskText = Color(0xFFB91C1C); val riskSurface = Color(0xFFFEF2F2); val riskBorder = Color(0xFFFECACA)
+    val infoText = Color(0xFF1D4ED8); val infoSurface = Color(0xFFEFF6FF); val infoBorder = Color(0xFFBFDBFE)
+}
 
 private val LightColors = lightColorScheme(
-    primary            = Ink900,      // 主按钮定的是 ink-900：克制，且不与蓝色焦点环糊在一起
-    onPrimary          = Color.White,
-    primaryContainer   = FocusSoft,
-    onPrimaryContainer = Focus,
-    secondary          = Focus,       // 蓝留给「可点的文字 / 选中 / 焦点」
-    onSecondary        = Color.White,
-    tertiary           = Iris,
-    background         = Ink50,
-    onBackground       = Ink800,
-    surface            = Color.White,
-    onSurface          = Ink800,
-    onSurfaceVariant   = Ink400,      // 次要文字。全 App 用得最多的一个角色
-    outline            = Ink200,      // 输入框描边
-    outlineVariant     = Ink100,      // 分隔线
-    error              = RiskSolid,
-    onError            = Color.White,
-    errorContainer     = RiskSurface,
-    onErrorContainer   = RiskText,
+    primary = Brand.focus,
+    onPrimary = Color.White,
+    primaryContainer = Brand.focusSoft,
+    onPrimaryContainer = Brand.focus,
+    secondary = Brand.iris,
+    background = Color.White,
+    onBackground = Ink.c900,
+    surface = Color.White,
+    onSurface = Ink.c900,
+    surfaceVariant = Ink.c50,
+    // 次要文字用 ink-500 而不是 ink-300：手机在阳光下看，
+    // 更浅的灰在网页上够用，在户外就读不出来了。
+    onSurfaceVariant = Ink.c500,
+    outline = Ink.c200,
+    outlineVariant = Ink.c100,
+    error = StateColor.riskText,
+    onError = Color.White,
+    errorContainer = StateColor.riskSurface,
+    onErrorContainer = StateColor.riskText,
 )
 
-/**
- * 暗色。**Web 端刻意不做暗色，移动端不能不做** —— 系统里有那个开关，
- * 用户切了之后期待 App 跟着变，不跟就是 App 的问题，不是用户的。
- *
- * 这一套不是把浅色反过来，是从 ink 色阶里另取：底用 ink-900，
- * 面用 ink-800 抬一档，蓝色提亮到能在深底上读出来（#0052D9 在 ink-900 上只有 2.1:1）。
- */
 private val DarkColors = darkColorScheme(
-    primary            = Color(0xFF7BA7F0),   // 深底上 ink-900 当主色是看不见的，改用提亮的蓝
-    onPrimary          = Ink900,
-    primaryContainer   = Color(0xFF16233A),
-    onPrimaryContainer = Color(0xFFCFE0FF),
-    secondary          = Color(0xFF7BA7F0),
-    onSecondary        = Ink900,
-    tertiary           = Color(0xFFA78BFA),
-    background         = Ink900,
-    onBackground       = Ink100,
-    surface            = Ink800,
-    onSurface          = Ink100,
-    onSurfaceVariant   = Ink300,
-    outline            = Color(0xFF3A3A43),
-    outlineVariant     = Color(0xFF2C2C33),
-    error              = Color(0xFFEF7C7C),
-    onError            = Ink900,
-    errorContainer     = Color(0xFF3A1C1C),
-    onErrorContainer   = Color(0xFFFFD9D9),
+    primary = Brand.focusBright,
+    onPrimary = Color.White,
+    primaryContainer = Ink.c700,
+    onPrimaryContainer = Brand.focusSoft,
+    secondary = Brand.iris,
+    background = Ink.c900,
+    onBackground = Ink.c50,
+    surface = Ink.c800,
+    onSurface = Ink.c50,
+    surfaceVariant = Ink.c700,
+    onSurfaceVariant = Ink.c200,
+    outline = Ink.c600,
+    outlineVariant = Ink.c700,
+    error = Color(0xFFFCA5A5),
+    onError = Ink.c900,
 )
 
 /**
- * 字阶。对齐设计系统的具名档，但**单位是 sp 不是 px** ——
- * sp 跟随系统字号设置，用户调大字体时界面要跟着变，这是无障碍要求不是可选项。
- *
- * 下限 11sp：10sp 的中文在手机上不可读（§2.2 定的下限，两端同一条）。
+ * 字阶。下限 11sp——中文在移动端小于这个就读不出来了，
+ * 网页那边的设计规范里是同一条（tinyFontSize 基线为 0）。
  */
-private val ShennaoTypography = Typography(
-    headlineMedium = TextStyle(fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold),
-    headlineSmall  = TextStyle(fontSize = 24.sp, lineHeight = 31.sp, fontWeight = FontWeight.SemiBold),
-    titleLarge     = TextStyle(fontSize = 20.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold),
-    titleMedium    = TextStyle(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium),
-    titleSmall     = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium),
-    bodyLarge      = TextStyle(fontSize = 15.sp, lineHeight = 26.sp),   // 长文正文，行高 1.7
-    bodyMedium     = TextStyle(fontSize = 14.sp, lineHeight = 22.sp),   // 界面默认
-    bodySmall      = TextStyle(fontSize = 13.sp, lineHeight = 20.sp),   // 元信息
-    labelLarge     = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
-    labelMedium    = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium),
-    labelSmall     = TextStyle(fontSize = 11.sp, lineHeight = 15.sp, fontWeight = FontWeight.Medium),
+private val Type = Typography(
+    headlineSmall = Typography().headlineSmall.copy(fontSize = 22.sp, fontWeight = FontWeight.SemiBold),
+    titleMedium = Typography().titleMedium.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
+    titleSmall = Typography().titleSmall.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium),
+    bodyLarge = Typography().bodyLarge.copy(fontSize = 15.sp),
+    bodyMedium = Typography().bodyMedium.copy(fontSize = 14.sp),
+    bodySmall = Typography().bodySmall.copy(fontSize = 12.sp),
+    labelMedium = Typography().labelMedium.copy(fontSize = 12.sp),
+    labelSmall = Typography().labelSmall.copy(fontSize = 11.sp),
 )
 
 @Composable
-fun ShennaoTheme(
-    dark: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit,
-) {
-    MaterialTheme(
-        colorScheme = if (dark) DarkColors else LightColors,
-        typography = ShennaoTypography,
-        content = content,
-    )
+fun ShennaoTheme(dark: Boolean = androidx.compose.foundation.isSystemInDarkTheme(), content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = if (dark) DarkColors else LightColors, typography = Type, content = content)
 }

@@ -173,3 +173,215 @@ object TodayParser {
         return parts.takeIf { it.isNotEmpty() }?.joinToString("，")
     }
 }
+
+
+// ---------------------------------------------------------------------------
+// 「我录过的会走到哪了」
+//
+// 这一层存在的理由：在此之前手机是只写不读的。录完就断了——一条卡住的录音
+// 只在服务器日志里有痕迹，而用户看到的是「我录完了」。
+
+/** 链路四站。名字按用户能理解的说法取，不用服务端的内部状态名。 */
+enum class Stage { RECORDED, DELIVERED, TRANSCRIBED, ANALYZED, FAILED, UNKNOWN }
+
+data class SessionCard(
+    val sessionId: String,
+    val title: String,
+    val startedAt: String?,
+    val durationMs: Long?,
+    val stage: Stage,
+    /** 卡住的原因。只在 FAILED 时有，且服务端保证是人话 */
+    val problem: String?,
+    val transcriptId: String?,
+)
+
+data class MeetingAtom(
+    val id: String, val statement: String, val atomType: String,
+    val quote: String, val epistemic: String, val subject: String?,
+)
+
+/** 一次分析的产物。一场分析常常是好几个方法合出来的。 */
+data class MeetingAnalysis(
+    val markdown: String?,
+    val methods: List<String>,
+    val routingReason: String?,
+    val status: String,
+)
+
+data class Meeting(
+    val transcriptId: String,
+    val title: String,
+    /** 没有就是分析还没跑完。界面要说清楚，不是显示一片空白 */
+    val summary: String?,
+    val durationSec: Int?,
+    val speakers: List<String>,
+    val atoms: List<MeetingAtom>,
+    val commitments: List<Commitment>,
+    /** null = 还没分析过 */
+    val analysis: MeetingAnalysis?,
+)
+
+object SessionsParser {
+    /** 认不出的状态归 UNKNOWN，不猜。猜错会让「还在传」显示成「已送到」。 */
+    private fun stageOf(s: String) = when (s) {
+        "recorded" -> Stage.RECORDED
+        "delivered" -> Stage.DELIVERED
+        "transcribed" -> Stage.TRANSCRIBED
+        "analyzed" -> Stage.ANALYZED
+        "failed" -> Stage.FAILED
+        else -> Stage.UNKNOWN
+    }
+
+    fun parse(body: String): List<SessionCard> = runCatching {
+        val arr = JSONObject(body).optJSONArray("sessions") ?: return emptyList()
+        (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val id = o.optString("sessionId").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            SessionCard(
+                sessionId = id,
+                title = o.optString("title").ifBlank { "未命名录音" },
+                startedAt = o.optString("startedAt").takeIf { it.isNotBlank() && it != "null" },
+                durationMs = if (o.isNull("durationMs")) null else o.optLong("durationMs"),
+                stage = stageOf(o.optString("stage")),
+                problem = o.optString("problem").takeIf { it.isNotBlank() && it != "null" },
+                transcriptId = o.optString("transcriptId").takeIf { it.isNotBlank() && it != "null" },
+            )
+        }
+    }.getOrElse { emptyList() }
+
+    fun parseMeeting(body: String): Meeting? = runCatching {
+        val o = JSONObject(body)
+        val tid = o.optString("transcriptId").takeIf { it.isNotBlank() } ?: return null
+        val sp = o.optJSONArray("speakers")
+        val at = o.optJSONArray("atoms")
+        val cm = o.optJSONArray("commitments")
+        Meeting(
+            transcriptId = tid,
+            title = o.optString("title").ifBlank { "未命名" },
+            summary = o.optString("summary").takeIf { it.isNotBlank() && it != "null" },
+            durationSec = if (o.isNull("durationSec")) null else o.optInt("durationSec"),
+            speakers = (0 until (sp?.length() ?: 0)).mapNotNull { sp!!.optString(it).takeIf { s -> s.isNotBlank() } },
+            atoms = (0 until (at?.length() ?: 0)).mapNotNull { i ->
+                val a = at!!.optJSONObject(i) ?: return@mapNotNull null
+                MeetingAtom(
+                    a.optString("id"), a.optString("statement"), a.optString("atomType"),
+                    a.optString("quote"), a.optString("epistemic"),
+                    a.optString("subject").takeIf { it.isNotBlank() && it != "null" },
+                )
+            },
+            analysis = o.optJSONObject("analysis")?.let { a ->
+                val ms = a.optJSONArray("methods")
+                MeetingAnalysis(
+                    markdown = a.optString("markdown").takeIf { it.isNotBlank() && it != "null" },
+                    methods = (0 until (ms?.length() ?: 0)).mapNotNull {
+                        ms!!.optString(it).takeIf { m -> m.isNotBlank() }
+                    },
+                    routingReason = a.optString("routingReason").takeIf { it.isNotBlank() && it != "null" },
+                    status = a.optString("status"),
+                )
+            },
+            commitments = (0 until (cm?.length() ?: 0)).mapNotNull { i ->
+                val c = cm!!.optJSONObject(i) ?: return@mapNotNull null
+                Commitment(
+                    id = c.optString("id"),
+                    speakerName = c.optString("speaker").ifBlank { "未指明" },
+                    statement = c.optString("quote"),
+                    quote = c.optString("quote"),
+                    saidDate = "",
+                    context = null,
+                    dueDate = c.optString("dueDate").takeIf { it.isNotBlank() && it != "null" },
+                    overdueDays = null,
+                    status = "open",
+                    transcriptId = tid,
+                )
+            },
+        )
+    }.getOrNull()
+}
+
+
+// ---------------------------------------------------------------------------
+// 人物：他说过什么、兑现了多少
+//
+// 用户说的「路」在这一层最实：一条孤立的承诺没有分量，
+// 「他第三次这么说了」才有。
+
+data class Person(
+    val id: String,
+    val name: String,
+    val role: String?,
+    val kept: Int,
+    val broken: Int,
+    val open: Int,
+    /** null = 还没有任何一条有结论。给 0% 或 100% 都是拿数字撒谎 */
+    val keptRate: Int?,
+    val judgments: List<Insight>,
+    val openCommitments: List<Commitment>,
+)
+
+object PersonParser {
+    fun parse(body: String): Person? = runCatching {
+        val o = JSONObject(body)
+        val id = o.optString("id").takeIf { it.isNotBlank() } ?: return null
+        val js = o.optJSONArray("judgments")
+        val cs = o.optJSONArray("openCommitments")
+        Person(
+            id = id,
+            name = o.optString("name").ifBlank { "未命名" },
+            role = o.optString("role").takeIf { it.isNotBlank() && it != "null" },
+            kept = o.optInt("kept"), broken = o.optInt("broken"), open = o.optInt("open"),
+            keptRate = if (o.isNull("keptRate")) null else o.optInt("keptRate"),
+            judgments = (0 until (js?.length() ?: 0)).mapNotNull { i ->
+                val a = js!!.optJSONObject(i) ?: return@mapNotNull null
+                Insight(
+                    id = a.optString("id"), statement = a.optString("statement"),
+                    atomType = "", quote = "", epistemic = a.optString("epistemic"),
+                    subject = null,
+                    transcriptId = a.optString("transcriptId").takeIf { it.isNotBlank() && it != "null" },
+                )
+            },
+            openCommitments = (0 until (cs?.length() ?: 0)).mapNotNull { i ->
+                val a = cs!!.optJSONObject(i) ?: return@mapNotNull null
+                Commitment(
+                    id = a.optString("id"), speakerName = o.optString("name"),
+                    statement = a.optString("quote"), quote = a.optString("quote"),
+                    saidDate = "", context = null,
+                    dueDate = a.optString("dueDate").takeIf { it.isNotBlank() && it != "null" },
+                    overdueDays = null, status = "open",
+                    transcriptId = a.optString("transcriptId").takeIf { it.isNotBlank() && it != "null" },
+                )
+            },
+        )
+    }.getOrNull()
+}
+
+
+// ---------------------------------------------------------------------------
+// 搜索：你问它
+//
+// 前面几层都是「它推给你」。第二大脑真正随身，是在你想不起来的那一刻
+// 它就在口袋里——而那一刻往往发生在会议室里、路上，不在电脑前。
+
+data class Hit(
+    val kind: String,            // judgment / commitment / meeting
+    val id: String,
+    val text: String,
+    val who: String?,
+    val transcriptId: String?,
+)
+
+object SearchParser {
+    fun parse(body: String): List<Hit> = runCatching {
+        val arr = JSONObject(body).optJSONArray("hits") ?: return emptyList()
+        (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val text = o.optString("text")
+            if (text.isBlank()) return@mapNotNull null   // 空文本的命中显示出来是一行空白
+            Hit(
+                kind = o.optString("kind"), id = o.optString("id"), text = text,
+                who = o.optString("who").takeIf { it.isNotBlank() && it != "null" },
+                transcriptId = o.optString("transcriptId").takeIf { it.isNotBlank() && it != "null" },
+            )
+        }
+    }.getOrElse { emptyList() }
+}

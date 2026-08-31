@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.graphics.drawable.Icon
 import android.os.IBinder
 import com.qiuyiwu.shennao.BuildConfig
 import com.qiuyiwu.shennao.MainActivity
@@ -44,9 +45,39 @@ class RecordingService : Service() {
          * 现在它照抄录音器的状态，不自己维护。
          */
         @Volatile var state: RecordState = RecordState.IDLE; private set
-        @Volatile var elapsedMs: Long = 0; private set
+        /**
+         * 已录多久。
+         *
+         * 这个值必须**每次读都是新的**：之前它由 15 秒一轮的轮询循环复制，
+         * 于是界面上的计时器每 15 秒才跳一次，读起来像卡住了。
+         * 改成直接问录音器——它在读音频的循环里持续更新（200 毫秒一次）。
+         */
+        @Volatile private var recorderRef: Recorder? = null
+        val elapsedMs: Long get() = recorderRef?.elapsedMs ?: 0L
+
+        /** 当前音量 0..1。给声波用——它是「确实在录到声音」的唯一直观证据。 */
+        val level: Float get() = recorderRef?.level ?: 0f
         @Volatile var pendingSegments: Int = 0; private set
-        @Volatile var lastError: String? = null; private set
+        /**
+         * **录音本身**的问题：麦克风打不开、被抢走。只有这一类该出现在录音页。
+         *
+         * 之前它和上传失败共用一个变量，于是一按「开始录音」，屏幕上跳出来的是
+         * 某条几小时前卡住的会话的「冻结清单失败 409」——用户完全没法把它
+         * 和自己刚做的动作联系起来，只会以为是这次录音出了问题。
+         */
+        @Volatile var micError: String? = null; private set
+
+        /** **上传**的问题。属于「会议」那一栏，不该打扰正在录音的人。 */
+        @Volatile var uploadProblem: String? = null; private set
+
+        /**
+         * 当前这场在服务端的会话 id。设本场热词要用它。
+         *
+         * 它在**第一段传上去之后**才有——建会话是上传的第一步，而上传是
+         * 封完第一段（一分钟）才开始的。所以界面上这个功能会有一分钟不可用，
+         * 必须说清楚在等什么，不能只给一个灰掉的按钮。
+         */
+        @Volatile var serverSessionId: String? = null; private set
 
         fun start(ctx: Context, title: String) {
             val i = Intent(ctx, RecordingService::class.java)
@@ -69,6 +100,7 @@ class RecordingService : Service() {
         super.onCreate()
         vault = FileVault(File(filesDir, "recordings"))
         recorder = Recorder(vault) { kick() }
+        recorderRef = recorder
         uploader = Uploader(
             UrlHttp(), vault, BuildConfig.API_BASE,
             auth = { force -> com.qiuyiwu.shennao.Session.authFor(applicationContext, force) },
@@ -85,22 +117,25 @@ class RecordingService : Service() {
                 scope.launch { recorder.recoverOrphans(); kick() }
                 val title = intent.getStringExtra("title") ?: "手机录音"
                 if (recorder.start(title, System.currentTimeMillis()) == null) {
-                    lastError = "麦克风打不开——检查权限，或者有别的应用正占着它"
+                    micError = "麦克风打不开——检查权限，或者有别的应用正占着它"
                     stopSelf()
                     return START_NOT_STICKY
                 }
                 recording = true
                 state = RecordState.RECORDING
-                lastError = null
+                micError = null
                 startPump()
             }
             ACTION_STOP -> {
                 recorder.stop()
                 recording = false
                 state = RecordState.IDLE
+                serverSessionId = null
+                // 停止这一刻最要紧：接下来这个服务就要退了，剩下的段要有人接手
+                UploadWorker.kick(applicationContext)
                 // 停止之后不能立刻退出服务：还有分段没传完。
                 // 转成一条「正在上传」的通知继续跑，传完了再自己退。
-                updateNotification("正在上传", "录音已停止，正在推送到深脑")
+                updateNotification("正在上传", "录音已停止，正在推送到深脑", canStop = false)
                 scope.launch { drainUntilEmpty() }
             }
         }
@@ -110,8 +145,8 @@ class RecordingService : Service() {
     private fun startPump() {
         pump?.cancel()
         pump = scope.launch {
+            var tick = 0L
             while (isActive) {
-                elapsedMs = recorder.elapsedMs
                 state = recorder.state
                 recording = recorder.isRecording
                 // 通知栏也要说真话。中断时还挂着「正在录音 12:34」，
@@ -120,34 +155,53 @@ class RecordingService : Service() {
                     RecordState.INTERRUPTED -> updateNotification(
                         "录音中断了", "麦克风被占用，正在抢回来。已录 ${fmt(elapsedMs)} 都在")
                     RecordState.GAVE_UP -> updateNotification(
-                        "录音已停止", "麦克风抢不回来。已录 ${fmt(elapsedMs)} 正在推送")
+                        "录音已停止", "麦克风抢不回来。已录 ${fmt(elapsedMs)} 正在推送", canStop = false)
                     else -> updateNotification("正在录音", "已录 ${fmt(elapsedMs)}")
                 }
                 if (state == RecordState.GAVE_UP) {
                     // 录音线程自己放弃了。把已经录到的传完就收工——
                     // 让服务空转着不会让麦克风回来。
-                    lastError = "麦克风被别的应用占着，录音已停止。已录到的部分会照常推送。"
+                    micError = "麦克风被别的应用占着，录音已停止。已录到的部分会照常推送。"
                     launch { drainUntilEmpty() }
                     return@launch
                 }
-                drainOnce()
-                delay(15_000)
+                // 推送 15 秒一轮就够了（网络往返不必更勤），
+                // 但通知栏的计时要每秒走——它是用户判断「还在录吗」的唯一依据。
+                if (tick % 15 == 0L) drainOnce()
+                tick++
+                delay(1_000)
             }
         }
     }
 
-    /** 有新段封好了，立刻催一次，不用等下一个轮询周期。 */
-    private fun kick() { scope.launch { drainOnce() } }
+    /**
+     * 有新段封好了，立刻催一次，不用等下一个轮询周期。
+     *
+     * 同时排一个 WorkManager 任务：服务活不过「用户把 App 从最近任务里划走」，
+     * 而那一刻没传完的段只躺在手机上——用户以为已经进深脑了。
+     */
+    private fun kick() {
+        scope.launch { drainOnce() }
+        UploadWorker.kick(applicationContext)
+    }
+
+    /** 把当前这场的服务端 id 抄到伴生对象上，供界面设热词。 */
+    private fun publishSessionId() {
+        val local = recorder.currentSession ?: return
+        serverSessionId = vault.readMeta(local)?.serverSessionId
+    }
 
     private fun drainOnce() {
-        val results = runCatching { uploader.drainAll() }.getOrElse { return }
+        // 走同一把锁：WorkManager 那条路也在推同一批文件
+        val results = runCatching { synchronized(Resume.lock) { uploader.drainAll() } }.getOrElse { return }
+        publishSessionId()
         pendingSegments = vault.sessions().sumOf { s ->
             vault.segments(s).count { it.state != Segment.State.UPLOADED }
         }
         // 只把不可重试的错报给界面。网络抖一下就弹一条红字，
         // 用户学会的第一件事就是无视它——那时候真出事也没人看了。
         results.values.filterIsInstance<DrainResult.Failed>()
-            .firstOrNull { !it.retryable }?.let { lastError = it.message }
+            .firstOrNull { !it.retryable }?.let { uploadProblem = it.message }
     }
 
     private suspend fun drainUntilEmpty() {
@@ -166,9 +220,22 @@ class RecordingService : Service() {
         stopSelf()
     }
 
+    /**
+     * 用户把 App 从最近任务里划走了。
+     *
+     * **什么都不做是对的**：录音是用户明确交代过的长活，划走 App 只是
+     * 「把界面收起来」，不是「停止录音」。安卓的默认行为（stopWithTask=false）
+     * 本来就不会停掉已启动的服务，这里显式写出来，是为了下一个人不会
+     * 顺手加个 stopSelf() 来「清理」——那会让整场会在切走的一瞬间没掉。
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // 故意不调 stopSelf()
+    }
+
     override fun onDestroy() {
         recorder.stop()
         recording = false
+        recorderRef = null
         pump?.cancel()
         scope.cancel()
         super.onDestroy()
@@ -187,24 +254,39 @@ class RecordingService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
     }
 
-    private fun notification(title: String, text: String): Notification {
+    private fun notification(title: String, text: String, canStop: Boolean = true): Notification {
         val tap = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        return Notification.Builder(this, CHANNEL)
+        val b = Notification.Builder(this, CHANNEL)
             .setContentTitle(title)
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(tap)
             .setOngoing(true)
-            .build()
+        // 通知栏里直接能停。录音时 App 是藏在后台的——没有这个按钮，
+        // 想停就得先把 App 从一堆应用里翻出来，而「开完会顺手停掉」
+        // 本该是一个动作的事。
+        if (canStop) {
+            val stop = PendingIntent.getService(
+                this, 1,
+                Intent(this, RecordingService::class.java).setAction(ACTION_STOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            b.addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(this, android.R.drawable.ic_media_pause), "停止", stop,
+                ).build()
+            )
+        }
+        return b.build()
     }
 
-    private fun updateNotification(title: String, text: String) {
+    private fun updateNotification(title: String, text: String, canStop: Boolean = true) {
         runCatching {
             getSystemService(NotificationManager::class.java)
-                .notify(NOTIF_ID, notification(title, text))
+                .notify(NOTIF_ID, notification(title, text, canStop))
         }
     }
 

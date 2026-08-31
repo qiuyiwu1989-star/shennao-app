@@ -1,10 +1,17 @@
 package com.qiuyiwu.shennao
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -22,49 +29,113 @@ import androidx.compose.ui.unit.dp
  * 这是手机端和网页端最大的区别，网页可以铺开，手机不行。
  */
 
+@OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+)
 @Composable
 fun TodayScreen(
     today: Today,
     onOpenTranscript: (String) -> Unit,
     onRecord: () -> Unit,
     onRefresh: () -> Unit,
+    /** 落账：兑现了 / 取消了。系统不裁定任何人，只由人落 */
+    onSettle: (String, String) -> Unit = { _, _ -> },
+    /** 非空表示现在显示的是离线缓存，并说明是什么时候的 */
+    staleLabel: String? = null,
+    /** 下拉刷新用。挂起函数返回了才停转圈 */
+    onPullRefresh: (suspend () -> Unit)? = null,
 ) {
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        item { Header(today) }
-
-        // 「录」放在最上面、在所有内容之前。手机端的录音是随手发生的——
-        // 掏出来就要能按下去，不该先滚过三段判断才找得到它。
-        item { RecordBar(onRecord) }
-
-        if (today.commitments.isNotEmpty()) {
-            item { SectionTitle("下文", "别人说出口、还没有下文的事") }
-            items(today.commitments, key = { it.id }) { c ->
-                CommitmentCard(c) { c.transcriptId?.let(onOpenTranscript) }
-            }
-        }
-
-        if (today.predictions.isNotEmpty()) {
-            item { SectionTitle("该给个说法", "到期的预测，应验了还是落空了") }
-            items(today.predictions, key = { it.id }) { PredictionCard(it) }
-        }
-
-        if (today.insights.isNotEmpty()) {
-            item { SectionTitle("新判断", "最近沉进大脑的") }
-            items(today.insights, key = { it.id }) { i ->
-                InsightCard(i) { i.transcriptId?.let(onOpenTranscript) }
-            }
-        }
-
-        item {
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) { Text("刷新") }
+    /*
+     * 三个频道，左右滑。
+     *
+     * 之前是一条长列表，三段首尾相接——而这三段是**三种不同的动作**：
+     * 下文是去问人、预测是去下判断、洞察是读。混在一条流里滚，
+     * 读到第三屏时人已经忘了自己在干嘛。
+     *
+     * 顺序仍按「多久之内不看就来不及」排，滑动只是换了导航方式，没换判据。
+     */
+    val channels = remember(today) {
+        buildList {
+            add(Channel("下文", "别人说出口、还没有下文的事", today.commitments.size))
+            add(Channel("该给个说法", "到期的预测，应验了还是落空了", today.predictions.size))
+            add(Channel("新判断", "最近沉进大脑的", today.insights.size))
         }
     }
+    val pager = androidx.compose.foundation.pager.rememberPagerState { channels.size }
+    val scope = rememberCoroutineScope()
+
+    val page = @Composable {
+    Column(Modifier.fillMaxSize()) {
+        staleLabel?.let { com.qiuyiwu.shennao.StaleBanner(it) }
+
+        Column(Modifier.padding(horizontal = 16.dp)) {
+            Header(today)
+            RecordBar(onRecord)
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // 频道条。数字直接标在标签上——不点进去就知道哪一栏有事。
+        androidx.compose.material3.ScrollableTabRow(
+            selectedTabIndex = pager.currentPage,
+            edgePadding = 16.dp,
+            divider = {},
+        ) {
+            channels.forEachIndexed { i, c ->
+                androidx.compose.material3.Tab(
+                    selected = pager.currentPage == i,
+                    onClick = { scope.launch { pager.animateScrollToPage(i) } },
+                    text = {
+                        Text(
+                            if (c.count > 0) "${c.title} ${c.count}" else c.title,
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                    },
+                )
+            }
+        }
+
+        androidx.compose.foundation.pager.HorizontalPager(
+                state = pager,
+                modifier = Modifier.fillMaxSize(),
+            ) { page ->
+                LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    item {
+                        Text(channels[page].hint, style = MaterialTheme.typography.bodySmall,
+                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    when (page) {
+                        0 -> if (today.commitments.isEmpty()) item {
+                            Empty("没有要问的", "别人在会上答应过的事，到期了会出现在这里。")
+                        } else items(today.commitments, key = { it.id }) { c ->
+                            CommitmentCard(c, onSettle) { c.transcriptId?.let(onOpenTranscript) }
+                        }
+                        1 -> if (today.predictions.isEmpty()) item {
+                            Empty("没有到期的预测", "写下的预测到期时会来这里要一个说法。")
+                        } else items(today.predictions, key = { it.id }) { PredictionCard(it) }
+                        else -> if (today.insights.isEmpty()) item {
+                            Empty("还没有新判断", "录一场会，深脑会从里面读出判断。", "录一场", onRecord)
+                        } else items(today.insights, key = { it.id }) { i ->
+                            InsightCard(i) { i.transcriptId?.let(onOpenTranscript) }
+                        }
+                    }
+                    item { Spacer(Modifier.height(24.dp)) }
+            }
+        }
+    }
+    }
+
+    // 整页下拉，而不是只有列表区域能拉——用户的手会落在标题上，
+    // 那里拉不动的话，他会以为这一页不支持刷新。
+    if (onPullRefresh != null) Refreshable(onRefresh = onPullRefresh) { page() }
+    else page()
 }
+
+private data class Channel(val title: String, val hint: String, val count: Int)
 
 @Composable
 private fun Header(t: Today) {
@@ -126,7 +197,7 @@ private fun SectionTitle(title: String, hint: String) {
 }
 
 @Composable
-private fun CommitmentCard(c: Commitment, onOpen: () -> Unit) {
+private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, onOpen: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -155,6 +226,22 @@ private fun CommitmentCard(c: Commitment, onOpen: () -> Unit) {
                 canOpen = c.transcriptId != null,
                 onOpen = onOpen,
             )
+            // 落账。放在卡上而不是详情里：这件事发生在「刚问完他」那一刻，
+            // 而那一刻人站在走廊里，不会为了点两下再钻进两层页面。
+            //
+            // 只有兑现和取消两个动作——**系统不裁定任何人**，
+            // 这两件事都需要账本以外的信息，只有在场的人知道。
+            var done by remember(c.id) { mutableStateOf<String?>(null) }
+            if (done == null) {
+                Row {
+                    TextButton(onClick = { done = "kept"; onSettle(c.id, "kept") }) { Text("兑现了") }
+                    TextButton(onClick = { done = "cancelled"; onSettle(c.id, "cancelled") }) { Text("取消了") }
+                }
+            } else {
+                Text(if (done == "kept") "已记：兑现了" else "已记：取消了",
+                     style = MaterialTheme.typography.labelMedium,
+                     color = MaterialTheme.colorScheme.primary)
+            }
         }
     }
 }

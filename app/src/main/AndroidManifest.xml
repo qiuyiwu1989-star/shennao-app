@@ -8,8 +8,13 @@
     <!-- 安卓 13 起通知要用户点头。拿不到也能录，只是状态栏那条看不见 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- 关掉云备份。备份会把应用目录整包上云：里面有还没上传的录音，也有凭证。
+         而加密凭证的密钥在系统 keystore 里、不会跟着备份走，恢复出来也解不开——
+         那时用户会看到一个「登录了但一直失败」的半死状态，比干脆重登一次更糟。 -->
     <application
         android:label="深脑"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
         android:supportsRtl="true"
         android:theme="@style/Theme.Material3.DayNight.NoActionBar">
         <activity android:name=".MainActivity" android:exported="true">

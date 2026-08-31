@@ -125,30 +125,187 @@ class DeepBrainClient(
      * 401 会自动续一次 token 再试。只续一次——续不上就是真的登录失效了，
      * 反复重试只会让用户对着转圈等，而正确的做法是把他送去登录页。
      */
-    fun today(): ApiResult<Today> {
+    fun today(): ApiResult<Today> = get("/api/mobile/today") { TodayParser.parse(it) }
+
+    /**
+     * 取原始应答，成功时交给调用方存进离线缓存。
+     *
+     * 缓存存的是**原始 json 而不是解析后的对象**：解析规则会随版本变，
+     * 存对象等于把当前这版的理解冻在磁盘上，升级之后旧缓存要么读不出来、
+     * 要么读成错的。存原文则永远能用当前这版的解析器重读一遍。
+     */
+    fun rawTodayOrNull(): String? = raw("/api/mobile/today")
+    fun rawSessionsOrNull(): String? = raw("/api/mobile/sessions")
+
+    private fun raw(path: String): String? {
+        val c = store.load() ?: return null
+        if (accessToken == null && !refresh()) return null
+        fun once() = http.request("GET", "$apiBase$path",
+            mapOf("Authorization" to "Bearer ${accessToken ?: ""}", "x-deepbrain-org-id" to c.orgId))
+        var r = runCatching { once() }.getOrNull() ?: return null
+        if (r.status == 401) {
+            if (!refresh()) return null
+            r = runCatching { once() }.getOrNull() ?: return null
+        }
+        return if (r.status >= 400) null else r.body
+    }
+
+    /**
+     * 设置本场专有名词（0080）。
+     *
+     * 组织底表是建会话时自动合上的，不用管；这里传的是**这场会特有**的词——
+     * 底表里没有的人名、项目名、生造词。
+     *
+     * 录音中途也能改，但只影响**之后**的识别：已经出的字不会回头修正。
+     * 界面必须把这句说出来，否则用户会以为加了词就能把前面的错字改过来。
+     */
+    fun setHotwordPins(sessionId: String, pins: List<String>): ApiResult<List<String>> {
         val c = store.load() ?: return ApiResult.Unauthorized
         if (accessToken == null && !refresh()) return ApiResult.Unauthorized
-
-        var r = call(c)
+        fun once() = http.request(
+            "PUT", "$apiBase/api/recordings/$sessionId/hotwords",
+            mapOf(
+                "Authorization" to "Bearer ${accessToken ?: ""}",
+                "x-deepbrain-org-id" to c.orgId,
+                "Content-Type" to "application/json",
+            ),
+            JSONObject().put("pins", org.json.JSONArray(pins)).toString(),
+        )
+        var r = once()
         if (r.status == 401) {
             if (!refresh()) return ApiResult.Unauthorized
-            r = call(c)
+            r = once()
+        }
+        if (r.status >= 400) return ApiResult.Failed("热词没存上（${r.status}）")
+        // 服务端会把超限/重复的词丢掉并回报 accepted。显示真正生效的那些，
+        // 不是用户输入的那些——否则用户会以为某个被丢掉的词在起作用。
+        return runCatching {
+            val a = JSONObject(r.body).optJSONArray("accepted")
+            ApiResult.Ok((0 until (a?.length() ?: 0)).map { a!!.getString(it) })
+        }.getOrElse { ApiResult.Ok(pins) }
+    }
+
+    /** 我录过的会走到哪了。401 同样自动续一次。 */
+    fun sessions(): ApiResult<List<SessionCard>> =
+        get("/api/mobile/sessions") { SessionsParser.parse(it) }
+
+    /**
+     * 生成一条分享链接。
+     *
+     * 和网页那条走同一张表、同一种 token——收到的人看到的页面完全一样。
+     * 手机端默认**不附原文**：分享往往是随手发出去的，而原始转写里
+     * 有别人说的每一句话。要附原文请到网页里显式开。
+     */
+    fun share(transcriptId: String): ApiResult<String> {
+        val c = store.load() ?: return ApiResult.Unauthorized
+        if (accessToken == null && !refresh()) return ApiResult.Unauthorized
+        fun once() = http.request(
+            "POST", "$apiBase/api/mobile/transcript/$transcriptId/share",
+            mapOf(
+                "Authorization" to "Bearer ${accessToken ?: ""}",
+                "x-deepbrain-org-id" to c.orgId,
+                "Content-Type" to "application/json",
+            ), "{}",
+        )
+        var r = once()
+        if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
+        // 409 = 还没分析完。说清楚，用户会去等，而不是反复点。
+        if (r.status == 409) return ApiResult.Failed("这场会还没分析完，分析完才能分享")
+        if (r.status >= 400) return ApiResult.Failed("生成链接失败（${r.status}）")
+        return runCatching {
+            val u = JSONObject(r.body).optString("url")
+            if (u.isBlank()) ApiResult.Failed("没拿到链接") else ApiResult.Ok(u)
+        }.getOrElse { ApiResult.Failed("应答看不懂") }
+    }
+
+    /**
+     * 删掉一条录音会话。
+     *
+     * 给「救不回来」的那些用：一条永远失败的录音挂在列表上，
+     * 用户每次打开都要重新判断一次「这个要不要管」。
+     */
+    fun deleteRecording(sessionId: String): ApiResult<Unit> {
+        val c = store.load() ?: return ApiResult.Unauthorized
+        if (accessToken == null && !refresh()) return ApiResult.Unauthorized
+        fun once() = http.request(
+            "DELETE", "$apiBase/api/recordings/$sessionId",
+            mapOf("Authorization" to "Bearer ${accessToken ?: ""}", "x-deepbrain-org-id" to c.orgId),
+        )
+        var r = once()
+        if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
+        // 404 = 已经不在了，也算达成目的
+        return if (r.status < 400 || r.status == 404) ApiResult.Ok(Unit)
+               else ApiResult.Failed("删不掉（${r.status}）")
+    }
+
+    /** 搜索。查询串要转义，否则用户搜的东西里带 & 会把参数截断。 */
+    fun search(q: String): ApiResult<List<Hit>> =
+        get("/api/mobile/search?q=" + java.net.URLEncoder.encode(q, "UTF-8")) { SearchParser.parse(it) }
+
+    /** 这个人说过什么、兑现了多少。 */
+    fun person(id: String): ApiResult<Person> =
+        get("/api/mobile/people/$id") { PersonParser.parse(it) ?: throw IllegalStateException("看不懂") }
+
+    /**
+     * 给一条承诺落账。
+     *
+     * **系统不裁定任何人**——兑现和取消都需要账本以外的信息，只由人落。
+     * 409 不是错误，是「已经落过账了」：报成失败会让用户以为网络有问题然后反复点。
+     */
+    fun settleCommitment(id: String, action: String): ApiResult<String> {
+        val c = store.load() ?: return ApiResult.Unauthorized
+        if (accessToken == null && !refresh()) return ApiResult.Unauthorized
+        fun once() = http.request(
+            "POST", "$apiBase/api/mobile/commitments/$id",
+            mapOf(
+                "Authorization" to "Bearer ${accessToken ?: ""}",
+                "x-deepbrain-org-id" to c.orgId,
+                "Content-Type" to "application/json",
+            ),
+            JSONObject().put("action", action).toString(),
+        )
+        var r = once()
+        if (r.status == 401) {
+            if (!refresh()) return ApiResult.Unauthorized
+            r = once()
+        }
+        if (r.status == 409) return ApiResult.Failed("这条已经落过账了")
+        if (r.status >= 400) return ApiResult.Failed("落账失败（${r.status}）")
+        return runCatching { ApiResult.Ok(JSONObject(r.body).optString("status")) }
+            .getOrElse { ApiResult.Ok(action) }
+    }
+
+    /** 这场会讲了什么。 */
+    fun meeting(transcriptId: String): ApiResult<Meeting> =
+        get("/api/mobile/transcript/$transcriptId") {
+            SessionsParser.parseMeeting(it) ?: throw IllegalStateException("应答看不懂")
+        }
+
+    /**
+     * 取数的公共壳：续 token、401 重试一次、应答解析失败不崩。
+     *
+     * 抽出来是因为 today() 那套逻辑要被逐字重复三遍，而「只续一次」
+     * 这种判据一旦分叉，某个面就会在 token 过期时开始无限转圈。
+     */
+    private fun <T> get(path: String, parse: (String) -> T): ApiResult<T> {
+        val c = store.load() ?: return ApiResult.Unauthorized
+        if (accessToken == null && !refresh()) return ApiResult.Unauthorized
+        fun once() = http.request(
+            "GET", "$apiBase$path",
+            mapOf("Authorization" to "Bearer ${accessToken ?: ""}", "x-deepbrain-org-id" to c.orgId),
+        )
+        var r = once()
+        if (r.status == 401) {
+            if (!refresh()) return ApiResult.Unauthorized
+            r = once()
         }
         return when {
             r.status == 401 -> ApiResult.Unauthorized
             r.status >= 400 -> ApiResult.Failed("取数失败（${r.status}）")
-            else -> runCatching { ApiResult.Ok(TodayParser.parse(r.body)) }
+            else -> runCatching { ApiResult.Ok(parse(r.body)) }
                 .getOrElse { ApiResult.Failed("应答看不懂") }
         }
     }
-
-    private fun call(c: Credentials) = http.request(
-        "GET", "$apiBase/api/mobile/today",
-        mapOf(
-            "Authorization" to "Bearer ${accessToken ?: ""}",
-            "x-deepbrain-org-id" to c.orgId,
-        ),
-    )
 
     /**
      * 拿一个当前可用的 access token，必要时续一次。

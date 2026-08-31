@@ -11,9 +11,56 @@ import android.content.Context
  * 而且只在开着录音时出现，极难复现。
  */
 
-/** 凭证存在 SharedPreferences。第一版先这样，上真机验通之后换 EncryptedSharedPreferences。 */
+/**
+ * 凭证落盘。
+ *
+ * refresh token 是长期钥匙——它能一直换出新的 access token，作废之前
+ * 谁拿到谁就是这个账号。明文躺在 SharedPreferences 里，任何能读到应用目录的
+ * 途径（root、某些厂商的备份、调试桥）都能直接拿走。所以用
+ * EncryptedSharedPreferences：密钥在系统 keystore 里，拷走文件也解不开。
+ *
+ * 旧的明文库要迁移过来并**删掉**，不能只是不再写它——留着等于加密了个寂寞。
+ * 迁完的用户不用重新登录。
+ *
+ * 加密库起不来时退回明文（某些设备的 keystore 会抽风）。宁可能用，
+ * 也不要让人连登录都登不上；但退回时必须留下痕迹，不能假装一切正常。
+ */
 class PrefsStore(ctx: Context) : CredentialStore {
-    private val p = ctx.applicationContext.getSharedPreferences("shennao", Context.MODE_PRIVATE)
+    private val app = ctx.applicationContext
+    private var encrypted = true
+    private val p = openEncrypted() ?: run {
+        encrypted = false
+        android.util.Log.w("shennao", "加密存储起不来，凭证退回明文")
+        app.getSharedPreferences(PLAIN, Context.MODE_PRIVATE)
+    }
+
+    init { if (encrypted) migrateFromPlain() }
+
+    private fun openEncrypted(): android.content.SharedPreferences? = runCatching {
+        val key = androidx.security.crypto.MasterKey.Builder(app)
+            .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        androidx.security.crypto.EncryptedSharedPreferences.create(
+            app, SECURE, key,
+            androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        )
+    }.getOrNull()
+
+    /** 把旧的明文凭证搬进来再删掉。留着旧文件 = 加密了个寂寞。 */
+    private fun migrateFromPlain() {
+        val old = app.getSharedPreferences(PLAIN, Context.MODE_PRIVATE)
+        val rt = old.getString("refresh", null) ?: run { old.edit().clear().apply(); return }
+        val org = old.getString("org", null)
+        if (org != null && p.getString("refresh", null) == null) {
+            p.edit().putString("refresh", rt).putString("org", org)
+                .putString("email", old.getString("email", "") ?: "").apply()
+        }
+        // 明文那份必须消失，无论有没有搬成功——搬不成功用户重登一次，
+        // 而留着一份明文长期钥匙的代价大得多。
+        old.edit().clear().apply()
+        app.deleteSharedPreferences(PLAIN)
+    }
     override fun load(): Credentials? {
         val rt = p.getString("refresh", null) ?: return null
         val org = p.getString("org", null) ?: return null
@@ -24,6 +71,11 @@ class PrefsStore(ctx: Context) : CredentialStore {
             .putString("org", c.orgId).putString("email", c.email).apply()
     }
     override fun clear() { p.edit().clear().apply() }
+
+    private companion object {
+        const val PLAIN = "shennao"          // 旧的明文库，只用来迁移和删除
+        const val SECURE = "shennao-secure"
+    }
 }
 
 object Session {
