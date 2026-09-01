@@ -139,8 +139,9 @@ fun RecordScreen(onBack: () -> Unit) {
                  * 屏幕上的变化要一秒后才看得出来（服务启动、状态回传）。
                  * 这一秒里手上没有任何确认，人会怀疑自己没按到，然后再按一次。
                  */
-                haptics.performHapticFeedback(
-                    androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                // 同理：先做事，再给手感，且手感不许抛。
+                runCatching { haptics.performHapticFeedback(
+                    androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }
                 if (recording) RecordingService.stop(ctx)
                 else {
                     denied = false

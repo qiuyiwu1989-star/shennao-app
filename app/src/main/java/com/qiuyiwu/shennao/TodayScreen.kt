@@ -241,17 +241,20 @@ private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, on
                     TextButton(
                         modifier = Modifier.heightIn(min = 48.dp),
                         onClick = {
-                            haptics.performHapticFeedback(
-                                androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            // **业务动作在前，触感在后**，且触感不许抛。
+                            // 反过来写的话，一个装饰性调用失败就会吃掉整笔记账——
+                            // 用户点了「兑现了」，屏幕没反应，账本上也没有这一笔。
                             done = "kept"; onSettle(c.id, "kept")
+                            runCatching { haptics.performHapticFeedback(
+                                androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }
                         },
                     ) { Text("兑现了") }
                     TextButton(
                         modifier = Modifier.heightIn(min = 48.dp),
                         onClick = {
-                            haptics.performHapticFeedback(
-                                androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                             done = "cancelled"; onSettle(c.id, "cancelled")
+                            runCatching { haptics.performHapticFeedback(
+                                androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }
                         },
                     ) { Text("取消了") }
                 }

@@ -116,7 +116,25 @@ class RecordingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
-                startForeground(NOTIF_ID, notification("正在录音", "深脑正在录这场会"))
+                /*
+                 * startForeground 会抛。
+                 *
+                 * 安卓 12 起，从后台启动前台服务是被禁止的
+                 * （ForegroundServiceStartNotAllowedException）。不接住就是**整个 App 崩掉**——
+                 * 而崩的时候用户正想录一场会。
+                 *
+                 * 2026-09-01 在模拟器上撞出来的：111 个单测和 9 条界面测试都抓不到，
+                 * 因为它们都不启动真正的服务。这正是把模拟器接进来的理由。
+                 */
+                try {
+                    startForeground(NOTIF_ID, notification("正在录音", "深脑正在录这场会"))
+                } catch (e: Exception) {
+                    micError = "系统不让在后台开始录音——请先打开深脑，再点开始。"
+                    recording = false
+                    state = RecordState.IDLE
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
                 // 先把上次被杀时留下的半截录音补封了，再开新的一场——
                 // 不然它们会一直躺在磁盘上，用户以为录到了，其实一直没传。
                 scope.launch { recorder.recoverOrphans(); kick() }
