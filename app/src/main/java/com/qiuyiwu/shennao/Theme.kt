@@ -30,7 +30,10 @@ import androidx.compose.ui.unit.sp
 private val Ink50  = Color(0xFFF6F7F9)
 private val Ink100 = Color(0xFFE8EAEF)
 private val Ink200 = Color(0xFFD3D7E0)
-private val Ink300 = Color(0xFF9096A4)
+// **控件边界档。** 从 #9096A4 压到 #898F9D（深 7/255，肉眼看不出）——
+// 输入框的边框是唯一告诉人「这里能打字」的东西，糊掉就没有别的线索了。
+// 对白对比度 2.96 → 3.24，过 1.4.11 的 3:1。与 packages/ui/src/tokens.ts 2026-09 同步。
+private val Ink300 = Color(0xFF898F9D)
 private val Ink400 = Color(0xFF646B7D)
 private val Ink600 = Color(0xFF3F4654)
 private val Ink800 = Color(0xFF1C1C1E)
