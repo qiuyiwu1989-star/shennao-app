@@ -12,7 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.List
-import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,6 +45,8 @@ private sealed class Screen {
     data class Broken(val message: String) : Screen()
     /** 一场会的详情。从历史点进来 */
     data class Meeting(val transcriptId: String) : Screen()
+    /** 在 App 内打开网页版的某一页，带登录态。逐句转写、播放、认人都在那边。 */
+    data class Web(val path: String, val title: String) : Screen()
 }
 
 /**
@@ -57,7 +59,9 @@ private sealed class Screen {
  *   在路上：录的东西到了吗   我的：账号和版本
  */
 private enum class Tab(val label: String) {
-    TODAY("今天"), RECORD("录音"), SEARCH("搜索"), HISTORY("会议"), ME("我的")
+    // 「搜索」改成「问」：人在路上想起来的是问题，不是关键词。
+    // 关键词检索没删，它挪到了真正有用的那一刻——深脑说「依据不够」的时候。
+    TODAY("今天"), RECORD("录音"), SEARCH("问"), HISTORY("会议"), ME("我的")
 }
 
 class MainActivity : ComponentActivity() {
@@ -232,8 +236,12 @@ private fun App(client: DeepBrainClient) {
 
                 is Screen.Ble -> BleScreen(onDone = { tab = Tab.HISTORY; scope.launch { load() } })
 
+                is Screen.Web -> MeetingWebScreen(client, s.path, s.title,
+                    onBack = { screen = Screen.Meeting(s.path.substringAfterLast('/')) })
+
                 is Screen.Meeting -> MeetingScreen(client, s.transcriptId,
-                    onBack = { tab = Tab.HISTORY; scope.launch { load() } })
+                    onBack = { tab = Tab.HISTORY; scope.launch { load() } },
+                    onOpenWeb = { path, title -> screen = Screen.Web(path, title) })
 
                 is Screen.Person -> PersonScreen(client, s.personId,
                     onBack = { scope.launch { load() } },
@@ -245,7 +253,7 @@ private fun App(client: DeepBrainClient) {
                         onBack = { tab = Tab.TODAY; scope.launch { load() } },
                         onImport = { screen = Screen.Ble },
                     )
-                    Tab.SEARCH -> SearchScreen(client) { tid -> screen = Screen.Meeting(tid) }
+                    Tab.SEARCH -> AskScreen(client) { tid -> screen = Screen.Meeting(tid) }
                     Tab.HISTORY -> HistoryScreen(
                         client = client,
                         onRecord = { tab = Tab.RECORD; screen = Screen.Record },
@@ -304,7 +312,9 @@ private fun TabIcon(t: Tab) {
     val v = when (t) {
         Tab.TODAY -> Icons.Outlined.Home
         Tab.RECORD -> MicOutlined
-        Tab.SEARCH -> Icons.Outlined.Search
+        // 放大镜说的是「搜索」。这一栏现在是问答，图标得跟着改口，
+        // 否则底栏和屏幕里说的是两件事。
+        Tab.SEARCH -> Icons.Outlined.Send
         Tab.HISTORY -> Icons.Outlined.List
         Tab.ME -> Icons.Outlined.Person
     }

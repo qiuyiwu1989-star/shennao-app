@@ -12,7 +12,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -24,13 +23,30 @@ import kotlinx.coroutines.withContext
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> Unit) {
+fun MeetingScreen(
+    client: DeepBrainClient,
+    transcriptId: String,
+    onBack: () -> Unit,
+    onOpenWeb: ((path: String, title: String) -> Unit)? = null,
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var meeting by remember { mutableStateOf<Meeting?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var sharing by remember { mutableStateOf(false) }
     var shareNote by remember { mutableStateOf<String?>(null) }
+    var analyzing by remember { mutableStateOf(false) }
+    val notice = LocalNotice.current
+
+    // 重新取数：手动排上分析之后要能看到状态从「没有分析」变成「在跑」。
+    // 不刷新的话用户点完按钮屏幕一动不动，只能反复点，而每一次都会
+    // 撞上服务端的幂等闸——他看到的是「点了没用」。
+    suspend fun reload() {
+        when (val r = withContext(Dispatchers.IO) { client.meeting(transcriptId) }) {
+            is ApiResult.Ok -> meeting = r.value
+            else -> Unit
+        }
+    }
 
     LaunchedEffect(transcriptId) {
         when (val r = withContext(Dispatchers.IO) { client.meeting(transcriptId) }) {
@@ -148,10 +164,58 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                         DsCard(Modifier.fillMaxWidth()) {
                             MarkdownText(a.markdown, Modifier.padding(DS.Pad.default))
                         }
-                    } else if (a.status != "completed") item {
-                        Text("分析还在跑（${a.status}）",
-                             style = MaterialTheme.typography.bodySmall,
-                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else item {
+                        // 「在跑」和「跑挂了」必须分开说。
+                        // 这里原来写的是 `a.status != "completed"`——那个枚举值
+                        // 根本不存在（真值是 done），条件永远为真，于是一场
+                        // **失败**的分析会永远显示成「还在跑」，用户就一直等。
+                        // 枚举见 0001_init.sql：queued / routing / analyzing /
+                        // self_check / persisting / done / failed。
+                        if (a.status == "failed") {
+                            Text("这场分析失败了。可以重跑一次。",
+                                 style = MaterialTheme.typography.bodyMedium,
+                                 color = MaterialTheme.colorScheme.error)
+                        } else {
+                            Text("分析还在跑（${a.status}）",
+                                 style = MaterialTheme.typography.bodyMedium,
+                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+
+                // **没有分析时也要说话。**
+                // 原来这一整块挂在 `m.analysis?.let`下面，分析为 null 时
+                // 屏幕上一个字都没有——一条 60 秒的录音传上来、转写好了、
+                // 详情页却什么都不显示，用户唯一能得出的结论是「这东西坏了」。
+                // 实际上是按「不到 5 分钟不自动分析」跳过的。
+                if (m.analysis == null) item {
+                    SectionHead("分析", "这条为什么没有")
+                    DsCard(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(DS.Pad.default)) {
+                            Text(m.analysisAbsentReason ?: "这条还没有分析。",
+                                 style = MaterialTheme.typography.bodyLarge,
+                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(DS.Rhythm.element))
+                            // 门槛的意思是「默认不花这个钱」，不是「不许分析」。
+                            // 所以出口必须在这里——用户正是在这一刻想要它。
+                            // 按钮上写明要花积分：花钱的动作不该让人点完才知道。
+                            Button(
+                                enabled = !analyzing,
+                                modifier = Modifier.heightIn(min = 48.dp),
+                                onClick = {
+                                    analyzing = true
+                                    scope.launch {
+                                        val r = withContext(Dispatchers.IO) { client.analyze(m.transcriptId) }
+                                        analyzing = false
+                                        when (r) {
+                                            is ApiResult.Ok -> { notice("排上了，分析在跑"); reload() }
+                                            is ApiResult.Failed -> notice(r.message)
+                                            else -> notice("登录失效了")
+                                        }
+                                    }
+                                },
+                            ) { Text(if (analyzing) "排队中…" else "还是分析这条（消耗积分）") }
+                        }
                     }
                 }
 
@@ -192,9 +256,14 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                     Spacer(Modifier.height(DS.Rhythm.element))
                     OutlinedButton(
                         onClick = {
-                            ctx.startActivity(android.content.Intent(
+                            val path = "/zh/transcript/${m.transcriptId}"
+                            // 在 App 里开（带登录态）。原来是甩给系统浏览器一个裸链接，
+                            // 用户在 Chrome 里多半没登录，看到的是登录页——
+                            // 这个按钮的实际效果成了「把人踢出 App，再要求他重登一次」。
+                            if (onOpenWeb != null) onOpenWeb(path, m.title)
+                            else ctx.startActivity(android.content.Intent(
                                 android.content.Intent.ACTION_VIEW,
-                                android.net.Uri.parse("${BuildConfig.API_BASE}/zh/transcript/${m.transcriptId}")))
+                                android.net.Uri.parse("${BuildConfig.API_BASE}$path")))
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text("在网页里看完整转写") }

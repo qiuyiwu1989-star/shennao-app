@@ -45,17 +45,33 @@ fun BleScreen(onDone: () -> Unit) {
     val ctx = LocalContext.current
     val notice = LocalNotice.current
     val scope = rememberCoroutineScope()
-    val gatt = remember { BleGatt(ctx) }
-    val parser = remember { FrameParser("AE22") }
-    val importer = remember { Importer(gatt) }
-
-    var conn by remember { mutableStateOf(BleState.IDLE) }
-    var devices by remember { mutableStateOf<List<BleDevice>>(emptyList()) }
-    var st by remember { mutableStateOf<ImportState>(ImportState.Idle) }
+    /*
+     * **这一屏只是显示器。** 传输在 BleImportService 里跑。
+     *
+     * 以前 BleGatt / Importer 挂在这里的 remember 上，onDispose 直接 disconnect()——
+     * 用户点了导入、切去看一眼别的，传输就断在半路（27 KB/s，一小时录音要传四分半）。
+     * 更隐蔽的是传完之后的落盘也写在界面的 LaunchedEffect 里：文件已经从设备上
+     * 完整传过来、就在内存里，这时候切走**它就没了**——设备那边显示传过，深脑里什么都没有。
+     */
+    var conn by remember { mutableStateOf(BleImportService.conn) }
+    var devices by remember { mutableStateOf(BleImportService.devices) }
+    var st by remember { mutableStateOf(BleImportService.state) }
     var denied by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
-    var picked by remember { mutableStateOf<FileEntry?>(null) }
     var ready by remember { mutableStateOf(Readiness.READY) }
+
+    // 轮询服务的状态。服务活着时它是真相，服务没起来时是默认值。
+    // 200 毫秒足够跟上进度条，又不会为了一个 27 KB/s 的传输去空转 CPU。
+    LaunchedEffect(Unit) {
+        while (true) {
+            conn = BleImportService.conn
+            devices = BleImportService.devices
+            st = BleImportService.state
+            note = BleImportService.note
+            BleImportService.consumeStaged()?.let { notice("已导入「$it」，正在推送到深脑") }
+            delay(200)
+        }
+    }
 
     /*
      * 每次进来、以及每次回到前台都自查一遍前提。
@@ -66,31 +82,18 @@ fun BleScreen(onDone: () -> Unit) {
     fun recheck() {
         val need = BlePermissions.required()
         val perm = need.all { ContextCompat.checkSelfPermission(ctx, it) == PackageManager.PERMISSION_GRANTED }
-        ready = gatt.readiness(perm)
+        ready = BleGatt.readinessOf(ctx, perm)
     }
     LaunchedEffect(Unit) { recheck() }
 
-    DisposableEffect(Unit) {
-        gatt.observeState { conn = it }
-        gatt.onNotify(Proto.CHAR_NOTIFY) { bytes ->
-            parser.feed(bytes).forEach { importer.onFrame(it) }
-            st = importer.state
-        }
-        onDispose { gatt.disconnect() }
-    }
-
-    // 设备可能一声不吭。不主动查的话界面会永远转圈。
-    LaunchedEffect(st) {
-        while (st is ImportState.Listing || st is ImportState.Downloading) {
-            delay(1000)
-            st = importer.tick()
-        }
-    }
+    // **这里刻意没有 onDispose { disconnect() }。**
+    // 那一行正是「点了导入、移开页面就停掉」的直接原因。连接的生命周期
+    // 归服务管，界面来去与它无关；用户想停有通知栏上的「停止」和这一屏的按钮。
 
     val ask = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { granted ->
-        if (granted.values.all { it }) { devices = emptyList(); gatt.scan { d -> devices = merge(devices, d) } }
+        if (granted.values.all { it }) BleImportService.scan(ctx)
         else denied = true
     }
 
@@ -103,8 +106,7 @@ fun BleScreen(onDone: () -> Unit) {
             Readiness.NO_PERMISSION -> { ask.launch(BlePermissions.required().toTypedArray()); return }
             Readiness.READY -> {}
         }
-        devices = emptyList()
-        gatt.scan { d -> devices = merge(devices, d) }
+        BleImportService.scan(ctx)
     }
 
     ListPage(
@@ -163,7 +165,7 @@ fun BleScreen(onDone: () -> Unit) {
             }
             // 连接失败的真实原因。Android 的 GATT 只给一个 status 数字，
             // 不翻出来的话用户只知道「连不上」，而 133 和 8 要做的事完全不同。
-            if (conn == BleState.FAILED) gatt.lastError?.let { e -> item {
+            if (conn == BleState.FAILED) BleImportService.lastError?.let { e -> item {
                 Surface(color = MaterialTheme.colorScheme.errorContainer, shape = DS.Radius.card) {
                     Text(e, Modifier.padding(DS.Pad.tight),
                          style = MaterialTheme.typography.bodySmall,
@@ -182,7 +184,7 @@ fun BleScreen(onDone: () -> Unit) {
                 )
             }
             items(devices, key = { it.id }) { d ->
-                DsCard(Modifier.fillMaxWidth(), onClick = { gatt.connect(d.id) }) {
+                DsCard(Modifier.fillMaxWidth(), onClick = { BleImportService.connect(ctx, d.id) }) {
                     Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -223,7 +225,7 @@ fun BleScreen(onDone: () -> Unit) {
                     // 连上了就自动去列文件。用户点「连接」的意思本来就是
                     // 「我要看里面有什么」，再让他点一次是无谓的一步。
                     LaunchedEffect(conn) {
-                        if (conn == BleState.READY) { importer.startListing(); st = importer.state }
+                        if (conn == BleState.READY) BleImportService.list(ctx)
                     }
                     Loading()
                 }
@@ -233,11 +235,7 @@ fun BleScreen(onDone: () -> Unit) {
                         Empty("录音笔里是空的", "先用它录一段，再回来导。")
                     }
                     items(s.files, key = { it.name }) { f ->
-                        DsCard(Modifier.fillMaxWidth(), onClick = {
-                            picked = f
-                            importer.startDownload(f)
-                            st = importer.state
-                        }) {
+                        DsCard(Modifier.fillMaxWidth(), onClick = { BleImportService.download(ctx, f.name) }) {
                             Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(f.base, style = MaterialTheme.typography.titleMedium)
@@ -278,32 +276,13 @@ fun BleScreen(onDone: () -> Unit) {
                     }
                 }
 
-                // ---- 4. 传完，交给上传链路 ----
+                // ---- 4. 传完 ----
+                //
+                // **落盘不在这里做。** 它在 BleImportService 里，传完那一刻就做完了。
+                // 以前这段写在界面的 LaunchedEffect 中：文件已经从设备上完整传过来、
+                // 就在内存里，用户这时候切走，它就没了——设备那边显示传过，
+                // 深脑里什么都没有，而两边都不会报错。
                 is ImportState.Done -> item {
-                    LaunchedEffect(s.name) {
-                        val entry = picked
-                        val started = Ingest.startedAtFrom(s.name)
-                        if (entry == null || started == null) {
-                            // 解不出录音时刻就不要往下走：拿「现在」顶的话，
-                            // 一场三天前的会会排到今天，而深脑的时间轴建立在它上面。
-                            note = "这个文件名里没有录音时刻，暂时导不了：${s.name}"
-                        } else {
-                            val ok = withContext(Dispatchers.IO) {
-                                Ingest.stage(
-                                    FileVault(File(ctx.filesDir, "recordings")),
-                                    s.bytes, entry.base, entry.time * 1000, started,
-                                )
-                            }
-                            if (ok != null) {
-                                UploadWorker.kick(ctx)
-                                note = null
-                                // 这张「导好了」的卡片一点「再导一个」就没了。
-                                // 连着导三个的人，最后只会看到第三个的卡片，
-                                // 前两个有没有成功全凭记忆——所以留一句提示。
-                                notice("已导入「${entry.base}」，正在推送到深脑")
-                            } else note = "落盘失败，请重试"
-                        }
-                    }
                     DsCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(DS.Pad.default)) {
                             Text("导好了", style = MaterialTheme.typography.titleMedium,
@@ -314,11 +293,11 @@ fun BleScreen(onDone: () -> Unit) {
                                  color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(DS.Rhythm.element))
                             Row {
-                                Button(onClick = {
-                                    importer.startListing(); st = importer.state
-                                }) { Text("再导一个") }
+                                Button(onClick = { BleImportService.list(ctx) }) { Text("再导一个") }
                                 Spacer(Modifier.width(DS.Rhythm.element))
-                                OutlinedButton(onClick = onDone) { Text("去看进度") }
+                                OutlinedButton(onClick = {
+                                    BleImportService.stop(ctx); onDone()
+                                }) { Text("去看进度") }
                             }
                         }
                     }
@@ -333,12 +312,12 @@ fun BleScreen(onDone: () -> Unit) {
                             Spacer(Modifier.height(DS.Rhythm.element))
                             // 断线可以接着传，已经收到的字节还在——这是 27KB/s 链路上
                             // 最要紧的一句话。设备拒绝则没得续，只能重来。
-                            if (!s.deviceSaid && importer.received > 0) {
-                                Button(onClick = { importer.resume(); st = importer.state }) {
-                                    Text("接着传（已收 ${importer.received / 1024} KB）")
+                            if (!s.deviceSaid && BleImportService.received > 0) {
+                                Button(onClick = { BleImportService.resume(ctx) }) {
+                                    Text("接着传（已收 ${BleImportService.received / 1024} KB）")
                                 }
                             } else {
-                                Button(onClick = { importer.startListing(); st = importer.state }) {
+                                Button(onClick = { BleImportService.list(ctx) }) {
                                     Text("回到文件列表")
                                 }
                             }

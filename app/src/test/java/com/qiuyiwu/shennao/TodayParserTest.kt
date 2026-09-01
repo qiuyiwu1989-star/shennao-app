@@ -174,4 +174,23 @@ class SessionsParserTest {
         assertNull(SessionsParser.parseMeeting("""{"title":"没有 id"}"""))
         assertNull(SessionsParser.parseMeeting("坏的"))
     }
+
+    // ---- 没有分析时，界面必须有话说（2026-09-02 实录暴露）----
+
+    @Test fun `没有分析时要接住服务端给的理由，而不是留一片空白`() {
+        val m = SessionsParser.parseMeeting("""{
+            "transcriptId":"t1","title":"手机录音","analysis":null,
+            "analysisAbsentReason":"这条不到 5 分钟，按设定没有自动分析。素材已经存好了，随时可以手动分析。"
+        }""")!!
+        assertNull(m.analysis)
+        // 理由必须是服务端那句原话——阈值只有服务端知道，
+        // 客户端拿 durationSec 自己和 300 比就是把同一条规矩写进两个地方
+        assertTrue(m.analysisAbsentReason!!.contains("5 分钟"))
+    }
+
+    @Test fun `服务端没给理由时不编一个`() {
+        val m = SessionsParser.parseMeeting("""{"transcriptId":"t1","title":"x","analysis":null}""")!!
+        assertNull("猜错的理由比不给理由更糟：用户会照着它去排查一条不通的路",
+                   m.analysisAbsentReason)
+    }
 }

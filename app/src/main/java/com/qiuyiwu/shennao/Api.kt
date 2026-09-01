@@ -217,8 +217,15 @@ data class Meeting(
     val speakers: List<String>,
     val atoms: List<MeetingAtom>,
     val commitments: List<Commitment>,
-    /** null = 还没分析过 */
+    /** null = 没有分析。这时候看 [analysisAbsentReason] */
     val analysis: MeetingAnalysis?,
+    /**
+     * 没有分析时，为什么没有。
+     *
+     * 理由由服务端给，客户端不自己拿时长去和阈值比——那条规矩（不到 5 分钟
+     * 不自动分析）只有服务端知道，抄一份到手机上，下次改阈值必然只改一处。
+     */
+    val analysisAbsentReason: String?,
 )
 
 object SessionsParser {
@@ -280,6 +287,8 @@ object SessionsParser {
                     status = a.optString("status"),
                 )
             },
+            analysisAbsentReason = o.optString("analysisAbsentReason")
+                .takeIf { it.isNotBlank() && it != "null" },
             commitments = (0 until (cm?.length() ?: 0)).mapNotNull { i ->
                 val c = cm!!.optJSONObject(i) ?: return@mapNotNull null
                 Commitment(

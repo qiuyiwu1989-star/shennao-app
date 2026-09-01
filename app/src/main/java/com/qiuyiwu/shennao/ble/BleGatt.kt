@@ -60,15 +60,8 @@ class BleGatt(private val ctx: Context) : BleTransport {
      * 不查的话，蓝牙关着时扫描会安静地返回空列表，而界面只能猜着说
      * 「确认录音笔开着」——把用户指向错误的方向。
      */
-    fun readiness(hasPermission: Boolean): Readiness {
-        val mgr = ctx.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-        val adapter = mgr?.adapter ?: return Readiness.NO_BLE
-        if (!ctx.packageManager.hasSystemFeature(
-                android.content.pm.PackageManager.FEATURE_BLUETOOTH_LE)) return Readiness.NO_BLE
-        if (!adapter.isEnabled) return Readiness.BLUETOOTH_OFF
-        if (!hasPermission) return Readiness.NO_PERMISSION
-        return Readiness.READY
-    }
+    fun readiness(hasPermission: Boolean): Readiness = readinessOf(ctx, hasPermission)
+
 
     // ---- 扫描 ----
 
@@ -324,7 +317,24 @@ class BleGatt(private val ctx: Context) : BleTransport {
         move(BleState.IDLE)
     }
 
-    private companion object {
+    companion object {
+        /**
+         * 自查不需要一个连接对象。
+         *
+         * 界面现在只是服务的显示器（传输在 BleImportService 里），
+         * 但它仍然要在用户点任何东西**之前**说清楚前提够不够——
+         * 为此再 new 一个 BleGatt，就会多出一个 GATT 客户端（一个 App 只有 32 个）。
+         */
+        fun readinessOf(ctx: Context, hasPermission: Boolean): Readiness {
+            val mgr = ctx.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+            val adapter = mgr?.adapter ?: return Readiness.NO_BLE
+            if (!ctx.packageManager.hasSystemFeature(
+                    android.content.pm.PackageManager.FEATURE_BLUETOOTH_LE)) return Readiness.NO_BLE
+            if (!adapter.isEnabled) return Readiness.BLUETOOTH_OFF
+            if (!hasPermission) return Readiness.NO_PERMISSION
+            return Readiness.READY
+        }
+
         /** 停扫描到发起连接之间的间隔。短于这个几乎必然拿到 133——
          *  蓝牙控制器还在扫描状态里。 */
         const val SETTLE_MS = 400L

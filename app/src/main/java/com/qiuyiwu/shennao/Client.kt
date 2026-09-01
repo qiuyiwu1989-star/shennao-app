@@ -219,6 +219,120 @@ class DeepBrainClient(
     }
 
     /**
+     * 问深脑。**流式**——一个字一个字回调给界面。
+     *
+     * 不走 Http 接口（那个是「发一次、拿全文」），这里必须自己开连接：
+     * agent 模式会翻好几篇文档，二十秒里界面得一直有东西在动。
+     *
+     * onEvent 在 IO 线程上被调用，调用方负责切回主线程。
+     */
+    fun ask(question: String, onEvent: (Ask.Event) -> Unit) {
+        val c = store.load() ?: return onEvent(Ask.Event.Failed("请先登录"))
+        if (accessToken == null && !refresh()) return onEvent(Ask.Event.Failed("登录失效了"))
+        var conn: java.net.HttpURLConnection? = null
+        try {
+            conn = (java.net.URL("$apiBase/api/mobile/ask").openConnection()
+                as java.net.HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 30_000
+                // **读超时要给足。** 智能体一轮可能十几秒不出字，
+                // 30 秒的读超时会在它正常工作时把连接掐掉，
+                // 而表现出来是「问一句就报网络错误」。
+                readTimeout = 180_000
+                setRequestProperty("Authorization", "Bearer ${accessToken ?: ""}")
+                setRequestProperty("x-deepbrain-org-id", c.orgId)
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("Accept", "text/event-stream")
+                doOutput = true
+            }
+            conn.outputStream.use {
+                it.write(JSONObject(mapOf("question" to question)).toString().toByteArray())
+            }
+            val code = conn.responseCode
+            if (code >= 400) {
+                val why = conn.errorStream?.bufferedReader()?.use { it.readText() }
+                val msg = runCatching { JSONObject(why ?: "").optString("error") }.getOrNull()
+                return onEvent(Ask.Event.Failed(msg?.takeIf { it.isNotBlank() } ?: "问不出来（$code）"))
+            }
+            conn.inputStream.bufferedReader().use { r ->
+                while (true) {
+                    val line = r.readLine() ?: break
+                    val e = Ask.parseLine(line) ?: continue
+                    onEvent(e)
+                    if (e is Ask.Event.Done || e is Ask.Event.Failed) return
+                }
+            }
+            // 流断在中途而没有 done：说出来。静默收尾会让半截答案
+            // 看起来像是完整答案。
+            onEvent(Ask.Event.Failed("答到一半断了，请重问一次"))
+        } catch (e: Exception) {
+            onEvent(Ask.Event.Failed(e.message ?: "网络错误"))
+        } finally {
+            runCatching { conn?.disconnect() }
+        }
+    }
+
+    /**
+     * 换一张进网页的入场券。
+     *
+     * 一分钟有效、只能用一次。**token 不进 URL**——URL 会进日志、进历史、
+     * 进用户随手的分享，而这里面装的是一整个会话。
+     *
+     * 券要连 refreshToken 一起交：网页那边写进 cookie 的是完整会话，
+     * 只给 accessToken 的话用户在网页里待过一小时就被踢出来。
+     */
+    fun webTicket(): ApiResult<String> {
+        val c = store.load() ?: return ApiResult.Unauthorized
+        if (accessToken == null && !refresh()) return ApiResult.Unauthorized
+        fun once() = http.request(
+            "POST", "$apiBase/api/mobile/web-ticket",
+            mapOf(
+                "Authorization" to "Bearer ${accessToken ?: ""}",
+                "x-deepbrain-org-id" to c.orgId,
+                "Content-Type" to "application/json",
+            ),
+            JSONObject(mapOf("refreshToken" to c.refreshToken)).toString(),
+        )
+        var r = once()
+        if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
+        if (r.status >= 400) return ApiResult.Failed("拿不到入场券（${r.status}）")
+        return runCatching {
+            val t = JSONObject(r.body).optString("ticket")
+            if (t.isBlank()) ApiResult.Failed("没拿到入场券") else ApiResult.Ok(t)
+        }.getOrElse { ApiResult.Failed("应答看不懂") }
+    }
+
+    /**
+     * 手动跑一次分析。
+     *
+     * finalizer 会按「不到 5 分钟不自动分析」跳过短录音。那条门槛的意思是
+     * **默认不花这个钱**，不是不许分析——所以手机上必须有这个出口，
+     * 只是要用户自己按一下。
+     *
+     * 服务端用 409 表示「现在还不能排」（积分不够 / 已经在跑 / 是实时草稿），
+     * 那不是「请求写错了」，理由直接端给用户看，别翻成一句「出错了」。
+     */
+    fun analyze(transcriptId: String): ApiResult<Unit> {
+        val c = store.load() ?: return ApiResult.Unauthorized
+        if (accessToken == null && !refresh()) return ApiResult.Unauthorized
+        fun once() = http.request(
+            "POST", "$apiBase/api/mobile/transcript/$transcriptId/analyze",
+            mapOf(
+                "Authorization" to "Bearer ${accessToken ?: ""}",
+                "x-deepbrain-org-id" to c.orgId,
+                "Content-Type" to "application/json",
+            ), "{}",
+        )
+        var r = once()
+        if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
+        if (r.status >= 400) {
+            val why = runCatching { JSONObject(r.body).optString("error") }.getOrNull()
+            return ApiResult.Failed(why?.takeIf { it.isNotBlank() } ?: "排不上（${r.status}）")
+        }
+        return ApiResult.Ok(Unit)
+    }
+
+    /**
      * 删掉一条录音会话。
      *
      * 给「救不回来」的那些用：一条永远失败的录音挂在列表上，

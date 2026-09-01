@@ -53,28 +53,31 @@ fun SearchScreen(client: DeepBrainClient, onOpen: (String) -> Unit) {
             searched && hits.isEmpty() -> Empty("没找到", "换个说法试试，或者那件事还没被录进来。")
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(DS.Rhythm.element)) {
                 items(hits, key = { it.kind + it.id }) { h ->
-                    DsCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = { h.transcriptId?.let(onOpen) },
-                    ) {
-                        Column(Modifier.padding(DS.Pad.tight)) {
-                            Row {
-                                Text(kindLabel(h.kind), style = MaterialTheme.typography.labelMedium,
-                                     color = MaterialTheme.colorScheme.primary,
-                                     fontWeight = FontWeight.Medium)
-                                h.who?.let {
-                                    Spacer(Modifier.width(DS.Rhythm.element))
-                                    Text(it, style = MaterialTheme.typography.labelMedium,
-                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                            Spacer(Modifier.height(DS.Rhythm.tight))
-                            Text(h.text, style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
+                    HitCard(h) { h.transcriptId?.let(onOpen) }
                 }
                 item { Spacer(Modifier.height(DS.Rhythm.inner)) }
             }
+        }
+    }
+}
+
+/** 一条命中。搜索和「问深脑」的兜底列表共用——两份画法迟早会长得不一样。 */
+@Composable
+fun HitCard(h: Hit, onClick: () -> Unit) {
+    DsCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+        Column(Modifier.padding(DS.Pad.tight)) {
+            Row {
+                Text(kindLabel(h.kind), style = MaterialTheme.typography.labelMedium,
+                     color = MaterialTheme.colorScheme.primary,
+                     fontWeight = FontWeight.Medium)
+                h.who?.let {
+                    Spacer(Modifier.width(DS.Rhythm.element))
+                    Text(it, style = MaterialTheme.typography.labelMedium,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Spacer(Modifier.height(DS.Rhythm.tight))
+            Text(h.text, style = MaterialTheme.typography.bodyLarge)
         }
     }
 }

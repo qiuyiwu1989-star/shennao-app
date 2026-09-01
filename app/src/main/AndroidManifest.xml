@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- 安卓 14 起，前台服务必须按用途单独申请。少这一条，startForeground 直接抛异常 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- 从录音笔导入也是长活：27 KB/s，一小时录音要传四分半。
+         没有它，用户切走看一眼别的，传输就断在半路。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <!-- 安卓 13 起通知要用户点头。拿不到也能录，只是状态栏那条看不见 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
@@ -40,5 +43,11 @@
             android:name=".record.RecordingService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+        <!-- 蓝牙导入。类型是 connectedDevice——用 microphone 会在 API 34 上
+             被系统按「没有麦克风权限的麦克风服务」直接拒掉。 -->
+        <service
+            android:name=".ble.BleImportService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
     </application>
 </manifest>
