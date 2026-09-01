@@ -11,6 +11,7 @@ import android.os.Build
 import android.graphics.drawable.Icon
 import android.os.IBinder
 import com.qiuyiwu.shennao.BuildConfig
+import com.qiuyiwu.shennao.R
 import com.qiuyiwu.shennao.MainActivity
 import com.qiuyiwu.shennao.UrlHttp
 import kotlinx.coroutines.*
@@ -344,7 +345,7 @@ class RecordingService : Service() {
         val b = Notification.Builder(this, CHANNEL)
             .setContentTitle(title)
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(tap)
             .setOngoing(true)
         // 通知栏里直接能停。录音时 App 是藏在后台的——没有这个按钮，

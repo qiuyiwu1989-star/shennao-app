@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import com.qiuyiwu.shennao.MainActivity
+import com.qiuyiwu.shennao.R
 import com.qiuyiwu.shennao.record.FileVault
 import com.qiuyiwu.shennao.record.UploadWorker
 import java.io.File
@@ -235,7 +236,7 @@ class BleImportService : Service() {
         )
         return Notification.Builder(this, CHANNEL)
             .setContentTitle(title).setContentText(text)
-            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(tap).setOngoing(true)
             .addAction(
                 Notification.Action.Builder(

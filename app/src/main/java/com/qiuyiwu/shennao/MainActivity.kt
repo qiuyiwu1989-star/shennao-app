@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -45,8 +46,15 @@ private sealed class Screen {
     data class Broken(val message: String) : Screen()
     /** 一场会的详情。从历史点进来 */
     data class Meeting(val transcriptId: String) : Screen()
-    /** 在 App 内打开网页版的某一页，带登录态。逐句转写、播放、认人都在那边。 */
-    data class Web(val path: String, val title: String) : Screen()
+    /**
+     * 在 App 内打开网页版的某一页，带登录态。逐句转写、播放、认人都在那边。
+     *
+     * **back 由调用方给，不猜。** 曾经在这里从 path 反推「返回哪去」
+     * （取最后一段当会议 id），从「会议详情」进来时凑巧猜对；从「我的」
+     * 打开首页（path=/zh）就会拿 "zh" 当会议 id 去查，查不到，
+     * 用户点返回看到的是一个错误页而不是他刚才在的地方。
+     */
+    data class Web(val path: String, val title: String, val back: Screen) : Screen()
 }
 
 /**
@@ -66,6 +74,11 @@ private enum class Tab(val label: String) {
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // 必须在 super.onCreate 之前调用——这一行本身不「显示」闪屏，
+        // 它是把 Activity 主题从 Theme.App.Starting 切回正常主题的开关，
+        // 闪屏内容早在系统绘制第一帧时就已经用 windowSplashScreenBackground
+        // 画出来了。晚调用/漏调用的表现是闪屏画面卡住不消失。
+        installSplashScreen()
         /*
          * 边到边 + 安全区。
          *
@@ -119,6 +132,13 @@ private fun App(client: DeepBrainClient) {
     }
 
     LaunchedEffect(Unit) { load() }
+
+    // 上次是不是崩溃退出的，有就传一次。放在这里而不是 Application：
+    // 那时进程还没跑稳，起网络请求容易跟别的初始化抢资源；这里已经是
+    // 「正常启动」的健康时机。不需要登录态——见 Crash.kt 的说明。
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) { Crash.uploadLastIfAny(ctx, UrlHttp(), BuildConfig.API_BASE) }
+    }
 
     /*
      * 安卓 13 起通知要用户点头。清单里声明了但从不申请，等于通知永远不显示——
@@ -237,11 +257,11 @@ private fun App(client: DeepBrainClient) {
                 is Screen.Ble -> BleScreen(onDone = { tab = Tab.HISTORY; scope.launch { load() } })
 
                 is Screen.Web -> MeetingWebScreen(client, s.path, s.title,
-                    onBack = { screen = Screen.Meeting(s.path.substringAfterLast('/')) })
+                    onBack = { screen = s.back })
 
                 is Screen.Meeting -> MeetingScreen(client, s.transcriptId,
                     onBack = { tab = Tab.HISTORY; scope.launch { load() } },
-                    onOpenWeb = { path, title -> screen = Screen.Web(path, title) })
+                    onOpenWeb = { path, title -> screen = Screen.Web(path, title, back = s) })
 
                 is Screen.Person -> PersonScreen(client, s.personId,
                     onBack = { scope.launch { load() } },
@@ -259,20 +279,25 @@ private fun App(client: DeepBrainClient) {
                         onRecord = { tab = Tab.RECORD; screen = Screen.Record },
                         onOpen = { tid -> screen = Screen.Meeting(tid) },
                     )
-                    Tab.ME -> MeScreen(client) {
-                        client.signOut()
-                        tab = Tab.TODAY
-                        screen = Screen.Login()
-                    }
+                    Tab.ME -> MeScreen(
+                        client = client,
+                        onOpenWeb = { path, title -> screen = Screen.Web(path, title, back = s) },
+                        onSignOut = {
+                            client.signOut()
+                            tab = Tab.TODAY
+                            screen = Screen.Login()
+                        },
+                    )
                     Tab.TODAY -> TodayScreen(
                         today = s.today,
-                        // 下钻走浏览器：那场会的完整转写、播放、认人都在网页里，
-                        // 在 App 里再实现一遍是重复造，而且必然比网页那份旧。
-                        onOpenTranscript = { tid ->
-                            ctx.startActivity(android.content.Intent(
-                                android.content.Intent.ACTION_VIEW,
-                                android.net.Uri.parse("${BuildConfig.API_BASE}/zh/transcript/$tid")))
-                        },
+                        // 跟「会议」栏一致：先进 App 内的会议详情（判断、承诺、
+                        // 谁在场），要看逐句转写再从那一页点进网页版。
+                        //
+                        // 这里原来是甩给系统浏览器一个裸链接——跟很早以前
+                        // 「在网页里看完整转写」那个按钮是同一个错：用户在
+                        // Chrome 里多半没登录，点开「今天」的一条判断，
+                        // 看到的是深脑的登录页，而他刚刚明明就在 App 里登着。
+                        onOpenTranscript = { tid -> screen = Screen.Meeting(tid) },
                         onRecord = { tab = Tab.RECORD; screen = Screen.Record },
                         onRefresh = { scope.launch { load() } },
                         staleLabel = stale,

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  图标前景：深脑的品牌形状（脑 + 顶上五道光）。
+
+  这个形状只此一处权威定义：apps/web/src/components/BrandMark.tsx 和
+  apps/web/src/app/[locale]/icon.tsx（浏览器标签页图标）。这里是第三处，
+  照抄同一份 path data——改标识要三处一起改。
+
+  **为什么内容缩在 66x66 里，不是铺满 108x108。** 自适应图标只保证中间
+  72x72dp（「安全区」）在所有形状的启动器遮罩下都完整可见，外面的部分
+  在圆形/圆角方形/挤压形状的遮罩下会被裁掉多少各不相同。66x66 留了
+  一点呼吸空间，同时确保五道光的笔尖不会被任何一种遮罩削掉。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:scaleX="1.03125" android:scaleY="1.03125"
+           android:translateX="21" android:translateY="21">
+        <path
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="4.6"
+            android:strokeLineCap="round"
+            android:pathData="M31,11 L31,2 M20.5,14 L16,6.5 M41.5,14 L46,6.5 M12.5,20.5 L6,15.5 M49.5,20.5 L56,15.5" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M29,14 C40.6,14 48.8,21.6 48.8,30.6 C48.8,32.4 47.8,33.2 46.8,33.8
+                C48.8,36.4 51.8,39.6 51.8,41 C51.8,42.6 49.4,43 46,43.2
+                C46.6,46.8 45.4,49.8 42.6,51.8 C40.6,53.2 38.4,54.1 37,55.3
+                L37,62 L21,62 L21,50.6 C14.4,46.6 10,40.2 10,32.4 C10,22 18,14 29,14 Z
+                M32.6,33.9 C35.4,29.3 41.2,29.3 44,33.9 C41.2,31.3 35.4,31.3 32.6,33.9 Z" />
+    </group>
+</vector>

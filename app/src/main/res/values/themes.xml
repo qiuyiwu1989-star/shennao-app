@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      冷启动闪屏。
+
+      **为什么需要它。** 从用户点桌面图标到第一帧 Compose 画面之间，
+      系统要先创建进程、加载 Dalvik/ART、跑 Application.onCreate——
+      这段时间不做任何处理的话，Android 12 以下就是一块空白（白屏或
+      黑屏）闪一下，Android 12+ 系统会自动补一个默认闪屏，但背景色
+      和图标取的是系统猜的默认值，不是我们的品牌色。
+
+      这里显式接管，两边统一：背景用品牌蓝，图标用跟自适应图标同一个
+      前景矢量（脑 + 五道光）。真正的加载态（今天的数据还没取回来）
+      不归这里管——那是 Compose 里的 Screen.Loading，闪屏只覆盖
+      「Compose 还没画出第一帧」这一小段，通常两三帧的事。
+    -->
+    <style name="Theme.App.Starting" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="windowSplashScreenBackground">@color/brand_focus</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Material3.DayNight.NoActionBar</item>
+    </style>
+</resources>

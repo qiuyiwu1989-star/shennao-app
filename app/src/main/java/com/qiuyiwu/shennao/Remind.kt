@@ -88,7 +88,7 @@ object Remind {
         val n = Notification.Builder(ctx, CHANNEL)
             .setContentTitle("今天有要问的事")
             .setContentText(message)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(tap)
             .setAutoCancel(true)
             .build()

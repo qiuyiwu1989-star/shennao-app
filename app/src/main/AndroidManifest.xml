@@ -26,12 +26,16 @@
          而加密凭证的密钥在系统 keystore 里、不会跟着备份走，恢复出来也解不开——
          那时用户会看到一个「登录了但一直失败」的半死状态，比干脆重登一次更糟。 -->
     <application
+        android:name=".ShennaoApp"
         android:label="深脑"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="false"
         android:fullBackupContent="false"
         android:supportsRtl="true"
         android:theme="@style/Theme.Material3.DayNight.NoActionBar">
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".MainActivity" android:exported="true"
+            android:theme="@style/Theme.App.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

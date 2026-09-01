@@ -89,6 +89,8 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.1")
     // enableEdgeToEdge 在 activity-ktx 里（activity-compose 只带 setContent）
     implementation("androidx.activity:activity-ktx:1.9.1")
+    // 冷启动闪屏。API 31 以下没有系统闪屏 API，这个库把两边接成一份代码。
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")

@@ -24,7 +24,15 @@ import kotlinx.coroutines.withContext
  * 而停在旧版的代价是「录了传不上去」这类他自己看不出的问题。
  */
 @Composable
-fun MeScreen(client: DeepBrainClient, onSignOut: () -> Unit) {
+fun MeScreen(
+    client: DeepBrainClient,
+    onOpenWeb: (path: String, title: String) -> Unit,
+    onSignOut: () -> Unit,
+    // 可注入，默认才是真的联网。不然这一屏没法在测试里脱网跑——
+    // 之前一直是 Update.check(UrlHttp(), ...) 写死在里面，
+    // 是这一版顺手改的，不是重点，但既然要给这一屏加测试就该改掉。
+    http: Http = UrlHttp(),
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<UpdateState?>(null) }
@@ -33,7 +41,7 @@ fun MeScreen(client: DeepBrainClient, onSignOut: () -> Unit) {
     fun check() {
         checking = true
         scope.launch {
-            state = withContext(Dispatchers.IO) { Update.check(UrlHttp(), BuildConfig.VERSION_CODE) }
+            state = withContext(Dispatchers.IO) { Update.check(http, BuildConfig.VERSION_CODE) }
             checking = false
         }
     }
@@ -114,10 +122,17 @@ fun MeScreen(client: DeepBrainClient, onSignOut: () -> Unit) {
                      style = MaterialTheme.typography.bodySmall,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(DS.Rhythm.element))
-                OutlinedButton(onClick = {
-                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE}/zh")))
-                }) { Text("打开深脑网页版") }
+                // 走 App 内 WebView（带登录态）。之前是甩给系统浏览器，
+                // 用户点进去看到的是深脑的登录页——他刚才明明就在 App 里登着。
+                OutlinedButton(onClick = { onOpenWeb("/zh", "深脑") }) { Text("打开深脑网页版") }
             }
+        }
+
+        // 隐私与条款。成熟产品该有的出口，用户想找的时候要找得到——
+        // 不用等到真出了纠纷才发现 App 里压根没有这条路。
+        Row(horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.inner)) {
+            TextButton(onClick = { onOpenWeb("/zh/privacy", "隐私政策") }) { Text("隐私政策") }
+            TextButton(onClick = { onOpenWeb("/zh/terms", "服务条款") }) { Text("服务条款") }
         }
 
         var signOut by remember { mutableStateOf(false) }

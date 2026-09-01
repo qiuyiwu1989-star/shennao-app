@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  应用图标与通知的品牌色。
+
+  与 packages/ui/src/tokens.ts 的 brand.focus (#0052d9) 和
+  Theme.kt 的 Focus 同一个值——三处各存一份是已知代价（Kotlin 读不到 TS，
+  这份 XML 资源又是 Compose Color 读不到的），改品牌色时三处一起改。
+-->
+<resources>
+    <color name="brand_focus">#0052D9</color>
+</resources>

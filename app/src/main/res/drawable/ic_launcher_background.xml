@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 图标底色，纯色铺满。安卓会用自适应图标的遮罩自己去裁成圆形/圆角方形等——
+     这里只管填满 108x108 的画布，不用管最终会被裁成什么形状。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="@color/brand_focus" android:pathData="M0,0h108v108h-108z" />
+</vector>

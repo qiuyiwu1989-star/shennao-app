@@ -195,4 +195,47 @@ class ScreenTest {
         compose.onNodeWithText("已记：兑现了").assertExists()
         assertEquals("落账成功不该再弹提示，卡片自己说了", emptyList<String>(), posted)
     }
+
+    // ---- 我的：隐私/条款出口、更新检查（2026-09-02，v3 收口）----
+
+    private class MemStore(var c: Credentials? = null) : CredentialStore {
+        override fun load() = c
+        override fun save(x: Credentials) { c = x }
+        override fun clear() { c = null }
+    }
+
+    private class NoNetHttp : Http {
+        // 测试里绝不该真的发请求——发了就说明某处忘了注入假实现。
+        override fun request(method: String, url: String, headers: Map<String, String>, body: String?) =
+            HttpResponse(0, "测试环境不该发出真实请求")
+        override fun requestBytes(method: String, url: String, headers: Map<String, String>, body: ByteArray) =
+            error("不该走到这里")
+    }
+
+    @Test fun `隐私政策和服务条款要有出口，且走 App 内网页`() {
+        val client = DeepBrainClient(NoNetHttp(), MemStore(Credentials("r", "o", "e@x.com")), "https://api.test", "https://sb.test", "k")
+        val opened = mutableListOf<Pair<String, String>>()
+        compose.setContent {
+            ShennaoTheme { MeScreen(client, onOpenWeb = { p, t -> opened += p to t }, onSignOut = {}, http = NoNetHttp()) }
+        }
+        compose.onNodeWithText("隐私政策").assertIsDisplayed().performClick()
+        compose.onNodeWithText("服务条款").assertIsDisplayed().performClick()
+        assertEquals(listOf("/zh/privacy" to "隐私政策", "/zh/terms" to "服务条款"), opened)
+    }
+
+    @Test fun `查不到新版和已是最新要分开说，不能用同一句话`() {
+        val client = DeepBrainClient(NoNetHttp(), MemStore(Credentials("r", "o", "e@x.com")), "https://api.test", "https://sb.test", "k")
+        val http = object : Http {
+            // 真实网络不通时 UrlHttp 是抛异常，不是回一个 status=0 的应答——
+            // 假实现要还原这一点，否则测的是「JSON 解析失败」而不是「网络不通」。
+            override fun request(method: String, url: String, headers: Map<String, String>, body: String?): HttpResponse =
+                throw java.io.IOException("连不上")
+            override fun requestBytes(method: String, url: String, headers: Map<String, String>, body: ByteArray) = error("不该走到这里")
+        }
+        compose.setContent {
+            ShennaoTheme { MeScreen(client, onOpenWeb = { _, _ -> }, onSignOut = {}, http = http) }
+        }
+        // 网络不通不等于「已是最新」——用户会因为这句话误以为不用管了
+        compose.onNodeWithText("查不到有没有新版（网络不通）").assertExists()
+    }
 }
