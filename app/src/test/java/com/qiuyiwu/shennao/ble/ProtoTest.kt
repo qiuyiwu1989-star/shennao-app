@@ -150,3 +150,59 @@ class FrameParserResyncTest {
         assertTrue(p.crcErrors > 0)
     }
 }
+
+class OggWrapTest {
+    /*
+     * 设备吐的是**裸 OPUS 40 字节定长包**，不是 Ogg 文件。直接当 audio/ogg
+     * 传上去，ffmpeg 会解出垃圾——而且多半不报错，就像 8-31 那次 m4a 拼接。
+     *
+     * Ogg 的 CRC（0x04C11DB7，不反转）和 granule（走 48kHz 时钟）算错，
+     * 产出的就是一个谁也解不开的文件。所以用独立算出的参照值验。
+     */
+
+    @Test fun `CRC 表和算法用独立参照值验过`() {
+        // 参照值由一份独立的 Python 实现算出，不是从这段代码自己产生的
+        assertEquals(79764919, OggWrap.tableAt(1))
+        assertEquals(2985771188L.toInt(), OggWrap.tableAt(255))
+        assertEquals(2309065087L.toInt(), OggWrap.crcOf("123456789".toByteArray()))
+        assertEquals(1605413199, OggWrap.crcOf("OggS".toByteArray()))
+    }
+
+    @Test fun `封出来的是合法 Ogg：以 OggS 开头，含 OpusHead 和 OpusTags`() {
+        val raw = ByteArray(OggWrap.PACKET_LEN * 10) { (it % 251).toByte() }
+        val ogg = OggWrap.wrap(raw)
+        assertEquals("OggS", String(ogg.copyOfRange(0, 4)))
+        val text = String(ogg, Charsets.ISO_8859_1)
+        assertTrue("缺 OpusHead", text.contains("OpusHead"))
+        assertTrue("缺 OpusTags", text.contains("OpusTags"))
+    }
+
+    @Test fun `granule 走 48kHz 时钟——即便音频是 16kHz`() {
+        // 写成 16k 的话时长会算成三倍，深脑那边的时间轴整个错位
+        assertEquals(960L, OggWrap.GRANULE_PER_PACKET)
+        // 一包 20ms：50 包 = 1 秒
+        assertEquals(1000L, OggWrap.durationMs(OggWrap.PACKET_LEN * 50))
+    }
+
+    @Test fun `尾部残包要截掉，不能当成完整包封进去`() {
+        val raw = ByteArray(OggWrap.PACKET_LEN * 3 + 17)     // 多出 17 字节
+        val ogg = OggWrap.wrap(raw)
+        // 3 包 = 60ms
+        assertEquals(60L, OggWrap.durationMs(raw.size))
+        assertTrue(ogg.isNotEmpty())
+    }
+
+    @Test fun `一个完整包都没有时要报错，不能产出一个空 Ogg`() {
+        // 空 Ogg 会被当成一段合法录音传上去，然后在服务端变成 0 秒
+        try {
+            OggWrap.wrap(ByteArray(20))
+            fail("不足一包时应该抛异常")
+        } catch (e: OggWrap.WrapError) { /* 预期 */ }
+    }
+
+    @Test fun `能认出已经是 Ogg 的数据，不重复封装`() {
+        val raw = ByteArray(OggWrap.PACKET_LEN * 4)
+        assertTrue(OggWrap.looksRaw(raw))
+        assertFalse(OggWrap.looksRaw(OggWrap.wrap(raw)))
+    }
+}

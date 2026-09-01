@@ -37,7 +37,20 @@ object Ingest {
         durationMs: Long,
         startedAtEpochMs: Long,
     ): String? {
-        if (bytes.isEmpty() || durationMs <= 0) return null
+        if (bytes.isEmpty()) return null
+
+        /*
+         * **设备吐的是裸 OPUS 定长包，不是 Ogg 文件。**
+         *
+         * 直接当 audio/ogg 传上去，ffmpeg 会解出垃圾——而且多半不报错，
+         * 就像 8-31 那次 m4a 拼接：服务端收下了，内容是坏的，没有一层说话。
+         * 所以先封成 Ogg，并按包数重算时长（设备报的秒数只精确到秒）。
+         */
+        val ogg = if (OggWrap.looksRaw(bytes)) {
+            runCatching { OggWrap.wrap(bytes) }.getOrNull() ?: return null
+        } else bytes
+        val realMs = if (OggWrap.looksRaw(bytes)) OggWrap.durationMs(bytes.size) else durationMs
+        if (realMs <= 0) return null
         val meta = SessionMeta(
             clientRequestId = UUID.randomUUID().toString(),
             title = title,
@@ -45,9 +58,9 @@ object Ingest {
             finished = true,        // 导入的文件天生就是完整的，不用等停止
         )
         val session = vault.newSession(meta)
-        val seg = Segment(0, 0, durationMs, Segment.State.SEALED, ext = "opus")
+        val seg = Segment(0, 0, realMs, Segment.State.SEALED, ext = "opus")
         return runCatching {
-            vault.segmentFile(session, seg).writeBytes(bytes)
+            vault.segmentFile(session, seg).writeBytes(ogg)
             session
         }.getOrNull()
     }
