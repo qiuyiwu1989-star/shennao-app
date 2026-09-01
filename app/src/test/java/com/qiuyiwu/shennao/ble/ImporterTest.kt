@@ -1,5 +1,6 @@
 package com.qiuyiwu.shennao.ble
 
+import com.qiuyiwu.shennao.record.Segment
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -158,5 +159,92 @@ class ImporterTimeoutTest {
 
     @Test fun `列表的超时比下载短——列表是设备立刻能答的`() {
         assertTrue(Importer.LIST_TIMEOUT_MS < Importer.DATA_TIMEOUT_MS)
+    }
+}
+
+class GattQueueTest {
+    /*
+     * Android 的 BluetoothGatt 一次只受理一个操作。第二个在前一个回调到达前发出去，
+     * 会被**静默丢弃**——代码看起来一切正常，设备那边什么都没收到。
+     */
+
+    @Test fun `第二个操作要等第一个的回调，不能挤在一起发`() {
+        val ran = mutableListOf<String>()
+        val q = GattQueue { ran += it.label; true }
+        q.enqueue("写CCCD-AE22") {true}
+        q.enqueue("写CCCD-AE23") {true}
+        q.enqueue("协商MTU") {true}
+        assertEquals("只该发出第一个", listOf("写CCCD-AE22"), ran)
+        q.onComplete()
+        assertEquals(listOf("写CCCD-AE22", "写CCCD-AE23"), ran)
+        q.onComplete()
+        assertEquals(3, ran.size)
+    }
+
+    @Test fun `失败也要调 onComplete，否则队列永远卡住`() {
+        // 只在成功时推进的话，一次失败之后「设备就不响应了」
+        val ran = mutableListOf<String>()
+        val q = GattQueue { ran += it.label; true }
+        q.enqueue("A") {true}; q.enqueue("B") {true}
+        q.onComplete()   // 假设 A 失败了，回调仍然到来
+        assertEquals(listOf("A", "B"), ran)
+    }
+
+    @Test fun `发都没发出去时要立刻跳到下一个，不能等一个不会来的回调`() {
+        val ran = mutableListOf<String>()
+        // 第一个操作连发都发不出去（GATT 忙 / 未连接）
+        val q = GattQueue { ran += it.label; it.label != "发不出去的" }
+        q.enqueue("发不出去的") {true}
+        q.enqueue("后面这个") {true}
+        assertEquals("卡在发不出去的那个上，后面全都饿死", listOf("发不出去的", "后面这个"), ran)
+    }
+
+    @Test fun `卡住时要能说清卡在哪一步`() {
+        val q = GattQueue { true }
+        q.enqueue("协商MTU") {true}
+        assertEquals("协商MTU", q.current)
+        q.enqueue("写CCCD") {true}
+        assertEquals(1, q.waiting)
+    }
+}
+
+class IngestTest {
+    /*
+     * 导进来的文件走和手机录音同一条上传链路。另开一条的话，
+     * 断点续传、分片幂等、时间轴严丝合缝这些坑要再踩一遍，
+     * 而且两条路会慢慢长歪——某天只有一条修好了另一条没有。
+     */
+
+    @Test fun `从设备文件名解出真实录音时刻`() {
+        val zone = java.util.TimeZone.getTimeZone("Asia/Shanghai")
+        val t = Ingest.startedAtFrom("note20260828-205856.opus", zone)!!
+        val c = java.util.Calendar.getInstance(zone).apply { timeInMillis = t }
+        assertEquals(2026, c.get(java.util.Calendar.YEAR))
+        assertEquals(8, c.get(java.util.Calendar.MONTH) + 1)
+        assertEquals(28, c.get(java.util.Calendar.DAY_OF_MONTH))
+        assertEquals(20, c.get(java.util.Calendar.HOUR_OF_DAY))
+        assertEquals(56, c.get(java.util.Calendar.SECOND))
+    }
+
+    @Test fun `解不出来要返回 null，绝不拿「现在」顶上`() {
+        // 拿现在顶的话，一场三天前的会会排在今天——
+        // 而深脑那边的整条时间轴都建立在这个时刻上
+        assertNull(Ingest.startedAtFrom("随便一个名字.opus"))
+        assertNull(Ingest.startedAtFrom(""))
+    }
+
+    @Test fun `不合法的日期要解失败，不能被「宽容」成别的日期`() {
+        // 13 月 40 号：不设 isLenient=false 的话 Java 会把它算成下一年的某天
+        assertNull(Ingest.startedAtFrom("note20261340-205856.opus"))
+        assertNull(Ingest.startedAtFrom("note20260828-256099.opus"))
+    }
+
+    @Test fun `导进来的分段报的是 ogg，不是 aac`() {
+        // 设备已经压好 opus，不重新编码——转 AAC 只会让音质白掉一层。
+        // mimeType 报错的话服务端会按别的格式解，解出垃圾而且不报错。
+        val seg = Segment(0, 0, 60_000, Segment.State.SEALED, ext = "opus")
+        assertEquals("audio/ogg", seg.mimeType)
+        assertEquals("seg-000000-000000000-000060000.opus", seg.fileName())
+        assertEquals(seg, Segment.parse(seg.fileName()))
     }
 }

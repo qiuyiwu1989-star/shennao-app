@@ -40,11 +40,13 @@ data class Segment(
 ) {
     enum class State { RECORDING, SEALED, UPLOADED }
 
-    /** v0.5 之前封的段是 m4a。只影响上传时报的 mimeType。 */
-    val legacyM4a: Boolean get() = state == State.SEALED && ext == "m4a"
-
-    /** 这一段该报什么 mimeType。判据只有一条：它实际是什么容器。 */
-    val mimeType: String get() = if (legacyM4a) "audio/mp4" else "audio/aac"
+    /** 这一段该报什么 mimeType。判据只有一条：**它实际是什么容器**。
+     *  报错了服务端会按别的格式去解，解出垃圾而且不报错。 */
+    val mimeType: String get() = when (ext) {
+        "m4a" -> "audio/mp4"          // v0.5 之前封的段
+        "opus" -> "audio/ogg"         // 从录音笔导进来的，设备已经压好，不重编码
+        else -> "audio/aac"
+    }
 
     val durationMs: Long get() = endMs - startMs
 
@@ -56,7 +58,7 @@ data class Segment(
     fun withState(s: State) = copy(state = s, ext = if (s == State.SEALED) ext.ifBlank { "aac" } else "")
 
     companion object {
-        private val RE = Regex("""^seg-(\d{6})-(\d{9})-(\d{9})\.(pcm|aac|m4a|up)$""")
+        private val RE = Regex("""^seg-(\d{6})-(\d{9})-(\d{9})\.(pcm|aac|m4a|opus|up)$""")
 
         /** 解析文件名。认不出的返回 null——目录里出现别的文件不该让整场录音失败。 */
         fun parse(name: String): Segment? {
@@ -71,10 +73,10 @@ data class Segment(
                 seq.toInt(), start, end,
                 when (ext) {
                     "pcm" -> State.RECORDING
-                    "aac", "m4a" -> State.SEALED
+                    "aac", "m4a", "opus" -> State.SEALED
                     else -> State.UPLOADED
                 },
-                ext = if (ext == "aac" || ext == "m4a") ext else "",
+                ext = if (ext in setOf("aac", "m4a", "opus")) ext else "",
             )
         }
     }

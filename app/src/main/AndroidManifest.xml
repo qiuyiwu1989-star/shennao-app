@@ -8,6 +8,17 @@
     <!-- 安卓 13 起通知要用户点头。拿不到也能录，只是状态栏那条看不见 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- 蓝牙录音笔导入。安卓 12（API 31）把蓝牙权限拆成了新的两个；
+         31 以下扫描仍然要定位权限——**这是最常被忘的一条**，
+         漏了它扫描会返回空列表而不是报错，看起来就像「附近没有设备」。
+         我们不用蓝牙推断位置，所以声明 neverForLocation。 -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+
     <!-- 关掉云备份。备份会把应用目录整包上云：里面有还没上传的录音，也有凭证。
          而加密凭证的密钥在系统 keystore 里、不会跟着备份走，恢复出来也解不开——
          那时用户会看到一个「登录了但一直失败」的半死状态，比干脆重登一次更糟。 -->

@@ -25,6 +25,7 @@ android {
         // 而真实语音实测 Opus 能省 37%（24k）到 59%（16k）的流量与存储，
         // 那是录音应用天天在付的成本。代价是放弃 Android 8/9。
         minSdk = 29
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         targetSdk = 34
         versionCode = 22
         versionName = "1.4.2"
@@ -107,6 +108,15 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     testImplementation("junit:junit:4.13.2")
+    /*
+     * Instrumented test：跑在 App 自己的进程里。
+     *
+     * 这是唯一能真正碰到 AudioRecord 和 MediaCodec 的地方——JVM 单测碰不到，
+     * 而从 adb shell 启动前台服务是被系统拒绝的（服务 exported=false，
+     * 那是对的；之前能从 shell 启起来是侥幸，不是设计）。
+     */
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test:runner:1.5.2")
     /*
      * 界面测试跑在 JVM 上（Robolectric），不需要模拟器。
      *

@@ -1,0 +1,71 @@
+package com.qiuyiwu.shennao.ble
+
+import com.qiuyiwu.shennao.record.FileVault
+import com.qiuyiwu.shennao.record.Segment
+import com.qiuyiwu.shennao.record.SessionMeta
+import java.util.UUID
+
+/**
+ * 把从录音笔导进来的一个文件，交给**和手机录音同一条上传链路**。
+ *
+ * ## 为什么不另开一条
+ *
+ * 上传那条路已经踩平了很多坑：断点续传、分片幂等、时间轴严丝合缝、
+ * 半成品不能被传走、409 各种含义。另写一条就是把这些坑再踩一遍——
+ * 而且两条路会慢慢长歪，某天只有一条修好了另一条没有。
+ *
+ * ## 一个不做的决定
+ *
+ * 导进来的是设备已经压好的 opus，**不重新编码**。
+ * 转成 AAC 只会让音质白掉一层，而服务端本来就接受 audio/ogg。
+ */
+object Ingest {
+
+    /**
+     * 落成一场待上传的录音。
+     *
+     * 整个文件当作**一片**：录音笔的文件是完整的一段，切开只会给自己制造
+     * 「时间轴要严丝合缝」的麻烦——而那正是 8-31 让所有录音传不上去的原因。
+     *
+     * @param startedAtEpochMs 录音真实开始的时刻。设备文件名里带着它，
+     *        比「导入的时刻」有意义得多——深脑那边的时间轴按它排。
+     */
+    fun stage(
+        vault: FileVault,
+        bytes: ByteArray,
+        title: String,
+        durationMs: Long,
+        startedAtEpochMs: Long,
+    ): String? {
+        if (bytes.isEmpty() || durationMs <= 0) return null
+        val meta = SessionMeta(
+            clientRequestId = UUID.randomUUID().toString(),
+            title = title,
+            startedAtEpochMs = startedAtEpochMs,
+            finished = true,        // 导入的文件天生就是完整的，不用等停止
+        )
+        val session = vault.newSession(meta)
+        val seg = Segment(0, 0, durationMs, Segment.State.SEALED, ext = "opus")
+        return runCatching {
+            vault.segmentFile(session, seg).writeBytes(bytes)
+            session
+        }.getOrNull()
+    }
+
+    /**
+     * 从设备的文件名里解出录音时刻。
+     *
+     * CB08 的命名是 `note20260828-205856.opus`（本地时间）。解不出来时
+     * **返回 null 而不是「现在」**——用现在的话，一场三天前的会会排在今天，
+     * 而深脑的整条时间轴都建立在这个时刻上。
+     */
+    fun startedAtFrom(name: String, zone: java.util.TimeZone = java.util.TimeZone.getDefault()): Long? {
+        val m = Regex("""(\d{8})-(\d{6})""").find(name) ?: return null
+        return runCatching {
+            val f = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
+            f.timeZone = zone
+            f.isLenient = false          // 20261340-999999 这种要解失败，不要被"宽容"成别的日期
+            f.parse("${m.groupValues[1]}-${m.groupValues[2]}")?.time
+        }.getOrNull()
+    }
+}
