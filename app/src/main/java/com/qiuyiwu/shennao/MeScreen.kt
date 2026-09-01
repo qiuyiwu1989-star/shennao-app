@@ -41,15 +41,15 @@ fun MeScreen(client: DeepBrainClient, onSignOut: () -> Unit) {
     LaunchedEffect(Unit) { check() }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(DS.Pad.default),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text("我的", style = MaterialTheme.typography.headlineSmall)
 
         DsCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp)) {
+            Column(Modifier.padding(DS.Pad.tight)) {
                 Text("账号", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(DS.Rhythm.tight))
                 Text(client.signedInEmail() ?: "未登录",
                      style = MaterialTheme.typography.bodyMedium,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -57,7 +57,7 @@ fun MeScreen(client: DeepBrainClient, onSignOut: () -> Unit) {
         }
 
         DsCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp)) {
+            Column(Modifier.padding(DS.Pad.tight)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("版本", style = MaterialTheme.typography.titleSmall)
@@ -71,11 +71,11 @@ fun MeScreen(client: DeepBrainClient, onSignOut: () -> Unit) {
 
                 when (val s = state) {
                     is UpdateState.Available -> {
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(DS.Rhythm.element))
                         Text("有新版 v${s.release.versionName} · ${mb(s.release.sizeBytes)} MB",
                              style = MaterialTheme.typography.bodyMedium,
                              fontWeight = FontWeight.Medium)
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(DS.Rhythm.element))
                         Button(
                             onClick = {
                                 // 交给系统浏览器下载并安装。应用内静默安装需要
@@ -84,18 +84,18 @@ fun MeScreen(client: DeepBrainClient, onSignOut: () -> Unit) {
                             },
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text("下载新版") }
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(DS.Rhythm.tight))
                         Text("装新版不用卸载旧的，登录状态和没传完的录音都会留着。",
                              style = MaterialTheme.typography.bodySmall,
                              color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     is UpdateState.UpToDate -> {
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(DS.Rhythm.element))
                         Text("已是最新", style = MaterialTheme.typography.bodySmall,
                              color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     is UpdateState.Unknown -> {
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(DS.Rhythm.element))
                         // 「查不到」和「已是最新」必须分开说：网络不通不等于没有新版
                         Text("查不到有没有新版（${s.reason}）",
                              style = MaterialTheme.typography.bodySmall,
@@ -107,21 +107,32 @@ fun MeScreen(client: DeepBrainClient, onSignOut: () -> Unit) {
         }
 
         DsCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp)) {
+            Column(Modifier.padding(DS.Pad.tight)) {
                 Text("在网页里打开", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(DS.Rhythm.tight))
                 Text("完整的转写、播放、认人、记忆库都在网页版。",
                      style = MaterialTheme.typography.bodySmall,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(DS.Rhythm.element))
                 OutlinedButton(onClick = {
                     ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE}/zh")))
                 }) { Text("打开深脑网页版") }
             }
         }
 
-        OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) { Text("退出登录") }
-        Spacer(Modifier.height(8.dp))
+        var signOut by remember { mutableStateOf(false) }
+        OutlinedButton(onClick = { signOut = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("退出登录")
+        }
+        if (signOut) ConfirmDialog(
+            title = "退出登录？",
+            // 用户最担心的是「我还没传完的录音会不会没」。直接回答它。
+            detail = "还没传完的录音会留在手机上，重新登录后接着传。",
+            confirmLabel = "退出",
+            onConfirm = onSignOut,
+            onDismiss = { signOut = false },
+        )
+        Spacer(Modifier.height(DS.Rhythm.element))
     }
 }
 

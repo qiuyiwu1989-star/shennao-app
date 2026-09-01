@@ -71,7 +71,7 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
         },
     ) {
         shareNote?.let { n -> item {
-            Text(n, style = MaterialTheme.typography.bodySmall,
+            Text(n, style = MaterialTheme.typography.bodyMedium,
                  color = MaterialTheme.colorScheme.error)
         } }
 
@@ -88,7 +88,7 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
             else -> {
                 item {
                     Text(m.title, style = MaterialTheme.typography.headlineSmall)
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(DS.Rhythm.tight))
                     Text(
                         listOfNotNull(
                             m.durationSec?.let { "${it / 60} 分钟" },
@@ -97,15 +97,15 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(DS.Rhythm.element))
                 }
 
                 item {
                     DsCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp)) {
+                        Column(Modifier.padding(DS.Pad.tight)) {
                             Text("这场会", style = MaterialTheme.typography.titleSmall,
                                  fontWeight = FontWeight.SemiBold)
-                            Spacer(Modifier.height(6.dp))
+                            Spacer(Modifier.height(DS.Rhythm.tight))
                             // 摘要是 Markdown。当纯文本显示的话，屏幕上就是一堆 ## 和 **，
                             // 用户看到的是「这个 App 坏了」。
                             if (m.summary != null) MarkdownText(m.summary)
@@ -124,11 +124,11 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                 // 之前只给了一段摘要，等于把大半藏起来了。
                 m.analysis?.let { a ->
                     if (a.methods.isNotEmpty()) item {
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(DS.Rhythm.tight))
                         // 一场分析常常是好几个方法合出来的。只显示一个，
                         // 用户会以为深脑只用了一种看法。
                         androidx.compose.foundation.layout.FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.tight),
                         ) {
                             a.methods.forEach { m2 ->
                                 AssistChip(onClick = {}, label = {
@@ -137,7 +137,7 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                             }
                         }
                         a.routingReason?.let { r ->
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(DS.Rhythm.tight))
                             Text("为什么选这几个方法：$r",
                                  style = MaterialTheme.typography.bodySmall,
                                  color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -146,7 +146,7 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                     if (a.markdown != null) item {
                         SectionHead("分析", "深脑读出来的")
                         DsCard(Modifier.fillMaxWidth()) {
-                            MarkdownText(a.markdown, Modifier.padding(20.dp))
+                            MarkdownText(a.markdown, Modifier.padding(DS.Pad.default))
                         }
                     } else if (a.status != "completed") item {
                         Text("分析还在跑（${a.status}）",
@@ -156,7 +156,7 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                 }
 
                 if (m.speakers.isNotEmpty()) item {
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(DS.Rhythm.tight))
                     Text("在场：" + m.speakers.joinToString("、"),
                          style = MaterialTheme.typography.bodySmall,
                          color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -166,9 +166,9 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                     item { SectionHead("这场会里的承诺", "别人说出口、还没有下文的") }
                     items(m.commitments, key = { "c" + it.id }) { c ->
                         DsCard(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(16.dp)) {
+                            Column(Modifier.padding(DS.Pad.tight)) {
                                 Row {
-                                    Text(c.speakerName, style = MaterialTheme.typography.titleSmall,
+                                    Text(c.speakerName, style = MaterialTheme.typography.titleMedium,
                                          fontWeight = FontWeight.SemiBold)
                                     Spacer(Modifier.weight(1f))
                                     c.dueDate?.let {
@@ -176,8 +176,8 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                                              color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
-                                Spacer(Modifier.height(4.dp))
-                                Text("「${c.quote}」", style = MaterialTheme.typography.bodyMedium)
+                                Spacer(Modifier.height(DS.Rhythm.tight))
+                                Text("「${c.quote}」", style = MaterialTheme.typography.bodyLarge)
                             }
                         }
                     }
@@ -189,7 +189,7 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
                 }
 
                 item {
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(DS.Rhythm.element))
                     OutlinedButton(
                         onClick = {
                             ctx.startActivity(android.content.Intent(
@@ -208,7 +208,7 @@ fun MeetingScreen(client: DeepBrainClient, transcriptId: String, onBack: () -> U
 private fun SectionHead(title: String, hint: String) {
     Column(Modifier.padding(top = 14.dp, bottom = 2.dp)) {
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Text(hint, style = MaterialTheme.typography.bodySmall,
+        Text(hint, style = MaterialTheme.typography.bodyMedium,
              color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -216,7 +216,7 @@ private fun SectionHead(title: String, hint: String) {
 @Composable
 private fun AtomCard(a: MeetingAtom) {
     DsCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(typeLabel(a.atomType), style = MaterialTheme.typography.labelMedium,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -226,11 +226,11 @@ private fun AtomCard(a: MeetingAtom) {
                 Text(epistemicLabel(a.epistemic), style = MaterialTheme.typography.labelSmall,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(DS.Rhythm.tight))
             Text(a.statement, style = MaterialTheme.typography.bodyLarge)
             if (a.quote.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
-                Text("「${a.quote}」", style = MaterialTheme.typography.bodySmall,
+                Spacer(Modifier.height(DS.Rhythm.tight))
+                Text("「${a.quote}」", style = MaterialTheme.typography.bodyLarge,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }

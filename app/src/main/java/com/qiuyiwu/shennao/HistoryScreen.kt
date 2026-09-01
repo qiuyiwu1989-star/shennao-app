@@ -98,16 +98,16 @@ fun HistoryScreen(
     }) {
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = DS.Pad.default,
+        verticalArrangement = Arrangement.spacedBy(DS.Rhythm.element),
     ) {
         item {
             Text("我录过的会", style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(DS.Rhythm.tight))
             Text("每一场走到哪一站，都在这里。",
                  style = MaterialTheme.typography.bodyMedium,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(DS.Rhythm.element))
         }
 
         // 还在这台手机上的排最前：它们是唯一可能丢的
@@ -121,7 +121,7 @@ fun HistoryScreen(
             items(served, key = { "s" + it.sessionId }) { s -> ServedRow(s, onOpen, onDelete) }
         }
 
-        if (!loaded) item { Loading() }
+        if (!loaded) item { SkeletonList(3) }
         else if (rows.isEmpty() && served.isEmpty()) item {
             Empty("还没有录过", "录一场会，它会自己走完转写和分析。", "录一场", onRecord)
         }
@@ -152,19 +152,19 @@ private fun ServedRow(s: SessionCard, onOpen: (String) -> Unit, onDelete: ((Stri
         modifier = Modifier.fillMaxWidth(),
         onClick = { s.transcriptId?.let(onOpen) },
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(s.title, style = MaterialTheme.typography.titleSmall,
+                Text(s.title, style = MaterialTheme.typography.titleMedium,
                      fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 s.durationMs?.let {
                     Text("${it / 60000} 分钟", style = MaterialTheme.typography.labelMedium,
                          color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(DS.Rhythm.element))
             Chain(s.stage)
             if (failed && s.problem != null) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(DS.Rhythm.element))
                 // 失败的原因要说清楚**该怎么办**，而不只是「出错了」。
                 // 服务端已经把内部术语翻成人话了，这里照着显示。
                 Surface(
@@ -172,18 +172,31 @@ private fun ServedRow(s: SessionCard, onOpen: (String) -> Unit, onDelete: ((Stri
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(s.problem, style = MaterialTheme.typography.bodySmall,
+                    Text(s.problem, style = MaterialTheme.typography.bodyMedium,
                          color = MaterialTheme.colorScheme.onErrorContainer,
-                         modifier = Modifier.padding(10.dp))
+                         modifier = Modifier.padding(DS.Pad.tight))
                 }
                 if (onDelete != null) {
                     // 给一条出路。一条救不回来的录音一直挂在列表上，
                     // 用户每次打开都要重新判断一次「这个要不要管」。
-                    TextButton(onClick = { onDelete(s.sessionId) }) { Text("删掉这条") }
+                    var confirming by remember { mutableStateOf(false) }
+                    TextButton(onClick = { confirming = true }) {
+                        Text("删掉这条", color = MaterialTheme.colorScheme.error)
+                    }
+                    if (confirming) ConfirmDialog(
+                        title = "删掉这条录音？",
+                        // 说清楚做完会怎样，而不是「确定删除吗」——那是句废话
+                        detail = "音频会从深脑删除，找不回来。这条已经处理失败，" +
+                                 "删掉不影响其它录音。",
+                        confirmLabel = "删掉",
+                        destructive = true,
+                        onConfirm = { onDelete(s.sessionId) },
+                        onDismiss = { confirming = false },
+                    )
                 }
             }
             s.startedAt?.let {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(DS.Rhythm.tight))
                 Text(day(it), style = MaterialTheme.typography.bodySmall,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -231,7 +244,7 @@ private fun day(iso: String): String = runCatching {
 @Composable
 private fun SessionRow(s: LocalSession) {
     DsCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(s.meta.title, style = MaterialTheme.typography.titleSmall,
                      fontWeight = FontWeight.SemiBold)
@@ -246,12 +259,12 @@ private fun SessionRow(s: LocalSession) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(DS.Rhythm.tight))
             LinearProgressIndicator(
                 progress = { if (s.total == 0) 0f else s.done.toFloat() / s.total },
                 modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(DS.Rhythm.tight))
             Text("${s.bytesLeftLabel} · 开始于 ${stamp(s.meta.startedAtEpochMs)}",
                  style = MaterialTheme.typography.bodySmall,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)

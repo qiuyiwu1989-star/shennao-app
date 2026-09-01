@@ -70,10 +70,10 @@ fun TodayScreen(
     Column(Modifier.fillMaxSize()) {
         staleLabel?.let { com.qiuyiwu.shennao.StaleBanner(it) }
 
-        Column(Modifier.padding(horizontal = 16.dp)) {
+        Column(Modifier.padding(DS.Pad.screen)) {
             Header(today)
             RecordBar(onRecord)
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(DS.Rhythm.element))
         }
 
         // 频道条。数字直接标在标签上——不点进去就知道哪一栏有事。
@@ -103,10 +103,10 @@ fun TodayScreen(
                 LazyColumn(
                     Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(DS.Rhythm.element),
                 ) {
                     item {
-                        Text(channels[page].hint, style = MaterialTheme.typography.bodySmall,
+                        Text(channels[page].hint, style = MaterialTheme.typography.bodyMedium,
                              color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     when (page) {
@@ -124,7 +124,7 @@ fun TodayScreen(
                             InsightCard(i) { i.transcriptId?.let(onOpenTranscript) }
                         }
                     }
-                    item { Spacer(Modifier.height(24.dp)) }
+                    item { Spacer(Modifier.height(DS.Rhythm.inner)) }
             }
         }
     }
@@ -142,7 +142,7 @@ private data class Channel(val title: String, val hint: String, val count: Int)
 private fun Header(t: Today) {
     Column {
         Text("今天", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(DS.Rhythm.tight))
         // 四种「空」要分开说。它们在界面上长得一样，
         // 而「坏了」这一类用户永远不会主动报告。
         val line = when {
@@ -160,7 +160,7 @@ private fun Header(t: Today) {
         }
         Text(line, style = MaterialTheme.typography.bodyMedium,
              color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(DS.Rhythm.tight))
     }
 }
 
@@ -169,7 +169,7 @@ private fun RecordBar(onRecord: () -> Unit) {
     val live = com.qiuyiwu.shennao.record.RecordingService.recording
     DsCard(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.fillMaxWidth().padding(16.dp),
+            Modifier.fillMaxWidth().padding(DS.Pad.tight),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
@@ -192,7 +192,7 @@ private fun RecordBar(onRecord: () -> Unit) {
 private fun SectionTitle(title: String, hint: String) {
     Column(Modifier.padding(top = 10.dp)) {
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Text(hint, style = MaterialTheme.typography.bodySmall,
+        Text(hint, style = MaterialTheme.typography.bodyMedium,
              color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -200,9 +200,9 @@ private fun SectionTitle(title: String, hint: String) {
 @Composable
 private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, onOpen: () -> Unit) {
     DsCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(c.speakerName, style = MaterialTheme.typography.titleSmall,
+                Text(c.speakerName, style = MaterialTheme.typography.titleMedium,
                      fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
                 // 逾期用文字说清楚，不只靠颜色——阳光下和色觉障碍面前颜色都不可靠
@@ -218,10 +218,10 @@ private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, on
                             else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(DS.Rhythm.tight))
             // 原话是主角，不是摘要——「他当时是这么说的」才问得出口
             Text("「${c.quote}」", style = MaterialTheme.typography.bodyLarge)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(DS.Rhythm.element))
             Footer(
                 meta = listOfNotNull(c.saidDate.takeIf { it.isNotBlank() }, c.context).joinToString(" · "),
                 canOpen = c.transcriptId != null,
@@ -270,9 +270,9 @@ private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, on
 @Composable
 private fun PredictionCard(p: Prediction) {
     DsCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(p.subject ?: "未指明对象", style = MaterialTheme.typography.titleSmall,
+                Text(p.subject ?: "未指明对象", style = MaterialTheme.typography.titleMedium,
                      fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
                 val od = p.overdueDays
@@ -280,9 +280,9 @@ private fun PredictionCard(p: Prediction) {
                      style = MaterialTheme.typography.labelMedium,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(DS.Rhythm.tight))
             Text(p.statement, style = MaterialTheme.typography.bodyLarge)
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(DS.Rhythm.tight))
             // 没有可观测信号的预测是验不了的。空着不能不说——
             // 那说明当初写这条时就没定清楚怎么算数，本身是个该看见的信号。
             Text(
@@ -298,7 +298,7 @@ private fun PredictionCard(p: Prediction) {
 @Composable
 private fun InsightCard(i: Insight, onOpen: () -> Unit) {
     DsCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 i.subject?.let {
                     Text(it, style = MaterialTheme.typography.titleSmall,
@@ -309,14 +309,14 @@ private fun InsightCard(i: Insight, onOpen: () -> Unit) {
                 // 一条「猜想」会被当成事实——比坐在电脑前更危险。
                 AssistChip(onClick = {}, label = { Text(epistemicLabel(i.epistemic)) })
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(DS.Rhythm.tight))
             Text(i.statement, style = MaterialTheme.typography.bodyLarge)
             if (i.quote.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
-                Text("「${i.quote}」", style = MaterialTheme.typography.bodySmall,
+                Spacer(Modifier.height(DS.Rhythm.tight))
+                Text("「${i.quote}」", style = MaterialTheme.typography.bodyLarge,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(DS.Rhythm.element))
             Footer(meta = atomTypeLabel(i.atomType), canOpen = i.transcriptId != null, onOpen = onOpen)
         }
     }

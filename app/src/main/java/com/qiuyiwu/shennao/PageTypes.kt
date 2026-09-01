@@ -105,7 +105,7 @@ fun PageHead(title: String, subtitle: String? = null) {
     Column(Modifier.padding(horizontal = 16.dp, vertical = DS.Rhythm.element)) {
         Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
         subtitle?.let {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(DS.Rhythm.tight))
             Text(it, style = MaterialTheme.typography.bodyMedium,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

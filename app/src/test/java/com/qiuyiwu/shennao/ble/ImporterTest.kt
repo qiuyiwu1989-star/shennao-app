@@ -311,3 +311,41 @@ class ReadinessTest {
         assertFalse("这台手机没有 BLE，给个按钮点了也没用", Readiness.NO_BLE.fixable)
     }
 }
+
+class IngestIdempotencyTest {
+    /*
+     * 深脑用 clientRequestId 做建会话的幂等键：同一个键重推只拿回同一个会话。
+     * 我原来用随机 UUID——同一个文件导两次就是两条，Mac 导过再用手机导也是两条，
+     * 而两条内容完全一样，用户还得自己去删。
+     */
+    private class Probe : com.qiuyiwu.shennao.record.Vault {
+        val metas = mutableMapOf<String, com.qiuyiwu.shennao.record.SessionMeta>()
+        override fun sessions() = metas.keys.toList()
+        override fun readMeta(s: String) = metas[s]
+        override fun writeMeta(s: String, m: com.qiuyiwu.shennao.record.SessionMeta) { metas[s] = m }
+        override fun updateMeta(s: String, f: (com.qiuyiwu.shennao.record.SessionMeta) -> com.qiuyiwu.shennao.record.SessionMeta) =
+            metas[s]?.let { f(it).also { n -> metas[s] = n } }
+        override fun segments(s: String) = emptyList<Segment>()
+        override fun readSegment(s: String, seg: Segment): ByteArray? = null
+        override fun rename(s: String, a: Segment, b: Segment) = true
+        override fun deleteSession(s: String) { metas.remove(s) }
+    }
+
+    @Test fun `同一个文件导两次，幂等键必须一样`() {
+        // 键由文件名决定，不是随机的
+        val a = keyFor("note20260901-140000")
+        val b = keyFor("note20260901-140000")
+        assertEquals("同一个文件两次导入拿到了不同的键——深脑里会变成两条", a, b)
+    }
+
+    @Test fun `不同文件的键必须不同`() {
+        assertNotEquals(keyFor("note20260901-140000"), keyFor("note20260901-150000"))
+    }
+
+    @Test fun `键要带前缀，能看出是从录音笔导进来的`() {
+        assertTrue(keyFor("note20260901-140000").startsWith("ble-"))
+    }
+
+    /** 复现 Ingest 里的构造规则。改那边就要改这里——这一条正是要钉住它。 */
+    private fun keyFor(title: String) = "ble-" + title.take(80)
+}

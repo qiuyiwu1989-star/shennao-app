@@ -41,7 +41,7 @@ fun PersonScreen(
     DetailPage(onBack = onBack, title = p?.name) {
         when {
             error != null -> item { Broken(error!!) { error = null } }
-            p == null -> item { Loading() }
+            p == null -> item { SkeletonList(2) }
             else -> {
                 p.role?.let { r -> item {
                     Text(r, style = MaterialTheme.typography.bodyMedium,
@@ -54,10 +54,10 @@ fun PersonScreen(
                     item { Head("还欠着的", "说出口、还没有下文") }
                     items(p.openCommitments, key = { "o" + it.id }) { c ->
                         DsCard(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(16.dp)) {
-                                Text("「${c.quote}」", style = MaterialTheme.typography.bodyMedium)
+                            Column(Modifier.padding(DS.Pad.tight)) {
+                                Text("「${c.quote}」", style = MaterialTheme.typography.bodyLarge)
                                 c.dueDate?.let {
-                                    Spacer(Modifier.height(4.dp))
+                                    Spacer(Modifier.height(DS.Rhythm.tight))
                                     Text(it, style = MaterialTheme.typography.labelMedium,
                                          color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
@@ -73,9 +73,9 @@ fun PersonScreen(
                     item { Head("关于他的判断", "深脑从这些会里读出来的") }
                     items(p.judgments, key = { "j" + it.id }) { j ->
                         DsCard(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(16.dp)) {
-                                Text(j.statement, style = MaterialTheme.typography.bodyMedium)
-                                Spacer(Modifier.height(4.dp))
+                            Column(Modifier.padding(DS.Pad.tight)) {
+                                Text(j.statement, style = MaterialTheme.typography.bodyLarge)
+                                Spacer(Modifier.height(DS.Rhythm.tight))
                                 Text(
                                     when (j.epistemic) {
                                         "attested" -> "有原话"; "inferred" -> "推断"
@@ -108,7 +108,7 @@ fun PersonScreen(
 @Composable
 private fun Ledger(p: Person) {
     DsCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
                     p.keptRate?.let { "$it%" } ?: "—",
@@ -116,20 +116,20 @@ private fun Ledger(p: Person) {
                     color = if (p.keptRate == null) MaterialTheme.colorScheme.onSurfaceVariant
                             else MaterialTheme.colorScheme.primary,
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(DS.Rhythm.element))
                 Text(
                     if (p.keptRate == null) "还没有一条有结论" else "兑现率",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(DS.Rhythm.element))
             Text(
                 "兑现 ${p.kept} · 落空 ${p.broken} · 在途 ${p.open}",
                 style = MaterialTheme.typography.bodyMedium,
             )
             if (p.keptRate != null) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(DS.Rhythm.tight))
                 // 分母写出来。一个不知道怎么算的比率，用起来会比没有更危险。
                 Text("比率只算已有结论的 ${p.kept + p.broken} 条，在途的不算。",
                      style = MaterialTheme.typography.bodySmall,
@@ -143,7 +143,7 @@ private fun Ledger(p: Person) {
 private fun Head(t: String, hint: String) {
     Column(Modifier.padding(top = 14.dp, bottom = 2.dp)) {
         Text(t, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Text(hint, style = MaterialTheme.typography.bodySmall,
+        Text(hint, style = MaterialTheme.typography.bodyMedium,
              color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

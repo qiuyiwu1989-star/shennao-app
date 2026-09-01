@@ -3,8 +3,6 @@ package com.qiuyiwu.shennao.ble
 import com.qiuyiwu.shennao.record.FileVault
 import com.qiuyiwu.shennao.record.Segment
 import com.qiuyiwu.shennao.record.SessionMeta
-import java.util.UUID
-
 /**
  * 把从录音笔导进来的一个文件，交给**和手机录音同一条上传链路**。
  *
@@ -51,8 +49,22 @@ object Ingest {
         } else bytes
         val realMs = if (OggWrap.looksRaw(bytes)) OggWrap.durationMs(bytes.size) else durationMs
         if (realMs <= 0) return null
+        /*
+         * **幂等键由文件本身决定，不能用随机 UUID。**
+         *
+         * 深脑用 clientRequestId 做建会话的幂等键：同一个键重推只会拿回同一个会话。
+         * 我原来写的是 UUID.randomUUID()——每次导入都是新的，于是：
+         *   · 同一个文件在手机上导两次 → 深脑里两条
+         *   · Mac 导过一次、手机再导一次 → 又是两条
+         * 而这两条内容完全一样，用户还得自己去删。
+         *
+         * Mac 端一直是对的：`mac-ble-<文件名>`。这里用 `ble-<文件名>` ——
+         * **两端故意不共用前缀**：录音笔的文件名只在这一支设备里唯一，
+         * 跨设备同名（两支笔都有 note20260901-1400.opus）时，
+         * 共用前缀会把两段不同的录音判成同一条，那比重复更糟。
+         */
         val meta = SessionMeta(
-            clientRequestId = UUID.randomUUID().toString(),
+            clientRequestId = "ble-" + title.take(80),
             title = title,
             startedAtEpochMs = startedAtEpochMs,
             finished = true,        // 导入的文件天生就是完整的，不用等停止

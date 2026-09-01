@@ -45,35 +45,35 @@ fun SearchScreen(client: DeepBrainClient, onOpen: (String) -> Unit) {
             placeholder = { Text("那件事上次是谁说的？") },
             singleLine = true,
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(DS.Rhythm.element))
 
         when {
-            busy && hits.isEmpty() -> Loading()
+            busy && hits.isEmpty() -> SkeletonList(3)
             q.trim().length < 2 -> Empty("搜判断、承诺、会议", "输入两个字以上。判断排在最前——它往往直接就是答案。")
             searched && hits.isEmpty() -> Empty("没找到", "换个说法试试，或者那件事还没被录进来。")
-            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(DS.Rhythm.element)) {
                 items(hits, key = { it.kind + it.id }) { h ->
                     DsCard(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { h.transcriptId?.let(onOpen) },
                     ) {
-                        Column(Modifier.padding(16.dp)) {
+                        Column(Modifier.padding(DS.Pad.tight)) {
                             Row {
                                 Text(kindLabel(h.kind), style = MaterialTheme.typography.labelMedium,
                                      color = MaterialTheme.colorScheme.primary,
                                      fontWeight = FontWeight.Medium)
                                 h.who?.let {
-                                    Spacer(Modifier.width(8.dp))
+                                    Spacer(Modifier.width(DS.Rhythm.element))
                                     Text(it, style = MaterialTheme.typography.labelMedium,
                                          color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
-                            Spacer(Modifier.height(4.dp))
-                            Text(h.text, style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(DS.Rhythm.tight))
+                            Text(h.text, style = MaterialTheme.typography.bodyLarge)
                         }
                     }
                 }
-                item { Spacer(Modifier.height(20.dp)) }
+                item { Spacer(Modifier.height(DS.Rhythm.inner)) }
             }
         }
     }

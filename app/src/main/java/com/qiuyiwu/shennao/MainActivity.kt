@@ -174,7 +174,17 @@ private fun App(client: DeepBrainClient) {
     val chrome = s0 is Screen.Feed || s0 is Screen.Record ||
                  s0 is Screen.Meeting || s0 is Screen.Person || s0 is Screen.Ble
 
+    val notices = remember { androidx.compose.material3.SnackbarHostState() }
+    val notice: (String) -> Unit = { msg ->
+        scope.launch {
+            // 先把上一条挤掉。排队等三秒再弹的提示，说的已经不是眼前这件事了。
+            notices.currentSnackbarData?.dismiss()
+            notices.showSnackbar(msg, withDismissAction = true)
+        }
+    }
+
     Scaffold(
+        snackbarHost = { androidx.compose.material3.SnackbarHost(notices) },
         // 内容区自己让开状态栏；底栏由 NavigationBar 让开手势条（它自带 inset）。
         // 两处都交给系统算，不写死 dp——不同机型的刘海和手势条高度不一样。
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets.safeDrawing
@@ -199,6 +209,7 @@ private fun App(client: DeepBrainClient) {
             }
         }
     ) { pad ->
+        androidx.compose.runtime.CompositionLocalProvider(LocalNotice provides notice) {
         Surface(Modifier.fillMaxSize().padding(pad)) {
             when (val s = screen) {
                 is Screen.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
@@ -264,7 +275,14 @@ private fun App(client: DeepBrainClient) {
                                 // 落账失败要说出来。界面已经先显示「已记」了——
                                 // 乐观更新用起来顺手，但失败时必须收回来，
                                 // 否则账本上没有这一笔，而用户以为记过了。
-                                if (r !is ApiResult.Ok) load()
+                                if (r !is ApiResult.Ok) {
+                                    load()
+                                    notice(when (r) {
+                                        is ApiResult.Failed -> "没记上：${r.message}"
+                                        is ApiResult.Unauthorized -> "没记上：登录失效了，重新登录后再点一次"
+                                        else -> "没记上，请再点一次"
+                                    })
+                                }
                             }
                         },
                     )
@@ -276,6 +294,7 @@ private fun App(client: DeepBrainClient) {
                     Broken(s.message) { scope.launch { load() } }
                 }
             }
+        }
         }
     }
 }
@@ -302,20 +321,20 @@ private fun LoginScreen(state: Screen.Login, onSubmit: (String, String) -> Unit)
     var email by remember { mutableStateOf("") }
     var pw by remember { mutableStateOf("") }
     Column(
-        Modifier.fillMaxSize().padding(24.dp),
+        Modifier.fillMaxSize().padding(DS.Pad.focus),
         verticalArrangement = Arrangement.Center,
     ) {
         Text("深脑", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(DS.Rhythm.tight))
         Text("登录后看你的下文", style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(DS.Rhythm.inner))
         OutlinedTextField(
             value = email, onValueChange = { email = it },
             label = { Text("邮箱") }, singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(DS.Rhythm.element))
         OutlinedTextField(
             value = pw, onValueChange = { pw = it },
             label = { Text("密码") }, singleLine = true,
@@ -323,11 +342,11 @@ private fun LoginScreen(state: Screen.Login, onSubmit: (String, String) -> Unit)
             modifier = Modifier.fillMaxWidth(),
         )
         if (state.error != null) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(DS.Rhythm.element))
             Text(state.error, color = MaterialTheme.colorScheme.error,
                  style = MaterialTheme.typography.bodySmall)
         }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(DS.Rhythm.inner))
         Button(
             onClick = { onSubmit(email.trim(), pw) },
             enabled = !state.busy && email.isNotBlank() && pw.isNotBlank(),

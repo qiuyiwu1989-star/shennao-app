@@ -99,17 +99,46 @@ private val DarkColors = darkColorScheme(
  *
  * 下限 11sp：10sp 的中文在手机上不可读（§2.2 定的下限，两端同一条）。
  */
+/*
+ * 字阶。数值本来就定得没问题——**2026-09-01 审计发现问题在用错了**：
+ * bodySmall 用了 41 次、bodyMedium 27 次，也就是「屏幕上最多的文字是最小号的」。
+ * 正文、说明、元信息全挤进小字，眼睛找不到重点，这是「粗糙」最直接的来源。
+ *
+ * 所以每一档都写清楚**什么时候用它**。选档不是审美问题，是「这段文字是什么」。
+ */
 private val ShennaoTypography = Typography(
+    /** 巨号。一屏最多一个，且它必须是那一屏的全部意义——目前只有录音时长。 */
     headlineMedium = TextStyle(fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold),
-    headlineSmall  = TextStyle(fontSize = 24.sp, lineHeight = 31.sp, fontWeight = FontWeight.SemiBold),
-    titleLarge     = TextStyle(fontSize = 20.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold),
-    titleMedium    = TextStyle(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium),
+    /** 页面标题。每屏一个。 */
+    headlineSmall  = TextStyle(fontSize = 22.sp, lineHeight = 29.sp, fontWeight = FontWeight.SemiBold),
+    /** 区块标题。频道名、分区名。 */
+    titleLarge     = TextStyle(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold),
+    /** 卡片主行：人名、会议名、判断的第一行。 */
+    titleMedium    = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium),
+    /** 卡片次行标题。用得应该比 titleMedium 少。 */
     titleSmall     = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium),
-    bodyLarge      = TextStyle(fontSize = 15.sp, lineHeight = 26.sp),   // 长文正文，行高 1.7
-    bodyMedium     = TextStyle(fontSize = 14.sp, lineHeight = 22.sp),   // 界面默认
-    bodySmall      = TextStyle(fontSize = 13.sp, lineHeight = 20.sp),   // 元信息
+
+    /**
+     * **正文默认档。** 判断、原话、摘要、说明——凡是「要读的内容」都用它。
+     *
+     * 审计前这些大多错用了 bodyMedium（14sp）甚至 bodySmall（13sp）。
+     * 判据：**如果这段话是用户要读进去的，就用 bodyLarge。**
+     */
+    bodyLarge      = TextStyle(fontSize = 15.sp, lineHeight = 24.sp),
+    /** 次要正文。只给「读了也行、不读也不影响」的补充说明。 */
+    bodyMedium     = TextStyle(fontSize = 14.sp, lineHeight = 21.sp),
+    /**
+     * **元信息专用。** 时间、来源、计数、状态。
+     *
+     * 判据：**一屏之内 bodySmall 不该多于 bodyLarge。**
+     * 多了就说明有正文被降级成了元信息——那正是审计抓到的病。
+     */
+    bodySmall      = TextStyle(fontSize = 13.sp, lineHeight = 19.sp),
+
     labelLarge     = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
+    /** 按钮与标签。 */
     labelMedium    = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium),
+    /** 药丸内文字。**下限**，不再往下——10sp 的中文在手机上读不出来。 */
     labelSmall     = TextStyle(fontSize = 11.sp, lineHeight = 15.sp, fontWeight = FontWeight.Medium),
 )
 

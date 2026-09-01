@@ -77,7 +77,7 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}) {
         Modifier.fillMaxSize().padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(DS.Rhythm.element))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) { Text("返回") }
             Spacer(Modifier.weight(1f))
@@ -111,11 +111,11 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}) {
         )
 
         if (recording || state == com.qiuyiwu.shennao.record.RecordState.INTERRUPTED) {
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(DS.Rhythm.inner))
             Waveform(bars, Modifier.fillMaxWidth().height(56.dp))
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(DS.Rhythm.element))
         Text(
             when (state) {
                 // 中断必须一眼看得出来。挂着「正在录音」而其实没在录，
@@ -133,7 +133,7 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}) {
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
 
-        Spacer(Modifier.height(40.dp))
+        Spacer(Modifier.height(DS.Rhythm.block))
 
         // 主按钮：录音时是「停止」，否则是「开始」。
         // 用实心圆而不是矩形按钮——这一屏只有一个动作，它该长得像一个动作。
@@ -173,13 +173,13 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}) {
         }
 
         if (recording) {
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(DS.Rhythm.inner))
             Captions(captions, captionState, sessionId != null)
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(DS.Rhythm.inner))
             HotwordBox(sessionId)
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(DS.Rhythm.inner))
 
         if (denied) {
             Text(
@@ -191,8 +191,8 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}) {
         }
         // 只显示不可重试的错。网络抖一下就弹红字，用户学会的第一件事就是无视它
         error?.let {
-            Spacer(Modifier.height(8.dp))
-            Text(it, style = MaterialTheme.typography.bodySmall,
+            Spacer(Modifier.height(DS.Rhythm.element))
+            Text(it, style = MaterialTheme.typography.bodyMedium,
                  color = MaterialTheme.colorScheme.error,
                  textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
@@ -212,7 +212,7 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}) {
                 modifier = Modifier.padding(14.dp),
             )
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(DS.Rhythm.inner))
     }
 }
 
@@ -234,10 +234,10 @@ private fun Captions(lines: List<String>, state: String?, hasSession: Boolean) {
             1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(DS.Pad.tight)) {
             Text("实时字幕", style = MaterialTheme.typography.labelMedium,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(DS.Rhythm.element))
             when {
                 lines.isNotEmpty() -> lines.forEachIndexed { i, t ->
                     Text(
@@ -248,7 +248,7 @@ private fun Captions(lines: List<String>, state: String?, hasSession: Boolean) {
                         color = if (i == lines.lastIndex) MaterialTheme.colorScheme.onSurface
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (i < lines.lastIndex) Spacer(Modifier.height(4.dp))
+                    if (i < lines.lastIndex) Spacer(Modifier.height(DS.Rhythm.tight))
                 }
                 // 字幕要等第一段传上去才有会话 id（约一分钟）。
                 // 说清楚在等什么，不要给一片空白让人以为坏了。
@@ -261,8 +261,8 @@ private fun Captions(lines: List<String>, state: String?, hasSession: Boolean) {
             }
             // 状态里的坏消息要单独说一次，别被字幕盖过去
             if (lines.isNotEmpty() && state != null && state.contains("断")) {
-                Spacer(Modifier.height(6.dp))
-                Text(state, style = MaterialTheme.typography.bodySmall,
+                Spacer(Modifier.height(DS.Rhythm.tight))
+                Text(state, style = MaterialTheme.typography.bodyMedium,
                      color = MaterialTheme.colorScheme.error)
             }
         }
@@ -329,7 +329,7 @@ private fun HotwordBox(sessionId: String?) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(DS.Rhythm.element))
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = text,
@@ -339,7 +339,7 @@ private fun HotwordBox(sessionId: String?) {
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(DS.Rhythm.element))
             TextButton(
                 // 安卓的命中区下限是 48dp（规范 §12 明写不取交集）。
                 // TextButton 默认高度不够，用透明 padding 撑开、不改视觉尺寸。
@@ -366,7 +366,7 @@ private fun HotwordBox(sessionId: String?) {
             ) { Text("加上") }
         }
         if (saved.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(DS.Rhythm.tight))
             // 显示服务端真正接受的那些，不是用户输入的那些——
             // 超限或重复的词会被丢掉，照抄输入会让人以为它在起作用。
             Text("已生效：" + saved.joinToString("、"),
@@ -374,8 +374,8 @@ private fun HotwordBox(sessionId: String?) {
                  color = MaterialTheme.colorScheme.primary)
         }
         failed?.let {
-            Spacer(Modifier.height(6.dp))
-            Text(it, style = MaterialTheme.typography.bodySmall,
+            Spacer(Modifier.height(DS.Rhythm.tight))
+            Text(it, style = MaterialTheme.typography.bodyMedium,
                  color = MaterialTheme.colorScheme.error)
         }
     }

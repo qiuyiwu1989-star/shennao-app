@@ -43,6 +43,7 @@ private fun merge(old: List<BleDevice>, d: BleDevice): List<BleDevice> =
 @Composable
 fun BleScreen(onDone: () -> Unit) {
     val ctx = LocalContext.current
+    val notice = LocalNotice.current
     val scope = rememberCoroutineScope()
     val gatt = remember { BleGatt(ctx) }
     val parser = remember { FrameParser("AE22") }
@@ -123,11 +124,11 @@ fun BleScreen(onDone: () -> Unit) {
         // 蓝牙关着却让用户去点「查找设备」，得到的空列表只会把他指向错误的方向。
         if (ready != Readiness.READY && ready != Readiness.NO_PERMISSION) item {
             Surface(color = MaterialTheme.colorScheme.errorContainer, shape = DS.Radius.card) {
-                Column(Modifier.padding(16.dp)) {
+                Column(Modifier.padding(DS.Pad.tight)) {
                     Text(ready.message ?: "", style = MaterialTheme.typography.bodyMedium,
                          color = MaterialTheme.colorScheme.onErrorContainer)
                     if (ready.fixable) {
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(DS.Rhythm.element))
                         // 只给能真正解决问题的按钮。硬件不支持时给个按钮，点了没反应，
                         // 比不给更让人困惑。
                         Button(onClick = {
@@ -141,13 +142,13 @@ fun BleScreen(onDone: () -> Unit) {
         if (denied) item {
             // 说对是哪个权限：旧系统上要的是定位，说成「蓝牙权限」用户会找不到开关
             Surface(color = MaterialTheme.colorScheme.errorContainer, shape = DS.Radius.card) {
-                Text(BlePermissions.deniedHint(), Modifier.padding(16.dp),
+                Text(BlePermissions.deniedHint(), Modifier.padding(DS.Pad.tight),
                      style = MaterialTheme.typography.bodySmall,
                      color = MaterialTheme.colorScheme.onErrorContainer)
             }
         }
         note?.let { n -> item {
-            Text(n, style = MaterialTheme.typography.bodySmall,
+            Text(n, style = MaterialTheme.typography.bodyMedium,
                  color = MaterialTheme.colorScheme.error)
         } }
 
@@ -164,7 +165,7 @@ fun BleScreen(onDone: () -> Unit) {
             // 不翻出来的话用户只知道「连不上」，而 133 和 8 要做的事完全不同。
             if (conn == BleState.FAILED) gatt.lastError?.let { e -> item {
                 Surface(color = MaterialTheme.colorScheme.errorContainer, shape = DS.Radius.card) {
-                    Text(e, Modifier.padding(16.dp),
+                    Text(e, Modifier.padding(DS.Pad.tight),
                          style = MaterialTheme.typography.bodySmall,
                          color = MaterialTheme.colorScheme.onErrorContainer)
                 }
@@ -182,13 +183,13 @@ fun BleScreen(onDone: () -> Unit) {
             }
             items(devices, key = { it.id }) { d ->
                 DsCard(Modifier.fillMaxWidth(), onClick = { gatt.connect(d.id) }) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(d.name, style = MaterialTheme.typography.titleSmall,
+                                Text(d.name, style = MaterialTheme.typography.titleMedium,
                                      fontWeight = FontWeight.SemiBold)
                                 if (d.advertisesOurService) {
-                                    Spacer(Modifier.width(8.dp))
+                                    Spacer(Modifier.width(DS.Rhythm.element))
                                     Text("疑似录音笔", style = MaterialTheme.typography.labelSmall,
                                          color = MaterialTheme.colorScheme.primary)
                                 }
@@ -237,9 +238,9 @@ fun BleScreen(onDone: () -> Unit) {
                             importer.startDownload(f)
                             st = importer.state
                         }) {
-                            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(f.base, style = MaterialTheme.typography.titleSmall)
+                                    Text(f.base, style = MaterialTheme.typography.titleMedium)
                                     Text("${f.time / 60} 分 ${f.time % 60} 秒 · ${f.size / 1024} KB",
                                          style = MaterialTheme.typography.bodySmall,
                                          color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -254,13 +255,13 @@ fun BleScreen(onDone: () -> Unit) {
                 // ---- 3. 传输中 ----
                 is ImportState.Downloading -> item {
                     DsCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(20.dp)) {
+                        Column(Modifier.padding(DS.Pad.default)) {
                             Text(s.name, style = MaterialTheme.typography.titleSmall)
-                            Spacer(Modifier.height(10.dp))
+                            Spacer(Modifier.height(DS.Rhythm.element))
                             val f = s.fraction
                             if (f != null) LinearProgressIndicator({ f }, Modifier.fillMaxWidth())
                             else LinearProgressIndicator(Modifier.fillMaxWidth())
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(DS.Rhythm.element))
                             Text(
                                 // 字节数要给出来。一个只有百分比的进度条停住时，
                                 // 用户分不清「慢」和「卡死」。
@@ -269,7 +270,7 @@ fun BleScreen(onDone: () -> Unit) {
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(DS.Rhythm.tight))
                             Text("蓝牙传输大约 27 KB 每秒，一小时的录音要四分半。",
                                  style = MaterialTheme.typography.bodySmall,
                                  color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -296,23 +297,27 @@ fun BleScreen(onDone: () -> Unit) {
                             if (ok != null) {
                                 UploadWorker.kick(ctx)
                                 note = null
+                                // 这张「导好了」的卡片一点「再导一个」就没了。
+                                // 连着导三个的人，最后只会看到第三个的卡片，
+                                // 前两个有没有成功全凭记忆——所以留一句提示。
+                                notice("已导入「${entry.base}」，正在推送到深脑")
                             } else note = "落盘失败，请重试"
                         }
                     }
                     DsCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(20.dp)) {
+                        Column(Modifier.padding(DS.Pad.default)) {
                             Text("导好了", style = MaterialTheme.typography.titleMedium,
                                  fontWeight = FontWeight.SemiBold)
-                            Spacer(Modifier.height(6.dp))
+                            Spacer(Modifier.height(DS.Rhythm.tight))
                             Text("${s.bytes.size / 1024} KB，正在推送到深脑。",
                                  style = MaterialTheme.typography.bodyMedium,
                                  color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.height(14.dp))
+                            Spacer(Modifier.height(DS.Rhythm.element))
                             Row {
                                 Button(onClick = {
                                     importer.startListing(); st = importer.state
                                 }) { Text("再导一个") }
-                                Spacer(Modifier.width(10.dp))
+                                Spacer(Modifier.width(DS.Rhythm.element))
                                 OutlinedButton(onClick = onDone) { Text("去看进度") }
                             }
                         }
@@ -322,10 +327,10 @@ fun BleScreen(onDone: () -> Unit) {
                 // ---- 失败：区分该重连还是该换 ----
                 is ImportState.Failed -> item {
                     DsCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(20.dp)) {
+                        Column(Modifier.padding(DS.Pad.default)) {
                             Text(s.reason, style = MaterialTheme.typography.bodyMedium,
                                  color = MaterialTheme.colorScheme.error)
-                            Spacer(Modifier.height(12.dp))
+                            Spacer(Modifier.height(DS.Rhythm.element))
                             // 断线可以接着传，已经收到的字节还在——这是 27KB/s 链路上
                             // 最要紧的一句话。设备拒绝则没得续，只能重来。
                             if (!s.deviceSaid && importer.received > 0) {
@@ -342,6 +347,6 @@ fun BleScreen(onDone: () -> Unit) {
                 }
             }
         }
-        item { Spacer(Modifier.height(24.dp)) }
+        item { Spacer(Modifier.height(DS.Rhythm.inner)) }
     }
 }

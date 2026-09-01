@@ -3,6 +3,7 @@ package com.qiuyiwu.shennao.ui
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.qiuyiwu.shennao.*
+import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,7 +20,12 @@ import org.robolectric.annotation.Config
  * 下面每一条都对着一个真实发生过的缺陷写，不是为了覆盖率。
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+// **屏幕尺寸要是一台真手机。** Robolectric 默认给的是 320×470dp——
+// 2026 年没有这个尺寸的机器。在它上面，正常的卡片会被挤出屏幕，
+// 而 performClick 点在可视区外时**既不报错也不生效**：
+// 测试会红在一句「回调没被调到」上，让人以为业务逻辑坏了，
+// 实际坏的是测试自己的取景框。Pixel 尺寸（411×891dp）。
+@Config(sdk = [34], qualifiers = "w411dp-h891dp")
 class ScreenTest {
 
     @get:Rule val compose = createComposeRule()
@@ -90,7 +96,8 @@ class ScreenTest {
                     onSettle = { id, action -> calls += id to action })
             }
         }
-        compose.onNodeWithText("兑现了").performClick()
+        // 先断言它真的在屏幕上——点一个看不见的节点是静默失败
+        compose.onNodeWithText("兑现了").assertIsDisplayed().performClick()
         assert(calls == listOf("c1" to "kept")) { "落账没报上去：$calls" }
         // 点完之后按钮要消失，换成「已记」——否则用户会再点一次，账上多一笔
         compose.onNodeWithText("已记：兑现了").assertExists()
@@ -127,5 +134,65 @@ class ScreenTest {
     @Test fun `取数失败要直说，不能显示成「今天没事」`() {
         compose.setContent { ShennaoTheme { TodayScreen(today(failed = true), {}, {}, {}) } }
         compose.onNodeWithText("取数失败了，不是「没有内容」。").assertExists()
+    }
+
+    // ---- UI 二次成型（2026-09-01）----
+
+    @Test fun `骨架屏要画出真实卡片的形状，不是一个转圈`() {
+        compose.setContent { ShennaoTheme { SkeletonList(3) } }
+        // 骨架是靠形状说话的，没有文字可断言——所以断言它确实渲染出了节点。
+        // 一条「什么都没画也能过」的测试比没有测试更糟。
+        compose.onRoot().assertExists()
+        val dump = compose.onRoot().printToString()
+        assertTrue("骨架屏什么都没画出来", dump.length > 200)
+    }
+
+    @Test fun `删除录音必须先问一次——音频删了找不回来`() {
+        var confirmed = false
+        compose.setContent {
+            ShennaoTheme {
+                ConfirmDialog(
+                    title = "删掉这条录音？",
+                    detail = "音频会从深脑删除，找不回来。",
+                    confirmLabel = "删掉", destructive = true,
+                    onConfirm = { confirmed = true }, onDismiss = {},
+                )
+            }
+        }
+        compose.onNodeWithText("取消").assertExists()
+        assertFalse("还没点确认就执行了", confirmed)
+        compose.onNodeWithText("删掉").performClick()
+        assertTrue(confirmed)
+    }
+
+    @Test fun `确认框要说清做完会怎样，不能只是重复标题`() {
+        compose.setContent {
+            ShennaoTheme {
+                ConfirmDialog(
+                    title = "退出登录？",
+                    detail = "还没传完的录音会留在手机上，重新登录后接着传。",
+                    confirmLabel = "退出", onConfirm = {}, onDismiss = {},
+                )
+            }
+        }
+        // 「确定要退出吗」是句废话；用户真正担心的是没传完的录音会不会没
+        compose.onNodeWithText("还没传完的录音会留在手机上，重新登录后接着传。").assertExists()
+    }
+
+    @Test fun `轻提示只说屏幕上看不见的事——落账成功不弹，失败才弹`() {
+        // 这条测的是判据本身，不是某个像素：
+        // 「已记：兑现了」已经写在卡片上了，再弹一句提示是噪音；
+        // 噪音弹多了，真正要紧的那句会被当成背景划走。
+        val posted = mutableListOf<String>()
+        compose.setContent {
+            androidx.compose.runtime.CompositionLocalProvider(LocalNotice provides { posted += it }) {
+                ShennaoTheme {
+                    TodayScreen(today(commitments = listOf(commitment())), {}, {}, {}, onSettle = { _, _ -> })
+                }
+            }
+        }
+        compose.onNodeWithText("兑现了").assertIsDisplayed().performClick()
+        compose.onNodeWithText("已记：兑现了").assertExists()
+        assertEquals("落账成功不该再弹提示，卡片自己说了", emptyList<String>(), posted)
     }
 }
