@@ -3,6 +3,7 @@ package com.qiuyiwu.shennao.record
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -20,6 +21,17 @@ import java.io.File
  */
 @RunWith(AndroidJUnit4::class)
 class RecorderInstrumentedTest {
+
+    /**
+     * 测试自己拿麦克风权限。
+     *
+     * 原来靠跑之前手工 `adb grant`——而重装 APK 会把权限清掉，
+     * 于是门禁在一次正常的重装之后就红了。**依赖外部手工步骤的测试，
+     * 迟早会在没做那一步的环境里跑出错误结论。**
+     */
+    @get:Rule
+    val permission: org.junit.rules.TestRule =
+        androidx.test.rule.GrantPermissionRule.grant(android.Manifest.permission.RECORD_AUDIO)
 
     private val ctx get() = InstrumentationRegistry.getInstrumentation().targetContext
 

@@ -38,6 +38,8 @@ private sealed class Screen {
     data class Login(val error: String? = null, val busy: Boolean = false) : Screen()
     data class Feed(val today: Today) : Screen()
     object Record : Screen()
+    /** 从蓝牙录音笔导入。和「录」是同一件事的两个来源，所以进同一栏。 */
+    object Ble : Screen()
     /** 一个人的页。从任何一条卡片走过来 */
     data class Person(val personId: String) : Screen()
     data class Broken(val message: String) : Screen()
@@ -155,12 +157,13 @@ private fun App(client: DeepBrainClient) {
      * 三层退法：详情 → 历史 → 今天 → 交还给系统（此时退出才是对的）。
      */
     androidx.activity.compose.BackHandler(
-        enabled = screen is Screen.Meeting || screen is Screen.Person ||
+        enabled = screen is Screen.Meeting || screen is Screen.Person || screen is Screen.Ble ||
                   (screen is Screen.Feed && tab != Tab.TODAY)
     ) {
         when {
             screen is Screen.Meeting -> { tab = Tab.HISTORY; scope.launch { load() } }
             screen is Screen.Person -> scope.launch { load() }
+            screen is Screen.Ble -> { tab = Tab.RECORD; screen = Screen.Record }
             else -> tab = Tab.TODAY
         }
     }
@@ -169,7 +172,7 @@ private fun App(client: DeepBrainClient) {
     // 只会让人以为「是不是我点错地方了」。
     val s0 = screen
     val chrome = s0 is Screen.Feed || s0 is Screen.Record ||
-                 s0 is Screen.Meeting || s0 is Screen.Person
+                 s0 is Screen.Meeting || s0 is Screen.Person || s0 is Screen.Ble
 
     Scaffold(
         // 内容区自己让开状态栏；底栏由 NavigationBar 让开手势条（它自带 inset）。
@@ -211,7 +214,12 @@ private fun App(client: DeepBrainClient) {
                     }
                 }
 
-                is Screen.Record -> RecordScreen(onBack = { tab = Tab.TODAY; scope.launch { load() } })
+                is Screen.Record -> RecordScreen(
+                    onBack = { tab = Tab.TODAY; scope.launch { load() } },
+                    onImport = { screen = Screen.Ble },
+                )
+
+                is Screen.Ble -> BleScreen(onDone = { tab = Tab.HISTORY; scope.launch { load() } })
 
                 is Screen.Meeting -> MeetingScreen(client, s.transcriptId,
                     onBack = { tab = Tab.HISTORY; scope.launch { load() } })
@@ -222,7 +230,10 @@ private fun App(client: DeepBrainClient) {
                     onRecord = { tab = Tab.RECORD; screen = Screen.Record })
 
                 is Screen.Feed -> when (tab) {
-                    Tab.RECORD -> RecordScreen(onBack = { tab = Tab.TODAY; scope.launch { load() } })
+                    Tab.RECORD -> RecordScreen(
+                        onBack = { tab = Tab.TODAY; scope.launch { load() } },
+                        onImport = { screen = Screen.Ble },
+                    )
                     Tab.SEARCH -> SearchScreen(client) { tid -> screen = Screen.Meeting(tid) }
                     Tab.HISTORY -> HistoryScreen(
                         client = client,

@@ -248,3 +248,25 @@ class IngestTest {
         assertEquals(seg, Segment.parse(seg.fileName()))
     }
 }
+
+class BlePermissionsTest {
+    /*
+     * 安卓 12 把蓝牙权限拆成了两套。少了旧系统那条定位权限的后果特别坏：
+     * **扫描不报错，只是永远返回空列表**，看起来就像「附近没有录音笔」。
+     */
+    @Test fun `安卓 12 及以上要的是「附近的设备」`() {
+        val p = BlePermissions.required(31)
+        assertTrue(p.any { it.endsWith("BLUETOOTH_SCAN") })
+        assertTrue(p.any { it.endsWith("BLUETOOTH_CONNECT") })
+        assertFalse("新系统不该再要定位", p.any { it.contains("LOCATION") })
+    }
+
+    @Test fun `安卓 11 及以下必须要定位，否则扫描静默返回空`() {
+        assertTrue(BlePermissions.required(30).any { it.contains("ACCESS_FINE_LOCATION") })
+    }
+
+    @Test fun `被拒的提示要说对是哪个权限——旧系统上说「蓝牙权限」是错的`() {
+        assertTrue(BlePermissions.deniedHint(30).contains("定位"))
+        assertTrue(BlePermissions.deniedHint(33).contains("附近的设备"))
+    }
+}

@@ -33,7 +33,7 @@ import kotlinx.coroutines.withContext
  */
 
 @androidx.compose.runtime.Composable
-fun RecordScreen(onBack: () -> Unit) {
+fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}) {
     val ctx = LocalContext.current
     var recording by remember { mutableStateOf(RecordingService.recording) }
     var state by remember { mutableStateOf(com.qiuyiwu.shennao.record.RecordState.IDLE) }
@@ -79,7 +79,13 @@ fun RecordScreen(onBack: () -> Unit) {
     ) {
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("返回") }
+            TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) { Text("返回") }
+            Spacer(Modifier.weight(1f))
+            // 录音笔导入放在这里：「录」和「导」是同一件事的两个来源，
+            // 分到两栏的话，用户要先想清楚「我这次算录还是算导」才知道点哪。
+            if (!recording) TextButton(
+                onClick = onImport, modifier = Modifier.heightIn(min = 48.dp),
+            ) { Text("从录音笔导入") }
         }
 
         Spacer(Modifier.weight(1f))

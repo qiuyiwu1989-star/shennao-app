@@ -27,8 +27,8 @@ android {
         minSdk = 29
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         targetSdk = 34
-        versionCode = 22
-        versionName = "1.4.2"
+        versionCode = 23
+        versionName = "1.5.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "API_BASE", "\"${cfg("deepbrain.apiBase")}\"")
@@ -117,6 +117,9 @@ dependencies {
      */
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test:runner:1.5.2")
+    // GrantPermissionRule：让测试自己拿权限。
+    // 依赖「跑之前先 adb grant」的测试，迟早会在没授权的环境里跑出错误结论。
+    androidTestImplementation("androidx.test:rules:1.5.0")
     /*
      * 界面测试跑在 JVM 上（Robolectric），不需要模拟器。
      *
