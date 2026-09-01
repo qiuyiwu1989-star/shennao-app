@@ -165,7 +165,20 @@ class Importer(
             else -> return state
         }
         if (idle > limit) {
-            state = ImportState.Failed("设备 ${idle / 1000} 秒没有回应", deviceSaid = false)
+            /*
+             * 超时提示要给出路。「设备 8 秒没有回应」是一句准确但**没用**的话——
+             * 用户不知道该等、该重连、还是该去动录音笔。
+             *
+             * 2026-09-01 用户看到这句时，真正的原因是我这边的 GATT 队列被一个
+             * 合成操作卡死了，一个字节都没发出去。所以这里也提一句「重连」——
+             * 客户端自己出问题时，重连是唯一能把状态清干净的动作。
+             */
+            state = ImportState.Failed(
+                "录音笔 ${idle / 1000} 秒没有回应。\n" +
+                    "可以先按一下它的按键（它空闲几分钟就会休眠），再点重连。\n" +
+                    "如果反复如此，退出这一页重新进——连接状态可能没清干净。",
+                deviceSaid = false,
+            )
         }
         return state
     }

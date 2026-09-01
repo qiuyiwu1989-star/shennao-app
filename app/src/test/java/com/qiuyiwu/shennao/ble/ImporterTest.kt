@@ -171,9 +171,9 @@ class GattQueueTest {
     @Test fun `第二个操作要等第一个的回调，不能挤在一起发`() {
         val ran = mutableListOf<String>()
         val q = GattQueue { ran += it.label; true }
-        q.enqueue("写CCCD-AE22") {true}
-        q.enqueue("写CCCD-AE23") {true}
-        q.enqueue("协商MTU") {true}
+        q.enqueue("写CCCD-AE22", true) {true}
+        q.enqueue("写CCCD-AE23", true) {true}
+        q.enqueue("协商MTU", true) {true}
         assertEquals("只该发出第一个", listOf("写CCCD-AE22"), ran)
         q.onComplete()
         assertEquals(listOf("写CCCD-AE22", "写CCCD-AE23"), ran)
@@ -185,7 +185,7 @@ class GattQueueTest {
         // 只在成功时推进的话，一次失败之后「设备就不响应了」
         val ran = mutableListOf<String>()
         val q = GattQueue { ran += it.label; true }
-        q.enqueue("A") {true}; q.enqueue("B") {true}
+        q.enqueue("A", true) {true}; q.enqueue("B", true) {true}
         q.onComplete()   // 假设 A 失败了，回调仍然到来
         assertEquals(listOf("A", "B"), ran)
     }
@@ -194,16 +194,30 @@ class GattQueueTest {
         val ran = mutableListOf<String>()
         // 第一个操作连发都发不出去（GATT 忙 / 未连接）
         val q = GattQueue { ran += it.label; it.label != "发不出去的" }
-        q.enqueue("发不出去的") {true}
-        q.enqueue("后面这个") {true}
+        q.enqueue("发不出去的", true) {true}
+        q.enqueue("后面这个", true) {true}
         assertEquals("卡在发不出去的那个上，后面全都饿死", listOf("发不出去的", "后面这个"), ran)
+    }
+
+    @Test fun `不产生回调的合成操作绝不能卡住队列`() {
+        /*
+         * 2026-09-01 真实事故：连接建立的最后一步「就绪」走了队列，
+         * 而它是个合成操作、不会有 GATT 回调。队列永久卡在它上面，
+         * 之后每一次写入都排在后面发不出去——**表现是「连上了，
+         * 但设备什么都不回」**，8 秒后超时。
+         */
+        val ran = mutableListOf<String>()
+        val q = GattQueue { ran += it.label; true }
+        q.enqueue("就绪", awaitsCallback = false) { true }
+        q.enqueue("写下载请求", awaitsCallback = true) { true }
+        assertEquals("合成操作后面的写入必须照常发出去", listOf("就绪", "写下载请求"), ran)
     }
 
     @Test fun `卡住时要能说清卡在哪一步`() {
         val q = GattQueue { true }
-        q.enqueue("协商MTU") {true}
+        q.enqueue("协商MTU", true) {true}
         assertEquals("协商MTU", q.current)
-        q.enqueue("写CCCD") {true}
+        q.enqueue("写CCCD", true) {true}
         assertEquals(1, q.waiting)
     }
 }
@@ -268,5 +282,32 @@ class BlePermissionsTest {
     @Test fun `被拒的提示要说对是哪个权限——旧系统上说「蓝牙权限」是错的`() {
         assertTrue(BlePermissions.deniedHint(30).contains("定位"))
         assertTrue(BlePermissions.deniedHint(33).contains("附近的设备"))
+    }
+}
+
+class ReadinessTest {
+    /*
+     * 2026-09-01：用户在手机蓝牙关着时扫描，得到空列表，而界面提示是
+     * 「确认录音笔开着」——把他指向了完全错误的方向，为此折腾了很久。
+     * 而 adapter.isEnabled 是随手就能查的。
+     *
+     * 判据：凡是程序自己知道答案的事，绝不让用户去猜。
+     */
+    @Test fun `每一种不就绪都要说清是什么问题`() {
+        assertNotNull(Readiness.BLUETOOTH_OFF.message)
+        assertNotNull(Readiness.NO_BLE.message)
+        // 就绪时不该有多余的话
+        assertNull(Readiness.READY.message)
+    }
+
+    @Test fun `蓝牙没开的提示要说怎么打开，不能只说「没开」`() {
+        val m = Readiness.BLUETOOTH_OFF.message!!
+        assertTrue("只说问题不给出路等于没说：$m", m.contains("打开"))
+    }
+
+    @Test fun `能自己解决的才给按钮——硬件不支持给按钮是骗人`() {
+        assertTrue(Readiness.BLUETOOTH_OFF.fixable)
+        assertTrue(Readiness.NO_PERMISSION.fixable)
+        assertFalse("这台手机没有 BLE，给个按钮点了也没用", Readiness.NO_BLE.fixable)
     }
 }

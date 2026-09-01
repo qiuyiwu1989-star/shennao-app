@@ -19,8 +19,19 @@ package com.qiuyiwu.shennao.ble
  */
 class GattQueue(private val execute: (Op) -> Boolean) {
 
-    /** 一个待办操作。`label` 只用于诊断——出问题时要能说清卡在哪一步。 */
-    data class Op(val label: String, val run: () -> Boolean)
+    /**
+     * 一个待办操作。
+     *
+     * `awaitsCallback` 是这个类最要紧的一个参数：
+     * 真正的 GATT 操作发出去之后要**等系统回调**才能推进下一个；
+     * 而「改一下状态」这类合成操作**不会产生任何回调**，
+     * 如果也去等，队列就永久卡死——而表现是「连上了，但设备什么都不回」，
+     * 因为之后每一次写入都排在后面发不出去。
+     *
+     * 2026-09-01 我就是这么把它卡死的：给「就绪」也走了队列。
+     * 所以这个参数没有默认值——**每次入队都必须明确回答「它会有回调吗」**。
+     */
+    data class Op(val label: String, val awaitsCallback: Boolean, val run: () -> Boolean)
 
     private val pending = ArrayDeque<Op>()
     private var inFlight: Op? = null
@@ -29,8 +40,8 @@ class GattQueue(private val execute: (Op) -> Boolean) {
     val current: String? get() = inFlight?.label
     val waiting: Int get() = pending.size
 
-    fun enqueue(label: String, run: () -> Boolean) {
-        pending.addLast(Op(label, run))
+    fun enqueue(label: String, awaitsCallback: Boolean, run: () -> Boolean) {
+        pending.addLast(Op(label, awaitsCallback, run))
         pump()
     }
 
@@ -53,8 +64,9 @@ class GattQueue(private val execute: (Op) -> Boolean) {
         if (inFlight != null) return
         val next = pending.removeFirstOrNull() ?: return
         inFlight = next
-        if (!execute(next)) {
-            // 发都没发出去：不能停在这儿等一个永远不会来的回调
+        val sent = execute(next)
+        if (!sent || !next.awaitsCallback) {
+            // 发都没发出去，或者这个操作压根不会有回调 —— 两种情况都不能停下来等。
             inFlight = null
             pump()
         }

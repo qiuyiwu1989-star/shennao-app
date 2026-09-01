@@ -54,6 +54,22 @@ class BleGatt(private val ctx: Context) : BleTransport {
         onStateChange?.invoke(s)
     }
 
+    /**
+     * 开始之前先自查。**在用户点任何东西之前就该知道答案。**
+     *
+     * 不查的话，蓝牙关着时扫描会安静地返回空列表，而界面只能猜着说
+     * 「确认录音笔开着」——把用户指向错误的方向。
+     */
+    fun readiness(hasPermission: Boolean): Readiness {
+        val mgr = ctx.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+        val adapter = mgr?.adapter ?: return Readiness.NO_BLE
+        if (!ctx.packageManager.hasSystemFeature(
+                android.content.pm.PackageManager.FEATURE_BLUETOOTH_LE)) return Readiness.NO_BLE
+        if (!adapter.isEnabled) return Readiness.BLUETOOTH_OFF
+        if (!hasPermission) return Readiness.NO_PERMISSION
+        return Readiness.READY
+    }
+
     // ---- 扫描 ----
 
     private var scanCb: ScanCallback? = null
@@ -111,26 +127,75 @@ class BleGatt(private val ctx: Context) : BleTransport {
 
     // ---- 连接 ----
 
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private var attempt = 0
+    private var lastId: String? = null
+
+    /**
+     * 连接。三个 Android 上出了名的坑，一个都不能少：
+     *
+     * 1. **停掉扫描之后不能立刻连**。蓝牙控制器还在扫描状态里，
+     *    这时发起连接几乎必然拿到 133。要等它把扫描真正停下来。
+     * 2. **connectGatt 要在主线程调**。在别的线程调，部分机型（尤其国产 ROM）
+     *    会把回调派发到一个已经没了的 looper 上，表现是「连了但永远没有回调」。
+     * 3. **133 要自动重试**。它多半是瞬时的——蓝牙栈忙、设备刚好在广播间隙。
+     *    让用户自己反复点，只会把 GATT 客户端耗光（每个 App 只有 32 个），
+     *    然后变成「越试越连不上」。
+     */
     @SuppressLint("MissingPermission")
     fun connect(deviceId: String): Boolean {
+        lastId = deviceId
+        attempt = 0
+        return doConnect(deviceId)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun doConnect(deviceId: String): Boolean {
         stopScan()
         val adapter = (ctx.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
-            ?: return false.also { move(BleState.FAILED) }
+            ?: return false.also { lastError = "蓝牙不可用"; move(BleState.FAILED) }
+        if (!adapter.isEnabled) {
+            lastError = "手机蓝牙没开"
+            move(BleState.FAILED); return false
+        }
         val dev = runCatching { adapter.getRemoteDevice(deviceId) }.getOrNull()
-            ?: return false.also { move(BleState.FAILED) }
+            ?: return false.also { lastError = "设备地址无效"; move(BleState.FAILED) }
         move(BleState.CONNECTING)
         queue = GattQueue { op -> runCatching { op.run() }.getOrDefault(false) }
-        gatt = runCatching {
-            dev.connectGatt(ctx, false, callback, BluetoothDevice.TRANSPORT_LE)
-        }.getOrNull()
-        if (gatt == null) { move(BleState.FAILED); return false }
+        // 上一次的 gatt 一定要先关掉再开新的，否则句柄泄漏，最后全部 133
+        runCatching { gatt?.close() }
+        gatt = null
+        // 停扫描到发起连接之间留一拍：控制器还在扫描状态时连接几乎必然 133
+        main.postDelayed({
+            gatt = runCatching {
+                dev.connectGatt(ctx, false, callback, BluetoothDevice.TRANSPORT_LE)
+            }.getOrNull()
+            if (gatt == null) { lastError = "发起连接失败"; move(BleState.FAILED) }
+        }, SETTLE_MS)
         return true
+    }
+
+    /** 133 之类的瞬时失败自动再来一次，最多三次。 */
+    private fun retryOrFail(status: Int) {
+        val id = lastId
+        if (id != null && attempt < MAX_ATTEMPTS && status == 133) {
+            attempt++
+            lastError = "第 $attempt 次没连上，正在重试…"
+            main.postDelayed({ doConnect(id) }, RETRY_MS * attempt)
+            return
+        }
+        lastError = gattStatusHint(status) +
+            if (attempt > 0) "（已自动重试 $attempt 次）" else ""
+        move(BleState.FAILED)
     }
 
     /** 把 GATT 的状态码翻成能指导下一步的人话。 */
     private fun gattStatusHint(status: Int): String = when (status) {
-        133 -> "连不上（133）。这个码在安卓上通常是「设备没在广播或已被别的设备连着」——" +
-               "确认录音笔没连在电脑或别的手机上，然后重试。"
+        133 -> "连不上（133）。这是安卓上最常见的蓝牙失败码，按可能性排：\n" +
+               "1. 录音笔已经被别的设备连着（电脑、另一台手机）——BLE 一次只能连一个\n" +
+               "2. 它进入了休眠，按一下它的按键再试\n" +
+               "3. 离得太远或有遮挡，靠近到一米内\n" +
+               "如果刚才在电脑上用过它，先在电脑上断开连接（不只是关蓝牙）。"
         8 -> "连接超时（8）。设备可能走远了或休眠了，按一下它的按键再试。"
         19 -> "设备主动断开了（19）。"
         22 -> "连接被本机终止（22）。"
@@ -142,18 +207,19 @@ class BleGatt(private val ctx: Context) : BleTransport {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             if (status != BluetoothGatt.GATT_SUCCESS &&
                 newState != BluetoothProfile.STATE_CONNECTED) {
-                lastError = gattStatusHint(status)
                 // **失败也必须 close()**。不 close 的话 GATT 客户端会泄漏，
                 // Android 每个 App 只有 32 个，用完之后所有连接都会以 133 失败——
                 // 表现是「第一次连不上，后面越试越连不上」。
                 runCatching { g.close() }
                 gatt = null
-                move(BleState.FAILED)
+                retryOrFail(status)
                 return
             }
             if (newState == BluetoothProfile.STATE_CONNECTED) {
+                attempt = 0
+                lastError = null
                 // MTU 先协商：默认 23 减 3 只剩 20，而下载请求 36 字节必须一次写完
-                queue.enqueue("协商MTU") { g.requestMtu(185) }
+                queue.enqueue("协商MTU", awaitsCallback = true) { g.requestMtu(185) }
             } else {
                 // **断开就要如实说**。留在 READY 上的话，上层会一直往一个死连接里写，
                 // 而每一次写都「成功」返回，什么都不会发生。
@@ -165,7 +231,7 @@ class BleGatt(private val ctx: Context) : BleTransport {
         @SuppressLint("MissingPermission")
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
             queue.onComplete()
-            queue.enqueue("发现服务") { g.discoverServices() }
+            queue.enqueue("发现服务", awaitsCallback = true) { g.discoverServices() }
         }
 
         @SuppressLint("MissingPermission")
@@ -178,7 +244,7 @@ class BleGatt(private val ctx: Context) : BleTransport {
             // 两路通知各写一次 CCCD。**必须串行**，挤在一起发只有第一个生效。
             for (u in listOf(Proto.CHAR_NOTIFY, Proto.CHAR_KEY)) {
                 val ch = svc.getCharacteristic(UUID.fromString(u)) ?: continue
-                queue.enqueue("开通知 $u") {
+                queue.enqueue("开通知 $u", awaitsCallback = true) {
                     g.setCharacteristicNotification(ch, true)
                     val d = ch.getDescriptor(CCCD) ?: return@enqueue false
                     // 光调 setCharacteristicNotification 是不够的——不写 CCCD，
@@ -195,7 +261,9 @@ class BleGatt(private val ctx: Context) : BleTransport {
                     }
                 }
             }
-            queue.enqueue("就绪") { move(BleState.READY); true }
+            // 合成操作：不会有 GATT 回调，所以 awaitsCallback = false。
+            // 写成 true 会把队列永久卡死——之后每次写入都排在后面发不出去。
+            queue.enqueue("就绪", awaitsCallback = false) { move(BleState.READY); true }
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, status: Int) {
@@ -226,7 +294,7 @@ class BleGatt(private val ctx: Context) : BleTransport {
         val ch = writeChar ?: return false
         if (state != BleState.READY) return false
         var ok = false
-        queue.enqueue("写 ${frame.size}B") {
+        queue.enqueue("写 ${frame.size}B", awaitsCallback = true) {
             ok = if (Build.VERSION.SDK_INT >= 33) {
                 g.writeCharacteristic(ch, frame,
                     BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS
@@ -254,5 +322,14 @@ class BleGatt(private val ctx: Context) : BleTransport {
         gatt = null; writeChar = null
         if (::queue.isInitialized) queue.reset()
         move(BleState.IDLE)
+    }
+
+    private companion object {
+        /** 停扫描到发起连接之间的间隔。短于这个几乎必然拿到 133——
+         *  蓝牙控制器还在扫描状态里。 */
+        const val SETTLE_MS = 400L
+        /** 重试间隔按次数递增：第一次 0.6 秒，第二次 1.2 秒。 */
+        const val RETRY_MS = 600L
+        const val MAX_ATTEMPTS = 3
     }
 }

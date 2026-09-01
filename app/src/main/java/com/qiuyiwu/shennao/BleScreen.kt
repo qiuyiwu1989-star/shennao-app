@@ -54,6 +54,20 @@ fun BleScreen(onDone: () -> Unit) {
     var denied by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
     var picked by remember { mutableStateOf<FileEntry?>(null) }
+    var ready by remember { mutableStateOf(Readiness.READY) }
+
+    /*
+     * 每次进来、以及每次回到前台都自查一遍前提。
+     *
+     * 用户可能在别的地方把蓝牙关了再回来——那时界面必须立刻改口，
+     * 而不是等他点了扫描、拿到空列表、再去猜是哪里不对。
+     */
+    fun recheck() {
+        val need = BlePermissions.required()
+        val perm = need.all { ContextCompat.checkSelfPermission(ctx, it) == PackageManager.PERMISSION_GRANTED }
+        ready = gatt.readiness(perm)
+    }
+    LaunchedEffect(Unit) { recheck() }
 
     DisposableEffect(Unit) {
         gatt.observeState { conn = it }
@@ -81,10 +95,15 @@ fun BleScreen(onDone: () -> Unit) {
 
     fun startScan() {
         denied = false
-        val need = BlePermissions.required()
-        val ok = need.all { ContextCompat.checkSelfPermission(ctx, it) == PackageManager.PERMISSION_GRANTED }
-        if (ok) { devices = emptyList(); gatt.scan { d -> devices = merge(devices, d) } }
-        else ask.launch(need.toTypedArray())
+        recheck()
+        when (ready) {
+            // 蓝牙没开就直接说，**不要去扫**——扫出来的空列表只会误导。
+            Readiness.BLUETOOTH_OFF, Readiness.NO_BLE -> return
+            Readiness.NO_PERMISSION -> { ask.launch(BlePermissions.required().toTypedArray()); return }
+            Readiness.READY -> {}
+        }
+        devices = emptyList()
+        gatt.scan { d -> devices = merge(devices, d) }
     }
 
     ListPage(
@@ -100,6 +119,25 @@ fun BleScreen(onDone: () -> Unit) {
         isEmpty = false,
         empty = {},
     ) {
+        // 前提不满足时**第一时间说**，而且要在扫描按钮之前。
+        // 蓝牙关着却让用户去点「查找设备」，得到的空列表只会把他指向错误的方向。
+        if (ready != Readiness.READY && ready != Readiness.NO_PERMISSION) item {
+            Surface(color = MaterialTheme.colorScheme.errorContainer, shape = DS.Radius.card) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(ready.message ?: "", style = MaterialTheme.typography.bodyMedium,
+                         color = MaterialTheme.colorScheme.onErrorContainer)
+                    if (ready.fixable) {
+                        Spacer(Modifier.height(10.dp))
+                        // 只给能真正解决问题的按钮。硬件不支持时给个按钮，点了没反应，
+                        // 比不给更让人困惑。
+                        Button(onClick = {
+                            ctx.startActivity(
+                                android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
+                        }) { Text("去打开蓝牙") }
+                    }
+                }
+            }
+        }
         if (denied) item {
             // 说对是哪个权限：旧系统上要的是定位，说成「蓝牙权限」用户会找不到开关
             Surface(color = MaterialTheme.colorScheme.errorContainer, shape = DS.Radius.card) {
@@ -116,10 +154,11 @@ fun BleScreen(onDone: () -> Unit) {
         // ---- 1. 找设备 ----
         if (conn != BleState.READY) {
             item {
-                Button(onClick = { startScan() }, modifier = Modifier.fillMaxWidth()
-                    .heightIn(min = 48.dp)) {
-                    Text(if (conn == BleState.SCANNING) "重新查找" else "查找设备")
-                }
+                Button(
+                    onClick = { startScan() },
+                    enabled = ready == Readiness.READY || ready == Readiness.NO_PERMISSION,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) { Text(if (conn == BleState.SCANNING) "重新查找" else "查找设备") }
             }
             // 连接失败的真实原因。Android 的 GATT 只给一个 status 数字，
             // 不翻出来的话用户只知道「连不上」，而 133 和 8 要做的事完全不同。
@@ -180,10 +219,12 @@ fun BleScreen(onDone: () -> Unit) {
         if (conn == BleState.READY) {
             when (val s = st) {
                 is ImportState.Idle -> item {
-                    Button(onClick = { importer.startListing(); st = importer.state },
-                           modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                        Text("看看里面有什么")
+                    // 连上了就自动去列文件。用户点「连接」的意思本来就是
+                    // 「我要看里面有什么」，再让他点一次是无谓的一步。
+                    LaunchedEffect(conn) {
+                        if (conn == BleState.READY) { importer.startListing(); st = importer.state }
                     }
+                    Loading()
                 }
                 is ImportState.Listing -> item { Loading() }
                 is ImportState.Listed -> {
