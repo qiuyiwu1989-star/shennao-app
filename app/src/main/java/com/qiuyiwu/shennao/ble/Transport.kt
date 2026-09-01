@@ -11,7 +11,19 @@ package com.qiuyiwu.shennao.ble
  */
 
 /** 一台被发现的设备。 */
-data class BleDevice(val id: String, val name: String, val rssi: Int)
+data class BleDevice(
+    val id: String,
+    val name: String,
+    val rssi: Int,
+    /**
+     * 这台设备的广播包里带了我们的服务 UUID。
+     *
+     * **只是提示，不是过滤条件。** BLE 广播包只有 31 字节，厂商经常放不下
+     * 或者干脆不放 service UUID——按它过滤会把设备自己滤掉。
+     * Mac 端就是扫所有设备再把这个当提示用的。
+     */
+    val advertisesOurService: Boolean = false,
+)
 
 /** 连接状态。界面照着念，不许自己编。 */
 enum class BleState { IDLE, SCANNING, CONNECTING, READY, DISCONNECTED, FAILED }

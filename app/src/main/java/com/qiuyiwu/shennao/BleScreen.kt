@@ -22,6 +22,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
+/**
+ * 合并扫描结果：按设备地址去重，**广播了我们服务的排前面**，其余按信号强弱。
+ *
+ * 不按 service UUID 过滤扫描（那样会把设备自己滤掉，见 BleGatt.scan 的注释），
+ * 所以列表里会混进周围其它蓝牙设备。排序就是替用户做的那一点筛选。
+ */
+private fun merge(old: List<BleDevice>, d: BleDevice): List<BleDevice> =
+    (old.filter { it.id != d.id } + d)
+        .sortedWith(compareByDescending<BleDevice> { it.advertisesOurService }.thenByDescending { it.rssi })
+
 /*
  * 从录音笔导入。
  *
@@ -65,7 +75,7 @@ fun BleScreen(onDone: () -> Unit) {
     val ask = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { granted ->
-        if (granted.values.all { it }) { devices = emptyList(); gatt.scan { d -> devices = (devices + d).distinctBy { it.id } } }
+        if (granted.values.all { it }) { devices = emptyList(); gatt.scan { d -> devices = merge(devices, d) } }
         else denied = true
     }
 
@@ -73,7 +83,7 @@ fun BleScreen(onDone: () -> Unit) {
         denied = false
         val need = BlePermissions.required()
         val ok = need.all { ContextCompat.checkSelfPermission(ctx, it) == PackageManager.PERMISSION_GRANTED }
-        if (ok) { devices = emptyList(); gatt.scan { d -> devices = (devices + d).distinctBy { it.id } } }
+        if (ok) { devices = emptyList(); gatt.scan { d -> devices = merge(devices, d) } }
         else ask.launch(need.toTypedArray())
     }
 
@@ -111,15 +121,46 @@ fun BleScreen(onDone: () -> Unit) {
                     Text(if (conn == BleState.SCANNING) "重新查找" else "查找设备")
                 }
             }
+            // 连接失败的真实原因。Android 的 GATT 只给一个 status 数字，
+            // 不翻出来的话用户只知道「连不上」，而 133 和 8 要做的事完全不同。
+            if (conn == BleState.FAILED) gatt.lastError?.let { e -> item {
+                Surface(color = MaterialTheme.colorScheme.errorContainer, shape = DS.Radius.card) {
+                    Text(e, Modifier.padding(16.dp),
+                         style = MaterialTheme.typography.bodySmall,
+                         color = MaterialTheme.colorScheme.onErrorContainer)
+                }
+            } }
+
+            if (devices.isNotEmpty()) item {
+                Text(
+                    // 不按服务 UUID 过滤，所以列表里会有别的蓝牙设备。
+                    // 直说，别让用户以为「这些都是录音笔」。
+                    "附近所有蓝牙设备都列在这里——录音笔多半叫 CB08 或类似名字。" +
+                        "带「疑似录音笔」的排在最前。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             items(devices, key = { it.id }) { d ->
                 DsCard(Modifier.fillMaxWidth(), onClick = { gatt.connect(d.id) }) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(d.name, style = MaterialTheme.typography.titleSmall,
-                                 fontWeight = FontWeight.SemiBold)
-                            // 信号强度直接给出来：连不上时它是唯一有用的线索
-                            Text("信号 ${d.rssi} dBm", style = MaterialTheme.typography.bodySmall,
-                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(d.name, style = MaterialTheme.typography.titleSmall,
+                                     fontWeight = FontWeight.SemiBold)
+                                if (d.advertisesOurService) {
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("疑似录音笔", style = MaterialTheme.typography.labelSmall,
+                                         color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                            // 信号强度直接给出来：连不上时它是唯一有用的线索。
+                            // -80 以下基本连不稳，说出来省得反复试。
+                            Text(
+                                "信号 ${d.rssi} dBm" + if (d.rssi < -80) "（偏弱，靠近一点再连）" else "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                         Text("连接", style = MaterialTheme.typography.labelMedium,
                              color = MaterialTheme.colorScheme.primary)
@@ -127,7 +168,11 @@ fun BleScreen(onDone: () -> Unit) {
                 }
             }
             if (conn == BleState.SCANNING && devices.isEmpty()) item {
-                Empty("还没找到", "确认录音笔开着、且没有被别的手机连着。")
+                Empty(
+                    "还没找到",
+                    "确认三件事：录音笔开着、手机蓝牙开着、" +
+                        "而且它**没有连在电脑或别的手机上**——BLE 一次只能被一个主机连。",
+                )
             }
         }
 

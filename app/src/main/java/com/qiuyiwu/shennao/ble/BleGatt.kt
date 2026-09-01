@@ -32,6 +32,15 @@ class BleGatt(private val ctx: Context) : BleTransport {
     override var state: BleState = BleState.IDLE
         private set
 
+    /**
+     * 最近一次失败的原因。
+     *
+     * Android 的 GATT 失败只给一个 status 数字，不报出来就完全无从查起——
+     * 用户看到的是「连不上」，而 133 和 8 是完全不同的两件事。
+     */
+    var lastError: String? = null
+        private set
+
     private var gatt: BluetoothGatt? = null
     private var writeChar: BluetoothGattCharacteristic? = null
     private val listeners = mutableMapOf<String, (ByteArray) -> Unit>()
@@ -50,10 +59,16 @@ class BleGatt(private val ctx: Context) : BleTransport {
     private var scanCb: ScanCallback? = null
 
     /**
-     * 按服务 UUID 过滤扫描。
+     * 扫描。**不按服务 UUID 过滤。**
      *
-     * 不做「扫到所有设备再自己筛」：那样会把周围几十个蓝牙设备都列出来，
-     * 用户得在里面找自己的录音笔——而他多半不知道它叫什么。
+     * 2026-09-01 用户实测「扫不到」，根因就在这里：我原来加了
+     * `ScanFilter.setServiceUuid(0xAE20)`。而 **BLE 广播包只有 31 字节**，
+     * 厂商经常放不下、或者干脆不把 service UUID 放进广播——
+     * 它只在连上之后的服务发现里才出现。按它过滤等于把设备自己滤掉了。
+     *
+     * Mac 端一直是对的：`scanForPeripherals(withServices: nil)`，
+     * 扫所有设备，把「有没有广播 0xAE20」当成排序提示而不是过滤条件。
+     * 移植时我自作主张改成了过滤，这是典型的「看起来更干净、实际上更错」。
      */
     @SuppressLint("MissingPermission")
     fun scan(onFound: (BleDevice) -> Unit): Boolean {
@@ -62,21 +77,29 @@ class BleGatt(private val ctx: Context) : BleTransport {
             move(BleState.FAILED); return false
         }
         stopScan()
-        val filter = ScanFilter.Builder()
-            .setServiceUuid(ParcelUuid(UUID.fromString(Proto.SERVICE_MAIN))).build()
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
+        val ours = ParcelUuid(UUID.fromString(Proto.SERVICE_MAIN))
         val cb = object : ScanCallback() {
             override fun onScanResult(type: Int, r: ScanResult) {
-                val name = r.device.name ?: r.scanRecord?.deviceName ?: "未命名设备"
-                onFound(BleDevice(r.device.address, name, r.rssi))
+                val name = r.device.name ?: r.scanRecord?.deviceName ?: return  // 无名的是信标噪音
+                val adv = r.scanRecord?.serviceUuids?.any { it == ours } == true
+                onFound(BleDevice(r.device.address, name, r.rssi, adv))
             }
-            override fun onScanFailed(errorCode: Int) { move(BleState.FAILED) }
+            override fun onScanFailed(errorCode: Int) {
+                lastError = "扫描启动失败（代码 $errorCode）"
+                move(BleState.FAILED)
+            }
         }
         scanCb = cb
         return runCatching {
-            scanner.startScan(listOf(filter), settings, cb); move(BleState.SCANNING); true
-        }.getOrElse { move(BleState.FAILED); false }   // 没权限会抛 SecurityException
+            // 不传 filter：扫所有设备。见上面注释。
+            scanner.startScan(null, settings, cb); move(BleState.SCANNING); true
+        }.getOrElse {
+            // 没权限会抛 SecurityException——说清楚是权限而不是"设备有问题"
+            lastError = "没有扫描权限"
+            move(BleState.FAILED); false
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -104,9 +127,30 @@ class BleGatt(private val ctx: Context) : BleTransport {
         return true
     }
 
+    /** 把 GATT 的状态码翻成能指导下一步的人话。 */
+    private fun gattStatusHint(status: Int): String = when (status) {
+        133 -> "连不上（133）。这个码在安卓上通常是「设备没在广播或已被别的设备连着」——" +
+               "确认录音笔没连在电脑或别的手机上，然后重试。"
+        8 -> "连接超时（8）。设备可能走远了或休眠了，按一下它的按键再试。"
+        19 -> "设备主动断开了（19）。"
+        22 -> "连接被本机终止（22）。"
+        else -> "连不上（状态码 $status）。"
+    }
+
     private val callback = object : BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
+            if (status != BluetoothGatt.GATT_SUCCESS &&
+                newState != BluetoothProfile.STATE_CONNECTED) {
+                lastError = gattStatusHint(status)
+                // **失败也必须 close()**。不 close 的话 GATT 客户端会泄漏，
+                // Android 每个 App 只有 32 个，用完之后所有连接都会以 133 失败——
+                // 表现是「第一次连不上，后面越试越连不上」。
+                runCatching { g.close() }
+                gatt = null
+                move(BleState.FAILED)
+                return
+            }
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 // MTU 先协商：默认 23 减 3 只剩 20，而下载请求 36 字节必须一次写完
                 queue.enqueue("协商MTU") { g.requestMtu(185) }
