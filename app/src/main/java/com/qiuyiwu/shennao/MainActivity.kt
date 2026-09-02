@@ -252,6 +252,7 @@ private fun App(client: DeepBrainClient) {
                 is Screen.Record -> RecordScreen(
                     onBack = { tab = Tab.TODAY; scope.launch { load() } },
                     onImport = { screen = Screen.Ble },
+                    onOpenHistory = { tab = Tab.HISTORY; scope.launch { load() } },
                 )
 
                 is Screen.Ble -> BleScreen(onDone = { tab = Tab.HISTORY; scope.launch { load() } })
@@ -272,6 +273,7 @@ private fun App(client: DeepBrainClient) {
                     Tab.RECORD -> RecordScreen(
                         onBack = { tab = Tab.TODAY; scope.launch { load() } },
                         onImport = { screen = Screen.Ble },
+                        onOpenHistory = { tab = Tab.HISTORY },
                     )
                     Tab.SEARCH -> AskScreen(client) { tid -> screen = Screen.Meeting(tid) }
                     Tab.HISTORY -> HistoryScreen(

@@ -33,7 +33,7 @@ import kotlinx.coroutines.withContext
  */
 
 @androidx.compose.runtime.Composable
-fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}) {
+fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     var recording by remember { mutableStateOf(RecordingService.recording) }
     var state by remember { mutableStateOf(com.qiuyiwu.shennao.record.RecordState.IDLE) }
@@ -48,6 +48,20 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}) {
     // 声波保留最近这些格。数量按一屏能画下的柱子数定，多了会挤成一片灰。
     val bars = remember { mutableStateListOf<Float>() }
 
+    /*
+     * **刚刚录完的那一场，不能一送达就从屏幕上消失。**
+     *
+     * 2026-09-02 用户实录：录了 8 分钟，全部段传完之后，这一屏的文案
+     * 变回了跟「从没录过」一模一样的那句「点一下开始录这场会」——
+     * 没有任何东西说「刚才那 8 分钟已经送到了」。用户看到的字面意思
+     * 就是「什么都没发生过」，而服务端那边其实转写、分析全跑完了。
+     *
+     * 在「recording 从真变假」这一刻拍一张快照（session id + 录了多久），
+     * 之后不管 pending 怎么变，这张快照都留着，直到用户按下一次「开始」。
+     */
+    var justFinished by remember { mutableStateOf<Pair<String, Long>?>(null) }
+    var wasRecording by remember { mutableStateOf(RecordingService.recording) }
+
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) RecordingService.start(ctx, "手机录音") else denied = true
     }
@@ -56,7 +70,14 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}) {
     // 服务被系统杀掉时，那份状态会一直显示「正在录音」，而其实早停了。
     LaunchedEffect(Unit) {
         while (true) {
-            recording = RecordingService.recording
+            val nowRecording = RecordingService.recording
+            // 恰好在这一拍从「在录」变成「没在录」——这才是「刚结束」的
+            // 那个瞬间，只在这里拍快照，别的时候都别碰它。
+            if (wasRecording && !nowRecording && sessionId != null) {
+                justFinished = sessionId!! to elapsed
+            }
+            wasRecording = nowRecording
+            recording = nowRecording
             state = RecordingService.state
             elapsed = RecordingService.elapsedMs
             pending = RecordingService.pendingSegments
@@ -151,6 +172,7 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}) {
                 if (recording) RecordingService.stop(ctx)
                 else {
                     denied = false
+                    justFinished = null
                     val need = Manifest.permission.RECORD_AUDIO
                     if (ContextCompat.checkSelfPermission(ctx, need) == PackageManager.PERMISSION_GRANTED)
                         RecordingService.start(ctx, "手机录音")
@@ -177,6 +199,14 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}) {
             Captions(captions, captionState, sessionId != null)
             Spacer(Modifier.height(DS.Rhythm.inner))
             HotwordBox(sessionId)
+        }
+
+        // **刚结束的那一场，一直留在屏幕上直到用户开始下一场。**
+        // 不在录、也没有别的可重试错误时才显示——避免跟中断/麦克风被抢的
+        // 提示叠在一起，那两种情况本身就是「这一场还没完」的信号。
+        if (!recording && justFinished != null && state != com.qiuyiwu.shennao.record.RecordState.INTERRUPTED) {
+            Spacer(Modifier.height(DS.Rhythm.inner))
+            JustFinishedCard(minutes = (justFinished!!.second / 60000).toInt(), pending = pending, onOpen = onOpenHistory)
         }
 
         Spacer(Modifier.height(DS.Rhythm.inner))
@@ -213,6 +243,43 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}) {
             )
         }
         Spacer(Modifier.height(DS.Rhythm.inner))
+    }
+}
+
+/**
+ * 刚结束的那一场，已经不在录了，但不能凭空消失。
+ *
+ * 判据：**这件事屏幕上已经看得见吗？看得见就别弹。**——但「刚才那场
+ * 到底有没有送到」这件事，一旦 pending 归零、界面回到待命文案，
+ * 就再也看不见了，所以它必须留在这里，而不是像轻提示那样一闪而过。
+ */
+@androidx.compose.runtime.Composable
+fun JustFinishedCard(minutes: Int, pending: Int, onOpen: (() -> Unit)?) {
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shape = com.qiuyiwu.shennao.DS.Radius.card,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(DS.Pad.tight)) {
+            Text(
+                if (pending > 0) "刚录的这场（约 $minutes 分钟）还有 $pending 段在传"
+                else "刚录的这场（约 $minutes 分钟）已经送到深脑了",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            if (pending == 0) {
+                Text(
+                    "转写和分析在那边跑，跑完会出现在「会议」里。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                if (onOpen != null) {
+                    Spacer(Modifier.height(DS.Rhythm.tight))
+                    TextButton(onClick = onOpen, modifier = Modifier.heightIn(min = 48.dp)) { Text("去「会议」看") }
+                }
+            }
+        }
     }
 }
 

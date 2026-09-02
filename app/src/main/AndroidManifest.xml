@@ -34,7 +34,15 @@
         android:fullBackupContent="false"
         android:supportsRtl="true"
         android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+        <!--
+             singleTask：没有它，每次从通知栏（录音完成/蓝牙导入完成）点回来，
+             或者应用已经在后台时再点一次桌面图标，安卓都会在栈顶叠一个
+             全新的 MainActivity——旧的那个还活着，两份 App() 各自跑着自己的
+             轮询循环。2026-09-02 用户实录抓到证据：nginx 日志里 /api/mobile/sessions
+             和 /api/mobile/today 每一拍都成对出现，时间戳几乎相同——正是
+             两个并存的实例在同时轮询。 -->
         <activity android:name=".MainActivity" android:exported="true"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.App.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
