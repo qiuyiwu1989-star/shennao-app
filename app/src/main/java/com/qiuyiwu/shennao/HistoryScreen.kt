@@ -29,7 +29,7 @@ import java.io.File
  * 在 App 里再实现一遍必然比网页那份旧。这一页只管「在路上的」。
  */
 
-private data class LocalSession(
+data class LocalSession(
     val dir: String,
     val meta: SessionMeta,
     val total: Int,
@@ -113,7 +113,16 @@ fun HistoryScreen(
         // 还在这台手机上的排最前：它们是唯一可能丢的
         if (rows.isNotEmpty()) {
             item { MiniHead("还在手机上") }
-            items(rows, key = { "l" + it.dir }) { s -> SessionRow(s) }
+            items(rows, key = { "l" + it.dir }) { s ->
+                SessionRow(s) {
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            FileVault(File(ctx.filesDir, "recordings")).deleteSession(s.dir)
+                        }
+                        rows = withContext(Dispatchers.IO) { scan(File(ctx.filesDir, "recordings")) }
+                    }
+                }
+            }
         }
 
         if (served.isNotEmpty()) {
@@ -242,7 +251,7 @@ private fun day(iso: String): String = runCatching {
 }.getOrElse { iso.take(10) }
 
 @Composable
-private fun SessionRow(s: LocalSession) {
+fun SessionRow(s: LocalSession, onDelete: () -> Unit) {
     DsCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -268,6 +277,26 @@ private fun SessionRow(s: LocalSession) {
             Text("${s.bytesLeftLabel} · 开始于 ${stamp(s.meta.startedAtEpochMs)}",
                  style = MaterialTheme.typography.bodySmall,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            // 正在录的那一条绝不能给删除入口——这是唯一一份还没落地的音频。
+            // 2026-09-02 用户实录：有两条卡在这里几天传不上去（早年时间轴
+            // 断裂的老 bug，服务端永远不会接受），一直占着「还在手机上」
+            // 这一栏，没有任何办法清掉，只能眼睁睁看着。
+            if (s.recording == 0) {
+                var confirming by remember { mutableStateOf(false) }
+                Spacer(Modifier.height(DS.Rhythm.tight))
+                TextButton(onClick = { confirming = true }) {
+                    Text("删掉这条", color = MaterialTheme.colorScheme.error)
+                }
+                if (confirming) ConfirmDialog(
+                    title = "删掉这条录音？",
+                    detail = "音频只存在这台手机上，删了找不回来。",
+                    confirmLabel = "删掉",
+                    destructive = true,
+                    onConfirm = { onDelete() },
+                    onDismiss = { confirming = false },
+                )
+            }
         }
     }
 }

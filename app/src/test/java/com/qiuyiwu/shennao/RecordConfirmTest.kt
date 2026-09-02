@@ -55,4 +55,33 @@ class RecordConfirmTest {
         }
         compose.onNodeWithText("去「会议」看").assertDoesNotExist()
     }
+
+    // ---- 本地卡住的录音要能删掉（2026-09-02 用户实录：两条早年时间轴
+    // 断裂的老 bug，服务端永远不会接受，之前没有任何办法清掉）----
+
+    private fun localSession(dir: String = "note20260831-215551", recording: Int = 0) =
+        LocalSession(
+            dir = dir,
+            meta = com.qiuyiwu.shennao.record.SessionMeta(
+                clientRequestId = dir, title = dir, startedAtEpochMs = 0L, finished = true),
+            total = 56, done = 2, recording = recording,
+        )
+
+    @Test fun `正常的本地会话给一条删除的路，要问一句才真的删`() {
+        var deleted = false
+        compose.setContent {
+            ShennaoTheme { SessionRow(localSession()) { deleted = true } }
+        }
+        compose.onNodeWithText("删掉这条").assertIsDisplayed().performClick()
+        assertFalse("点了按钮不该立刻删——这是不可逆动作", deleted)
+        compose.onNodeWithText("删掉").assertIsDisplayed().performClick()
+        assertTrue(deleted)
+    }
+
+    @Test fun `正在录的那条绝不能给删除入口——这是唯一一份还没落地的音频`() {
+        compose.setContent {
+            ShennaoTheme { SessionRow(localSession(recording = 1)) { fail("正在录的不该能删") } }
+        }
+        compose.onNodeWithText("删掉这条").assertDoesNotExist()
+    }
 }
