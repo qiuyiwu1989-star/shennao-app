@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -234,7 +235,12 @@ fun BleScreen(onDone: () -> Unit) {
                     if (s.files.isEmpty()) item {
                         Empty("录音笔里是空的", "先用它录一段，再回来导。")
                     }
-                    items(s.files, key = { it.name }) { f ->
+                    // key 不能只用文件名——2026-09-02 真实崩溃：CB08 曾经返回过
+                    // 两条同名文件（重名本身不算错，设备允许），LazyColumn 要求
+                    // key 全局唯一，撞了直接崩整个进程（IllegalArgumentException
+                    // "Key ... was already used"）。带上下标就不会撞，
+                    // 下载仍然传 f.name 原文——设备认的是名字，不是下标。
+                    itemsIndexed(s.files, key = { i, f -> "$i:${f.name}" }) { _, f ->
                         DsCard(Modifier.fillMaxWidth(), onClick = { BleImportService.download(ctx, f.name) }) {
                             Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {

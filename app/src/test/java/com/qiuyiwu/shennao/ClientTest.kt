@@ -129,6 +129,30 @@ class ClientTest {
         assertEquals("org-9", store.load()!!.orgId)
     }
 
+    @Test fun `拿组织的查询要带排序——2026-09-02 真实事故：多组织账号选到了空的那个`() {
+        // 账号有两条 membership：一条真在用（org-real，一堆真实数据），
+        // 一条是空的测试组织（org-empty）。原来的查询没有 order by，
+        // PostgREST 不保证返回顺序——一次重装/重登就可能翻到空的那条。
+        // 翻过去之后不会报任何错：一样能登录成功，一样是 200，
+        // 只是「今天」「会议」永远是空的，因为查的组织本身就是错的。
+        val store = MemStore()
+        var sawOrder = false
+        val http = FakeHttp { _, url, _, _ ->
+            when {
+                url.contains("grant_type=password") ->
+                    HttpResponse(200, """{"access_token":"at","refresh_token":"rt"}""")
+                url.contains("memberships") -> {
+                    sawOrder = url.contains("order=created_at.asc")
+                    // 假装乱序返回：先给空组织，故意制造「不排序就会选错」的现场
+                    HttpResponse(200, """[{"org_id":"org-empty"},{"org_id":"org-real"}]""")
+                }
+                else -> HttpResponse(404, "")
+            }
+        }
+        client(http, store).signIn("a@b.c", "pw")
+        assertTrue("查询必须显式排序，不能靠 PostgREST 的默认顺序", sawOrder)
+    }
+
     @Test fun `账号没有组织就不算登录成功——存下去每个请求都会 403 且看不出原因`() {
         val store = MemStore()
         val http = FakeHttp { _, url, _, _ ->

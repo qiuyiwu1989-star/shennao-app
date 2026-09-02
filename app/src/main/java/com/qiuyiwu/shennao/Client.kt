@@ -89,10 +89,26 @@ class DeepBrainClient(
         return ApiResult.Ok(Unit)
     }
 
+    /**
+     * 拿这个账号该用哪个组织。
+     *
+     * **2026-09-02 事故根因**：查询原来是 `select=org_id&limit=1`，
+     * 没有排序。一个账号如果有两条 membership（这次是真实撞上的——
+     * 一条真在用、一条是空的测试组织），PostgREST 在没有 order by 时
+     * 不保证返回哪一行在前——多半时候физически 顺序稳定，但不是承诺，
+     * 一次重装/重新登录就可能翻到另一条。翻过去之后**不会报任何错**：
+     * 空组织一样能登录成功，一样能拿到 200，只是「今天」「会议」
+     * 永远是空的——因为查询本身是对的，查的组织是错的。
+     *
+     * 加 `order=created_at.asc`：**最早那条 membership 几乎总是账号
+     * 真正在用的那个**——后来的组织多半是测试、误建。这不是「多组织
+     * 支持」的完整方案，只是把「随机选」换成「选一个大概率对的」，
+     * 配合确定性，至少同一个账号每次登录选到的都是同一个组织。
+     */
     private fun fetchOrgId(): String? {
         val t = accessToken ?: return null
         val r = http.request(
-            "GET", "$supabaseUrl/rest/v1/memberships?select=org_id&limit=1",
+            "GET", "$supabaseUrl/rest/v1/memberships?select=org_id&order=created_at.asc&limit=1",
             mapOf("apikey" to supabaseAnonKey, "Authorization" to "Bearer $t"),
         )
         if (r.status >= 400) return null
