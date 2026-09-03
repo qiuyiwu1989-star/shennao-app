@@ -116,6 +116,12 @@ class BleImportService : Service() {
     private lateinit var registry: ImportedRegistry
     /** 列表刚回来时，是不是该自动接上同步——区分「用户手动点了查看列表」。 */
     private var autoSyncOnListed = false
+    /**
+     * 当前同步这一批时用的账号 id。只在 beginSync 读一次——PrefsStore 每次
+     * 构造都要碰系统 keystore（EncryptedSharedPreferences），一批几十个
+     * 文件的话，每份文件完成都重新读一遍纯粹是浪费。
+     */
+    private var syncOrgId: String = ""
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -215,7 +221,8 @@ class BleImportService : Service() {
      */
     private fun beginSync(files: List<FileEntry>) {
         val addr = connectedAddress ?: ""
-        syncQueue = files.filterNot { registry.isImported(addr, it.base) }.toMutableList()
+        syncOrgId = com.qiuyiwu.shennao.PrefsStore(this).load()?.orgId ?: ""
+        syncQueue = files.filterNot { registry.isImported(addr, it.base, syncOrgId) }.toMutableList()
         syncTotal = syncQueue.size
         syncDone = 0
         if (syncQueue.isEmpty()) { note = null; refresh(); return }
@@ -278,7 +285,13 @@ class BleImportService : Service() {
                 note = null
                 staged = entry.base
                 // 记进本地账本——下次同步（甚至下次连这支笔）不用再传一遍。
-                connectedAddress?.let { registry.markImported(it, entry.base) }
+                // 手动下载单个文件（不在自动同步批次里）时 syncOrgId 还没读过——
+                // 现读一次。单个文件的这次读盘代价可以忽略，跟批量同步时
+                // 「每份文件都读一遍」是完全不同的量级。
+                connectedAddress?.let { addr ->
+                    val org = syncOrgId.ifEmpty { com.qiuyiwu.shennao.PrefsStore(this).load()?.orgId ?: "" }
+                    if (org.isNotEmpty()) registry.markImported(addr, entry.base, org)
+                }
                 advanceQueuePast(entry, success = true)
             } else {
                 note = "落盘失败，请重试"

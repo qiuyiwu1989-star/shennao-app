@@ -65,6 +65,7 @@ fun BleScreen(onDone: () -> Unit) {
     // 手动兜底列表要说清楚"这份是不是已经同步过了"——不然全部已同步之后
     // 回来看这一屏，会让人怀疑"是不是没传"。
     val registry = remember { com.qiuyiwu.shennao.ble.ImportedRegistry(ctx) }
+    val currentOrgId = remember { com.qiuyiwu.shennao.PrefsStore(ctx).load()?.orgId ?: "" }
 
     // 轮询服务的状态。服务活着时它是真相，服务没起来时是默认值。
     // 200 毫秒足够跟上进度条，又不会为了一个 27 KB/s 的传输去空转 CPU。
@@ -277,7 +278,7 @@ fun BleScreen(onDone: () -> Unit) {
                     // "Key ... was already used"）。带上下标就不会撞，
                     // 下载仍然传 f.name 原文——设备认的是名字，不是下标。
                     itemsIndexed(s.files, key = { i, f -> "$i:${f.name}" }) { _, f ->
-                        val synced = BleImportService.connectedAddress?.let { registry.isImported(it, f.base) } ?: false
+                        val synced = BleImportService.connectedAddress?.let { registry.isImported(it, f.base, currentOrgId) } ?: false
                         DsCard(Modifier.fillMaxWidth(), onClick = { BleImportService.download(ctx, f.name) }) {
                             Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {

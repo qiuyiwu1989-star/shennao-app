@@ -19,13 +19,13 @@ class ImportedRegistryTest {
 
     @Test fun `没导过的文件默认不算已导入`() {
         val r = ImportedRegistry(ctx)
-        assertFalse(r.isImported("AA:BB", "note1"))
+        assertFalse(r.isImported("AA:BB", "note1", "org1"))
     }
 
     @Test fun `标记过的文件下次查询要能查到`() {
         val r = ImportedRegistry(ctx)
-        r.markImported("AA:BB", "note1")
-        assertTrue(r.isImported("AA:BB", "note1"))
+        r.markImported("AA:BB", "note1", "org1")
+        assertTrue(r.isImported("AA:BB", "note1", "org1"))
     }
 
     @Test fun `两支不同录音笔的同名文件不能互相顶替——协议允许重名`() {
@@ -34,14 +34,26 @@ class ImportedRegistryTest {
         // 只按文件名记，会把导过 A 笔的这份，误判成 B 笔同名文件也导过，
         // 白白漏掉一份真实录音。
         val r = ImportedRegistry(ctx)
-        r.markImported("AA:BB", "note20260901-1400")
+        r.markImported("AA:BB", "note20260901-1400", "org1")
         assertFalse("B 笔的同名文件不该被 A 笔的记录顶替",
-                    r.isImported("CC:DD", "note20260901-1400"))
+                    r.isImported("CC:DD", "note20260901-1400", "org1"))
     }
 
     @Test fun `账本要跨进程重启还在——存的是文件不是内存`() {
-        ImportedRegistry(ctx).markImported("AA:BB", "note1")
+        ImportedRegistry(ctx).markImported("AA:BB", "note1", "org1")
         // 用一个全新实例读，模拟进程重启后重新构造 ImportedRegistry
-        assertTrue(ImportedRegistry(ctx).isImported("AA:BB", "note1"))
+        assertTrue(ImportedRegistry(ctx).isImported("AA:BB", "note1", "org1"))
+    }
+
+    @Test fun `换了账号，之前导过的对新账号不成立——2026-09-03 真实事故`() {
+        // 事发经过：账号登错了，三份文件真实同步成功，但落进了错误账号；
+        // 换回正确账号后，账本原来的写法会说"这三份导过了"，
+        // 于是"同步全部"永远不会再去拉——而正确账号里其实一条都没有。
+        // "导过"的完整含义是"导进了我现在在用的这个账号"，换了账号，
+        // 之前那次"导过"对新账号不成立。
+        val r = ImportedRegistry(ctx)
+        r.markImported("AA:BB", "note20260829-140354", "org-错的")
+        assertFalse("换了账号，旧账号的导入记录不该顶替新账号",
+                    r.isImported("AA:BB", "note20260829-140354", "org-对的"))
     }
 }

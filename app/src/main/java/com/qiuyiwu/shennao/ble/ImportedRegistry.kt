@@ -19,12 +19,23 @@ import android.content.Context
 class ImportedRegistry(ctx: Context) {
     private val prefs = ctx.getSharedPreferences("ble_imported", Context.MODE_PRIVATE)
 
-    private fun key(deviceAddress: String, fileBase: String) = "$deviceAddress|$fileBase"
+    /**
+     * 2026-09-03 真实事故补的一维：**"导过"必须连着"导到了哪个账号"一起记**，
+     * 不能只认设备+文件名。
+     *
+     * 事发经过：账号切错（登录用了另一个邮箱），三份录音笔文件被真实同步
+     * 成功，但落进了错误账号。等换回正确账号，这份账本却说"这三份导过了"——
+     * 于是"同步全部"永远不会再去拉它们，而它们在正确账号里其实一条都没有。
+     * "导过"这件事的完整含义本来就是"导进了我现在在用的这个账号"，
+     * 换了账号，之前的"导过"对新账号而言不成立。
+     */
+    private fun key(deviceAddress: String, fileBase: String, orgId: String) =
+        "$orgId|$deviceAddress|$fileBase"
 
-    fun isImported(deviceAddress: String, fileBase: String): Boolean =
-        prefs.getBoolean(key(deviceAddress, fileBase), false)
+    fun isImported(deviceAddress: String, fileBase: String, orgId: String): Boolean =
+        prefs.getBoolean(key(deviceAddress, fileBase, orgId), false)
 
-    fun markImported(deviceAddress: String, fileBase: String) {
-        prefs.edit().putBoolean(key(deviceAddress, fileBase), true).apply()
+    fun markImported(deviceAddress: String, fileBase: String, orgId: String) {
+        prefs.edit().putBoolean(key(deviceAddress, fileBase, orgId), true).apply()
     }
 }
