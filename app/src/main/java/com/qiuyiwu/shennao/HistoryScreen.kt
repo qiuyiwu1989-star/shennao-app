@@ -153,7 +153,7 @@ private fun MiniHead(t: String) {
  * 一条线还说了「还差几步」——而用户真正想知道的是后者。
  */
 @Composable
-private fun ServedRow(s: SessionCard, onOpen: (String) -> Unit, onDelete: ((String) -> Unit)? = null) {
+fun ServedRow(s: SessionCard, onOpen: (String) -> Unit, onDelete: ((String) -> Unit)? = null) {
     val failed = s.stage == Stage.FAILED
     // 可点的 Card 那个重载是 onClick 在前、modifier 在后，
     // 按 Modifier 优先的习惯写会匹配不上。
@@ -162,16 +162,27 @@ private fun ServedRow(s: SessionCard, onOpen: (String) -> Unit, onDelete: ((Stri
         onClick = { s.transcriptId?.let(onOpen) },
     ) {
         Column(Modifier.padding(DS.Pad.tight)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(s.title, style = MaterialTheme.typography.titleMedium,
-                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                s.durationMs?.let {
-                    Text("${it / 60000} 分钟", style = MaterialTheme.typography.labelMedium,
-                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+            // 标题在前、一行紧凑的元信息在下——参考的是"智能纪要"那类列表
+            // 的读法：先给结论（这是什么），日期和时长是找它的时候才用得上的。
+            // 之前是标题和时长并排、日期又落到卡片最下面，读的时候视线要
+            // 跳两趟才拼出"这是哪场、什么时候"。
+            Text(s.title, style = MaterialTheme.typography.titleMedium,
+                 fontWeight = FontWeight.SemiBold)
+            val meta = listOfNotNull(
+                s.startedAt?.let { day(it) },
+                s.durationMs?.let { "${it / 60000} 分钟" },
+            ).joinToString(" · ")
+            if (meta.isNotEmpty()) {
+                Spacer(Modifier.height(2.dp))
+                Text(meta, style = MaterialTheme.typography.bodySmall,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Spacer(Modifier.height(DS.Rhythm.element))
-            Chain(s.stage)
+            // 分析完的不用再看"走到第几步了"——四个绿勾对一场已经办完的事
+            // 只是噪音，参考设计对处理完的条目就是这么干净、什么流程状态都不带。
+            if (s.stage != Stage.ANALYZED) {
+                Spacer(Modifier.height(DS.Rhythm.element))
+                Chain(s.stage)
+            }
             if (failed && s.problem != null) {
                 Spacer(Modifier.height(DS.Rhythm.element))
                 // 失败的原因要说清楚**该怎么办**，而不只是「出错了」。
@@ -203,11 +214,6 @@ private fun ServedRow(s: SessionCard, onOpen: (String) -> Unit, onDelete: ((Stri
                         onDismiss = { confirming = false },
                     )
                 }
-            }
-            s.startedAt?.let {
-                Spacer(Modifier.height(DS.Rhythm.tight))
-                Text(day(it), style = MaterialTheme.typography.bodySmall,
-                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

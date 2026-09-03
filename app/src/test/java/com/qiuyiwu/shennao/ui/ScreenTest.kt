@@ -238,4 +238,41 @@ class ScreenTest {
         // 网络不通不等于「已是最新」——用户会因为这句话误以为不用管了
         compose.onNodeWithText("查不到有没有新版（网络不通）").assertExists()
     }
+
+    // ---- 会议卡片：参考"智能纪要"改版（2026-09-03）----
+
+    private fun sessionCard(
+        stage: Stage = Stage.ANALYZED,
+        title: String = "产品方向讨论会",
+        startedAt: String? = "2026-08-28T11:16:00",
+        durationMs: Long? = 1_800_000L,
+    ) = SessionCard(
+        sessionId = "s1", title = title, startedAt = startedAt, durationMs = durationMs,
+        stage = stage, problem = null, transcriptId = "t1",
+    )
+
+    @Test fun `标题在前，日期和时长收成一行紧凑的元信息`() {
+        compose.setContent {
+            ShennaoTheme { ServedRow(sessionCard(), onOpen = {}) }
+        }
+        compose.onNodeWithText("产品方向讨论会").assertExists()
+        // 日期和时长现在是同一行，用 · 连着——不是分开两处
+        // （不测具体几点：day() 按系统时区转换，测试环境时区不保证跟设备一致）
+        compose.onNodeWithText("30 分钟", substring = true).assertExists()
+        compose.onNodeWithText("月", substring = true).assertExists()
+    }
+
+    @Test fun `分析完的条目不显示四步进度——对一场办完的事，四个绿勾只是噪音`() {
+        compose.setContent {
+            ShennaoTheme { ServedRow(sessionCard(stage = Stage.ANALYZED), onOpen = {}) }
+        }
+        compose.onNodeWithText("分析完").assertDoesNotExist()
+    }
+
+    @Test fun `还没分析完的条目要留着进度——这正是这一页存在的理由`() {
+        compose.setContent {
+            ShennaoTheme { ServedRow(sessionCard(stage = Stage.TRANSCRIBED), onOpen = {}) }
+        }
+        compose.onNodeWithText("分析完").assertExists()
+    }
 }
