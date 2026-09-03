@@ -60,6 +60,11 @@ fun BleScreen(onDone: () -> Unit) {
     var denied by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
     var ready by remember { mutableStateOf(Readiness.READY) }
+    var syncTotal by remember { mutableStateOf(0) }
+    var syncDone by remember { mutableStateOf(0) }
+    // 手动兜底列表要说清楚"这份是不是已经同步过了"——不然全部已同步之后
+    // 回来看这一屏，会让人怀疑"是不是没传"。
+    val registry = remember { com.qiuyiwu.shennao.ble.ImportedRegistry(ctx) }
 
     // 轮询服务的状态。服务活着时它是真相，服务没起来时是默认值。
     // 200 毫秒足够跟上进度条，又不会为了一个 27 KB/s 的传输去空转 CPU。
@@ -69,6 +74,8 @@ fun BleScreen(onDone: () -> Unit) {
             devices = BleImportService.devices
             st = BleImportService.state
             note = BleImportService.note
+            syncTotal = BleImportService.syncTotal
+            syncDone = BleImportService.syncDone
             BleImportService.consumeStaged()?.let { notice("已导入「$it」，正在推送到深脑") }
             delay(200)
         }
@@ -219,14 +226,43 @@ fun BleScreen(onDone: () -> Unit) {
             }
         }
 
-        // ---- 2. 列文件 ----
+        // ---- 2. 同步 ----
         if (conn == BleState.READY) {
+            // 一直在跑的同步进度条，跟 st 具体走到哪个子状态无关——
+            // 一次自动同步会在 Listed → Downloading → Done → Downloading → …
+            // 之间反复横跳，用户不该跟着这些内部状态切换看进度条一起消失又出现。
+            if (syncTotal > 0) item {
+                DsCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(DS.Pad.tight)) {
+                        val finished = syncDone >= syncTotal
+                        Text(
+                            if (finished) "同步完成 · 共 $syncTotal 份"
+                            else "正在自动同步 · 第 ${syncDone + 1} / $syncTotal 份",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(DS.Rhythm.tight))
+                        LinearProgressIndicator(
+                            progress = { if (syncTotal == 0) 0f else syncDone.toFloat() / syncTotal },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        if (!finished) {
+                            Spacer(Modifier.height(DS.Rhythm.tight))
+                            Text("可以直接切走做别的，同步会在后台继续。",
+                                 style = MaterialTheme.typography.bodySmall,
+                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
             when (val s = st) {
                 is ImportState.Idle -> item {
-                    // 连上了就自动去列文件。用户点「连接」的意思本来就是
-                    // 「我要看里面有什么」，再让他点一次是无谓的一步。
+                    // 连上了就自动同步——不用用户先看列表、再一个个点。
+                    // 之前是自动 list()，用户还要自己挑文件一个个导；
+                    // 2026-09-03 用户反馈这不是"同步"，是"手动搬"，
+                    // 改成连上直接同步全部还没导过的。
                     LaunchedEffect(conn) {
-                        if (conn == BleState.READY) BleImportService.list(ctx)
+                        if (conn == BleState.READY) BleImportService.syncAll(ctx)
                     }
                     Loading()
                 }
@@ -241,6 +277,7 @@ fun BleScreen(onDone: () -> Unit) {
                     // "Key ... was already used"）。带上下标就不会撞，
                     // 下载仍然传 f.name 原文——设备认的是名字，不是下标。
                     itemsIndexed(s.files, key = { i, f -> "$i:${f.name}" }) { _, f ->
+                        val synced = BleImportService.connectedAddress?.let { registry.isImported(it, f.base) } ?: false
                         DsCard(Modifier.fillMaxWidth(), onClick = { BleImportService.download(ctx, f.name) }) {
                             Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
@@ -249,8 +286,12 @@ fun BleScreen(onDone: () -> Unit) {
                                          style = MaterialTheme.typography.bodySmall,
                                          color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                Text("导入", style = MaterialTheme.typography.labelMedium,
-                                     color = MaterialTheme.colorScheme.primary)
+                                Text(
+                                    if (synced) "已同步" else "导入",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (synced) MaterialTheme.colorScheme.onSurfaceVariant
+                                            else MaterialTheme.colorScheme.primary,
+                                )
                             }
                         }
                     }

@@ -38,6 +38,7 @@ class BleImportService : Service() {
         const val ACTION_DOWNLOAD = "download"
         const val ACTION_STOP = "stop"
         const val ACTION_RESUME = "resume"
+        const val ACTION_SYNC_ALL = "sync_all"
         const val EXTRA_ADDRESS = "address"
         const val EXTRA_FILE = "file"
 
@@ -59,6 +60,25 @@ class BleImportService : Service() {
         @Volatile var lastError: String? = null; private set
         /** 已经收到多少字节。断线续传的按钮上要写明——27 KB/s 的链路上这是最要紧的一句。 */
         @Volatile var received: Long = 0L; private set
+        /**
+         * 自动同步的整体进度。**只在真的有一批文件排着队的时候才非零**——
+         * 手动点单个文件下载时不动它，界面据此分辨「我在自动同步」还是
+         * 「用户自己在挑一个文件」。
+         */
+        @Volatile var syncTotal: Int = 0; private set
+        @Volatile var syncDone: Int = 0; private set
+        /** 当前连着的设备地址。界面要用它去问 ImportedRegistry「这份文件同步过没有」。 */
+        @Volatile var connectedAddress: String? = null; private set
+
+        /**
+         * 一键同步：列完文件后自动挨个下载**还没导过的**，不用用户一个个点。
+         *
+         * 2026-09-03 用户反馈：现在的流程是"连上→自己看列表→自己点每一个
+         * 文件→自己点下一个"，这不是"同步"，是"手动搬"。BLE 一次只能下
+         * 一个文件（协议本身的限制），所以"同时下载"做不到，但"排好队、
+         * 一个接一个、不用用户守着"是能做到的——这正是这里要做的事。
+         */
+        fun syncAll(ctx: Context) = send(ctx, ACTION_SYNC_ALL)
 
         fun resume(ctx: Context) = send(ctx, ACTION_RESUME)
 
@@ -91,6 +111,11 @@ class BleImportService : Service() {
     private var picked: FileEntry? = null
     /** 超时看门狗。设备可能一声不吭，没人问的话状态会永远停在 Downloading。 */
     private var ticker: Thread? = null
+    /** 自动同步排队中还没下的文件。为空 = 没有在自动同步（手动模式）。 */
+    private var syncQueue: MutableList<FileEntry> = mutableListOf()
+    private lateinit var registry: ImportedRegistry
+    /** 列表刚回来时，是不是该自动接上同步——区分「用户手动点了查看列表」。 */
+    private var autoSyncOnListed = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -107,6 +132,7 @@ class BleImportService : Service() {
             parser.feed(bytes).forEach { imp.onFrame(it) }
             onImporterMoved(imp)
         }
+        registry = ImportedRegistry(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -124,9 +150,19 @@ class BleImportService : Service() {
             }
             ACTION_CONNECT -> {
                 gatt.stopScan()
-                intent.getStringExtra(EXTRA_ADDRESS)?.let { gatt.connect(it) }
+                intent.getStringExtra(EXTRA_ADDRESS)?.let {
+                    connectedAddress = it
+                    gatt.connect(it)
+                }
             }
-            ACTION_LIST -> importer?.let { it.startListing(); onImporterMoved(it) }
+            ACTION_LIST -> {
+                autoSyncOnListed = false
+                importer?.let { it.startListing(); onImporterMoved(it) }
+            }
+            ACTION_SYNC_ALL -> {
+                autoSyncOnListed = true
+                importer?.let { it.startListing(); onImporterMoved(it) }
+            }
             ACTION_DOWNLOAD -> {
                 val name = intent.getStringExtra(EXTRA_FILE)
                 val entry = (state as? ImportState.Listed)?.files?.firstOrNull { it.name == name }
@@ -134,6 +170,8 @@ class BleImportService : Service() {
                 if (entry != null) importer?.let { it.startDownload(entry); onImporterMoved(it) }
             }
             ACTION_RESUME -> importer?.let { it.resume(); onImporterMoved(it) }
+            // 同步中途断线，用户点了「接着传」——这仍然算在同一次同步里，
+            // 完成之后要继续排队里剩下的文件，不能表现得像一次孤立的手动下载。
             ACTION_STOP -> { shutdown(); return START_NOT_STICKY }
         }
         return START_STICKY
@@ -151,8 +189,43 @@ class BleImportService : Service() {
         received = imp.received
         lastError = gatt.lastError
         refresh()
+        if (s is ImportState.Listed && autoSyncOnListed) {
+            autoSyncOnListed = false
+            beginSync(s.files)
+        }
         if (s is ImportState.Done && was !is ImportState.Done) finish(s)
+        // 设备明确拒绝这一个文件（deviceSaid=true）：这份录音这次导不了，
+        // 但不该因为一个坏文件让整批同步停下——跳过它，接着同步排队里
+        // 剩下的。断线（deviceSaid=false）不在这里处理：那是可续传的，
+        // 用户点「接着传」时走的是 resume()，picked 没变，队列自然接得上。
+        if (s is ImportState.Failed && s.deviceSaid && syncQueue.isNotEmpty()) {
+            syncQueue.removeAt(0)
+            note = "跳过了一份文件（设备说没有），接着同步剩下的"
+            if (syncQueue.isNotEmpty()) downloadNextInQueue() else refresh()
+        }
         ensureTicking(imp)
+    }
+
+    /**
+     * 列完文件后，筛掉已经导过的，把剩下的排成一队，自动挨个下载。
+     *
+     * **判据只信本地账本，不信设备。** 录音笔自己不知道"这份是不是导过"——
+     * 它只会老老实实报出它存着的每一个文件。跳不跳过，完全是手机这边
+     * 记不记得住的事。
+     */
+    private fun beginSync(files: List<FileEntry>) {
+        val addr = connectedAddress ?: ""
+        syncQueue = files.filterNot { registry.isImported(addr, it.base) }.toMutableList()
+        syncTotal = syncQueue.size
+        syncDone = 0
+        if (syncQueue.isEmpty()) { note = null; refresh(); return }
+        downloadNextInQueue()
+    }
+
+    private fun downloadNextInQueue() {
+        val entry = syncQueue.firstOrNull() ?: return
+        picked = entry
+        importer?.let { it.startDownload(entry); onImporterMoved(it) }
     }
 
     /**
@@ -187,6 +260,8 @@ class BleImportService : Service() {
             // 解不出录音时刻就不往下走：拿「现在」顶的话，一场三天前的会
             // 会排到今天，而深脑的时间轴建立在它上面。
             note = "这个文件名里没有录音时刻，暂时导不了：${s.name}"
+            // 这一份卡住了，但不能让它把整批同步也卡住——照样往后走。
+            advanceQueuePast(entry)
             refresh()
             return
         }
@@ -202,21 +277,43 @@ class BleImportService : Service() {
                 UploadWorker.kick(this)
                 note = null
                 staged = entry.base
-            } else note = "落盘失败，请重试"
+                // 记进本地账本——下次同步（甚至下次连这支笔）不用再传一遍。
+                connectedAddress?.let { registry.markImported(it, entry.base) }
+                advanceQueuePast(entry, success = true)
+            } else {
+                note = "落盘失败，请重试"
+                // 落盘失败不标记「已导入」——留在队列里等下次同步重试，
+                // 但这一轮不再自动往下走：接连失败多半是共同原因（比如存储满了），
+                // 一次性把剩下的都试一遍只会把同一个错误重复报很多次。
+            }
             refresh()
         }.start()
     }
 
+    /** 这一份处理完了（不管成功与否），把它从同步队列挪走，继续下一份。 */
+    private fun advanceQueuePast(entry: FileEntry?, success: Boolean = false) {
+        if (syncQueue.isEmpty() || syncQueue.first() != entry) return
+        syncQueue.removeAt(0)
+        if (success) syncDone++
+        if (syncQueue.isNotEmpty()) downloadNextInQueue()
+    }
+
     private fun refresh() {
+        // 排着队自动同步时，标题带上整体进度——这是这一整块功能唯一
+        // 直接给用户看的地方：他很可能已经切去别的应用，通知栏是唯一入口。
+        val syncPrefix = if (syncTotal > 0) "同步 ${syncDone + 1}/$syncTotal · " else ""
         val (title, text) = when (val s = state) {
             is ImportState.Downloading ->
-                "正在导入 ${s.name}" to (
+                "${syncPrefix}正在导入 ${s.name}" to (
                     if (s.total > 0) "${s.got / 1024} / ${s.total / 1024} KB"
                     else "${s.got / 1024} KB"
                 )
             is ImportState.Listing -> "正在读录音笔" to "列文件中"
-            is ImportState.Done -> "导好了" to "正在推送到深脑"
+            is ImportState.Done -> "${syncPrefix}导好了" to "正在推送到深脑"
             is ImportState.Failed -> "导入中断" to s.reason
+            is ImportState.Listed ->
+                if (syncTotal > 0 && syncDone >= syncTotal) "同步完成" to "共 $syncTotal 份，已推送到深脑"
+                else "从录音笔导入" to "保持蓝牙开着就行"
             else -> "从录音笔导入" to "保持蓝牙开着就行"
         }
         runCatching {
