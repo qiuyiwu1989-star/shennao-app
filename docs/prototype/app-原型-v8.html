@@ -1,0 +1,2305 @@
+<title>深脑 App 全量原型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;700;800&display=swap">
+<style>
+:root{
+  --ground:#F2F2F0;--surface:#FFF;--sunk:#E9E9E6;--line:#D6D6D1;--line-soft:#E4E4E0;
+  --ink:#17171A;--ink2:#4A4A50;--ink3:#7A7A82;--accent:#0052D9;--accent-soft:#E8F0FF;
+  --crit:#B91C1C;--ok:#0F7B4F;--warn:#9A6206;--iris:#6725FF;
+  --shadow:0 1px 3px rgba(23,23,26,.06),0 18px 40px -28px rgba(23,23,26,.5);
+  --sans:"Manrope","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"IBM Plex Mono","SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#0F0F11;--surface:#1A1A1D;--sunk:#151517;--line:#2E2E33;--line-soft:#232326;
+  --ink:#EDEDF0;--ink2:#B8B8C0;--ink3:#83838C;--accent:#7FA8F5;--accent-soft:#16203A;
+  --crit:#E58175;--ok:#63BE8B;--warn:#D7A65A;--iris:#A98BFF;
+  --shadow:0 1px 3px rgba(0,0,0,.5),0 20px 44px -30px rgba(0,0,0,1);
+}}
+:root[data-theme="dark"]{
+  --ground:#0F0F11;--surface:#1A1A1D;--sunk:#151517;--line:#2E2E33;--line-soft:#232326;
+  --ink:#EDEDF0;--ink2:#B8B8C0;--ink3:#83838C;--accent:#7FA8F5;--accent-soft:#16203A;
+  --crit:#E58175;--ok:#63BE8B;--warn:#D7A65A;--iris:#A98BFF;
+  --shadow:0 1px 3px rgba(0,0,0,.5),0 20px 44px -30px rgba(0,0,0,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px 100px}
+code{font-family:var(--mono);font-size:.85em;background:var(--sunk);padding:.1em .38em;border-radius:3px}
+header{padding:56px 0 28px;border-bottom:2px solid var(--ink)}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink3);margin:0 0 14px}
+h1{font-weight:800;font-size:clamp(30px,4.4vw,42px);line-height:1.15;letter-spacing:-.025em;margin:0;text-wrap:balance}
+.lede{margin:20px 0 0;font-size:17px;color:var(--ink2);max-width:66ch}
+.lede b{color:var(--ink)}
+.facts{display:flex;flex-wrap:wrap;gap:8px 26px;margin-top:20px;font-family:var(--mono);font-size:12px;color:var(--ink3)}
+section{margin-top:52px}
+.shead{display:flex;align-items:baseline;gap:13px;flex-wrap:wrap;margin-bottom:4px}
+.snum{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.1em}
+h2{font-weight:800;font-size:24px;line-height:1.32;margin:0;letter-spacing:-.015em}
+.sub{margin:0 0 24px;color:var(--ink3);font-size:14.5px;max-width:76ch}
+h3{font-weight:800;font-size:17px;margin:30px 0 8px}
+p{margin:0 0 14px;max-width:76ch}
+ul{margin:0 0 14px;padding-left:20px;max-width:76ch}li{margin-bottom:7px}li::marker{color:var(--ink3)}
+strong{color:var(--ink)}
+blockquote{margin:0 0 16px;padding:2px 0 2px 16px;border-left:3px solid var(--accent);color:var(--ink2);font-size:15px;max-width:74ch}
+blockquote b{color:var(--ink)}
+pre{background:var(--sunk);border:1px solid var(--line-soft);border-radius:8px;padding:15px 17px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.8;margin:0 0 16px;color:var(--ink2)}
+pre b{color:var(--accent);font-weight:500}pre i{color:var(--ink3);font-style:normal}
+.bar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:0 0 26px;padding:11px 15px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.bar span{font-size:12.5px;color:var(--ink3);font-family:var(--mono)}
+button.tg{font-family:var(--sans);font-weight:700;font-size:12.5px;padding:6px 14px;border-radius:99px;border:1px solid var(--line);background:var(--sunk);color:var(--ink2);cursor:pointer}
+button.tg[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+button.tg:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;overflow-x:auto;margin-bottom:8px}
+.diagram svg{display:block;min-width:660px;width:100%;height:auto}
+.cap{font-size:13px;color:var(--ink3);margin:0 0 24px}
+.grp{margin-top:46px}
+.grpname{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 4px}
+.grpdek{margin:0 0 22px;font-size:15px;color:var(--ink2);max-width:72ch}
+.screen{display:grid;grid-template-columns:360px 1fr;gap:40px;padding:32px 0;border-top:1px solid var(--line)}
+.screen:first-of-type{border-top:none;padding-top:8px}
+.side{padding-top:6px}
+.sid{font-family:var(--mono);font-size:12px;color:var(--accent);margin:0 0 6px;letter-spacing:.08em}
+.side h4{font-weight:800;font-size:21px;line-height:1.3;margin:0 0 4px;letter-spacing:-.015em}
+.route{font-family:var(--mono);font-size:11.5px;color:var(--ink3);margin:0 0 16px}
+.side ul{margin:0;padding-left:19px;font-size:14.5px;color:var(--ink2);max-width:58ch}
+.side li{margin-bottom:9px}.side b{color:var(--ink)}
+.new{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;padding:2px 7px;border-radius:4px;background:var(--accent-soft);color:var(--accent);vertical-align:3px;margin-left:8px}
+.stage{--s-bg:#F6F7F9;--s-surf:#FFFFFF;--s-on:#1C1C1E;--s-pri:#0D1117;--s-onpri:#FFFFFF;
+  --s-focus:#0052D9;--s-fsoft:#E8F0FF;--s-iris:#6725FF;--s-isoft:#F0EAFF;
+  --s-risk:#DC2626;--s-rsurf:#FEF2F2;--s-rtext:#B91C1C;
+  --s-i100:#E8EAEF;--s-i200:#D3D7E0;--s-i300:#898F9D;--s-i400:#646B7D;--s-i600:#3F4654;
+  --s-ok:#0F7B4F;--s-oksurf:#E6F4EC;--s-warn:#8A5A00;--s-wsurf:#FBF1DE;}
+.stage.dark{--s-bg:#0D1117;--s-surf:#161B22;--s-on:#E8EAEF;--s-pri:#E8EAEF;--s-onpri:#0D1117;
+  --s-focus:#6E9BFF;--s-fsoft:#16203A;--s-iris:#A98BFF;--s-isoft:#221A38;
+  --s-risk:#F87171;--s-rsurf:#2B1516;--s-rtext:#FCA5A5;
+  --s-i100:#21262D;--s-i200:#30363D;--s-i300:#6E7681;--s-i400:#8B949E;--s-i600:#B1B8C0;
+  --s-ok:#4ED08A;--s-oksurf:#122A1E;--s-warn:#D7A65A;--s-wsurf:#2A2113;}
+.ph{width:360px;height:780px;border-radius:36px;border:1px solid var(--line);background:var(--s-bg);
+  overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:var(--shadow);
+  color:var(--s-on);font-size:15px;line-height:24px;flex:none}
+.ph.sm{width:250px;height:542px;border-radius:26px}
+.sb{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px 0 24px;font-size:12px;font-weight:700;flex:none;letter-spacing:.02em}
+.sb em{font-style:normal;font-weight:500;font-size:11px;color:var(--s-i400)}
+.pb{flex:1;overflow:hidden;padding:0 16px;display:flex;flex-direction:column;min-height:0}
+.pb.wide{padding:0 24px}
+.t22{font-size:22px;line-height:29px;font-weight:600;margin:0;letter-spacing:-.01em}
+.t30{font-size:30px;line-height:36px;font-weight:600;margin:0;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.t16{font-size:16px;line-height:22px;font-weight:500;margin:0}
+.b15{font-size:15px;line-height:24px;margin:0}
+.b14{font-size:14px;line-height:21px;margin:0;color:var(--s-i600)}
+.b13{font-size:13px;line-height:19px;margin:0;color:var(--s-i400);font-variant-numeric:tabular-nums}
+.l11{font-size:11px;line-height:15px;font-weight:500;margin:0}
+.sec{font-size:13px;line-height:19px;color:var(--s-i400);margin:0}
+.rb{height:40px;flex:none}.ri{height:20px;flex:none}.re{height:12px;flex:none}.rt{height:6px;flex:none}
+.grow{flex:1;min-height:0}.col{display:flex;flex-direction:column}.row{display:flex;align-items:center}
+.cd{background:var(--s-surf);border:1px solid var(--s-i200);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:8px;flex:none}
+.cd.t{padding:16px;border-radius:12px}
+.cd.risk{border-color:var(--s-risk);background:var(--s-rsurf)}
+.cd.soft{background:var(--s-fsoft);border-color:transparent}
+.cd.iris{background:var(--s-isoft);border-color:transparent}
+.cd.flat{background:var(--s-i100);border-color:transparent}
+.cd.warn{background:var(--s-wsurf);border-color:transparent}
+.btn{font-size:14px;font-weight:500;padding:9px 16px;border-radius:12px;border:1px solid var(--s-i200);background:var(--s-surf);color:var(--s-on);text-align:center;flex:none}
+.btn.p{background:var(--s-pri);color:var(--s-onpri);border-color:var(--s-pri)}
+.btn.w{width:100%;padding:14px;font-size:15px}
+.btn.s{font-size:12px;padding:6px 13px;border-radius:99px}
+.quo{border-left:2px solid var(--s-focus);padding:0 0 0 12px;font-size:14px;line-height:21px;color:var(--s-i600)}
+.jump{color:var(--s-focus);font-size:12px;font-weight:500}
+.lab{font-size:11px;line-height:15px;font-weight:500;padding:2px 8px;border-radius:99px;flex:none}
+.lab.att{background:var(--s-fsoft);color:var(--s-focus)}
+.lab.inf{background:var(--s-i100);color:var(--s-i400)}
+.lab.conj{background:var(--s-isoft);color:var(--s-iris)}
+.lab.ok{background:var(--s-oksurf);color:var(--s-ok)}
+.lab.no{background:var(--s-rsurf);color:var(--s-rtext)}
+.lab.wn{background:var(--s-wsurf);color:var(--s-warn)}
+.jd{display:flex;gap:9px;align-items:flex-start;font-size:15px;line-height:23px}
+.ev{font-size:12px;color:var(--s-focus);font-weight:500;margin:0}
+.hr{height:1px;background:var(--s-i100);flex:none}
+.li{display:flex;align-items:center;gap:12px;padding:14px 0;flex:none}
+.li .nm{font-size:15px;line-height:22px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li .rt{font-size:12px;color:var(--s-i400);flex:none;font-variant-numeric:tabular-nums}
+.mini{font-size:12px;line-height:17px;color:var(--s-i400);margin:0}
+.prog{height:4px;border-radius:99px;background:var(--s-i100);overflow:hidden;flex:none}
+.prog i{display:block;height:100%;background:var(--s-focus);border-radius:99px}
+.prog.calm i{background:var(--s-i400)}
+.dev{display:flex;align-items:center;gap:9px;padding:11px 14px;background:var(--s-surf);border:1px solid var(--s-i200);border-radius:12px;flex:none}
+.dev .dot{width:7px;height:7px;border-radius:50%;background:var(--s-ok);flex:none}
+.dev .tx{font-size:13px;line-height:19px;color:var(--s-i400);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dev .tx b{color:var(--s-on);font-weight:500}
+.dev .go{font-size:13px;color:var(--s-focus);font-weight:500;flex:none}
+.nb{display:flex;border-top:1px solid var(--s-i200);background:var(--s-surf);padding:8px 0 18px;flex:none}
+.nb a{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;line-height:15px;color:var(--s-i400);text-decoration:none}
+.nb a.on{color:var(--s-focus);font-weight:500}
+.nb svg{width:22px;height:22px}
+.fab{position:absolute;right:20px;bottom:96px;width:56px;height:56px;border-radius:19px;background:var(--s-pri);color:var(--s-onpri);display:flex;align-items:center;justify-content:center}
+.dt{display:flex;gap:20px;border-bottom:1px solid var(--s-i100);flex:none}
+.dt span{padding:0 0 10px;font-size:14px;color:var(--s-i400)}
+.dt span.on{color:var(--s-on);font-weight:600;box-shadow:inset 0 -2px 0 var(--s-pri)}
+.sg{display:flex;background:var(--s-i100);border-radius:99px;padding:3px;flex:none}
+.sg span{flex:1;text-align:center;padding:6px 0;border-radius:99px;font-size:12px;color:var(--s-i400)}
+.sg span.on{background:var(--s-surf);color:var(--s-on);font-weight:500}
+.sc{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:none}
+.sc div{background:var(--s-surf);border:1px solid var(--s-i200);border-radius:12px;padding:14px}
+.sc div.on{border-color:var(--s-focus);background:var(--s-fsoft)}
+.sc b{display:block;font-size:15px;font-weight:500;margin-bottom:3px}
+.sc span{font-size:12px;line-height:17px;color:var(--s-i400)}
+.fe{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;flex:none}
+.fe div{background:var(--s-surf);border:1px solid var(--s-i200);border-radius:12px;padding:12px 8px;font-size:11.5px;line-height:16px;color:var(--s-i600);text-align:center}
+.fe b{display:block;color:var(--s-on);font-weight:500;font-size:12.5px}
+.wv{display:flex;align-items:center;gap:3px;height:40px;flex:none}
+.wv i{width:3px;border-radius:2px;background:var(--s-i300);display:block}
+.pl{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--s-surf);border:1px solid var(--s-i200);border-radius:12px;flex:none}
+.pl .pp{width:34px;height:34px;border-radius:50%;background:var(--s-pri);color:var(--s-onpri);display:flex;align-items:center;justify-content:center;flex:none}
+.rec{width:68px;height:68px;border-radius:50%;background:var(--s-risk);box-shadow:0 0 0 6px var(--s-rsurf);margin:0 auto;flex:none}
+.st{display:flex;gap:6px;flex:none}.st i{height:3px;flex:1;border-radius:99px;background:var(--s-i100)}.st i.on{background:var(--s-pri)}
+.art{width:68px;height:68px;border-radius:24px;background:var(--s-i100);display:flex;align-items:center;justify-content:center;flex:none}
+.mid{display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;flex:1;gap:18px;min-height:0}
+.pen{width:104px;height:150px;border-radius:12px;background:linear-gradient(120deg,#9AA1AD,#5B6270 62%,#454B57);position:relative;flex:none;margin:0 auto}
+.pen .onoff{position:absolute;right:11px;top:22px;width:19px;height:11px;border-radius:3px;background:#E9EBEF}
+.pen .mark{position:absolute;right:9px;top:47px;width:23px;height:23px;border-radius:50%;background:#E9EBEF}
+.pen .lg{position:absolute;left:12px;bottom:12px;width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.28)}
+.cal{position:relative;flex:none;margin:0 auto;width:230px}
+.cal .tag{position:absolute;font-family:var(--mono);font-size:10.5px;color:var(--s-i400);white-space:nowrap}
+.cal .ln{position:absolute;height:1px;background:var(--s-i200)}
+/* 链路四站 */
+.pipe{display:flex;align-items:center;gap:0;flex:none}
+.pipe i{flex:1;height:2px;background:var(--s-i200)}
+.pipe i.on{background:var(--s-ok)}
+.pipe u{width:9px;height:9px;border-radius:50%;background:var(--s-i200);flex:none;display:block}
+.pipe u.on{background:var(--s-ok)}
+.pipe u.now{background:var(--s-focus);box-shadow:0 0 0 4px var(--s-fsoft)}
+.pipel{display:flex;justify-content:space-between;flex:none;font-size:10.5px;color:var(--s-i400);margin-top:6px}
+/* 兑现率环 */
+.ringwrap{display:flex;align-items:center;gap:16px;flex:none}
+.ring{width:74px;height:74px;flex:none}
+.trio{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
+.trio figure{margin:0;display:flex;flex-direction:column;gap:10px;align-items:center}
+.trio figcaption{font-size:13px;color:var(--ink3);text-align:center;max-width:250px}
+.trio figcaption b{display:block;color:var(--ink);font-size:14px;font-weight:700;margin-bottom:2px}
+.scroller{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:13.5px}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+thead th{background:var(--sunk);font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:500;color:var(--ink2);border-bottom:1px solid var(--line)}
+tbody tr:last-child td{border-bottom:none}
+td.k{font-weight:700;white-space:nowrap}
+td.q{color:var(--ink3);font-size:12.5px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.box h4{margin:0 0 8px;font-weight:800;font-size:16px}
+.box ul{margin:0;padding-left:19px;font-size:14px;color:var(--ink2)}
+.box li{margin-bottom:7px}
+footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink3)}
+footer p{max-width:none}
+@media (max-width:820px){.screen{grid-template-columns:1fr;gap:22px}.ph{max-width:100%}.wrap{padding:0 16px 72px}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">深脑 App · 全量原型 v8 · 2026-09-04 · 全画完</p>
+  <h1>三十二屏、两张结构图、四条闭环</h1>
+  <p class="lede">这一版从<b>真实系统</b>出发重画：<code>/api/mobile/*</code> 已有的 12 个端点、<code>Api.kt</code> 里已经定死的数据模型、以及网页端 60 个页面里哪些该留在浏览器。上一版有三处画错了——最要紧的是<b>认知状态是三档不是两档</b>。</p>
+  <div class="facts">
+    <span>32 屏 + 3 边界态</span>
+    <span>灵魂卡 899 · 深判断 10 次/张·月</span>
+    <span>信息结构图 · 逻辑闭环图</span>
+    <span>数据来自 mobile BFF 12 个端点</span>
+    <span>色/字/间距取自 Theme.kt · DS.kt</span>
+  </div>
+</header>
+
+<section>
+  <div class="shead"><span class="snum">01</span><h2>先对齐真实系统</h2></div>
+  <p class="sub">这一版的每一屏都能指出它吃哪个端点、画哪个字段。下面五条是从代码里读出来的，不是设想。</p>
+
+  <h3>手机端有自己的一个面，而且这是刻意的</h3>
+  <p>网页端有 60 个页面、111 个接口用 cookie 鉴权。手机端没有硬套过去，而是单开了 <code>/api/mobile/*</code>。<code>today/route.ts</code> 的注释把理由写死了：</p>
+  <blockquote>
+    第三条还有一个不明显的好处：<b>改提炼规则不用发版</b>。APK 外发没有商店的自动更新，用户可能长期停在旧版本——把判断留在服务端，旧客户端也能跟着变。<br><br>
+    它不是「网页的移动版」…… <b>记忆库、概念活页、图谱一概不在这儿——那些在浏览器里看更合适。</b>
+  </blockquote>
+  <p><strong>这条注释就是本规格「读只到浅层」那条边界的出处。</strong>它不是我提的主张，是系统里已经立过的判断。本版原型全部建立在这 12 个端点上：</p>
+  <pre><b>today</b>              counts{overdue,total,awaitingSpeaker} + commitments[] + insights[] + predictions[]
+<b>sessions</b>           SessionCard[]：链路四站 + 卡住原因
+<b>transcript/[id]</b>    Meeting：summary · speakers · atoms[] · commitments[] · analysis{methods,routingReason}
+<b>transcript/[id]/analyze</b>   手动触发分析      <b>transcript/[id]/share</b>  出可分享的一页
+<b>people/[id]</b>        Person：kept/broken/open/keptRate + judgments[] + openCommitments[]
+<b>search</b> · <b>ask</b>       跨录音检索与提问
+<b>commitments/[id]</b>   落账（兑现 / 没兑现 / 改期）
+<b>web-ticket</b> · <b>web-open</b>  带登录态开网页版      <b>crash</b> 崩溃回传</pre>
+
+  <h3>三处我上一版画错了</h3>
+  <div class="grid2">
+    <div class="box">
+      <h4>① 认知状态是三档，不是两档</h4>
+      <p style="font-size:14px;margin:0 0 8px"><code>epistemic</code> 的取值是 <code>attested</code> 亲证 / <code>inferred</code> 推断 / <code>conjecture</code> 猜想。<code>Api.kt</code> 的注释：</p>
+      <blockquote style="font-size:14px;margin:0"><b>必须显示</b>——手机是一扫而过的场景，<b>一条猜想会被当成事实</b>。</blockquote>
+    </div>
+    <div class="box">
+      <h4>② 「今天」是四件事，不是两件</h4>
+      <p style="font-size:14px;margin:0">到期承诺 + 新洞察 + <b>到期的预测</b> + <b>等着认人的</b>（<code>counts.awaitingSpeaker</code>）。预测那一栏是竞品完全没有的东西——<code>Prediction.observableSignal</code>：「看到什么就算应验／落空」。</p>
+    </div>
+    <div class="box">
+      <h4>③ 台账应该按链路四站画</h4>
+      <p style="font-size:14px;margin:0"><code>Stage</code>：<b>RECORDED → DELIVERED → TRANSCRIBED → ANALYZED</b>，另有 FAILED（带 <code>problem</code>，服务端保证是人话）。上一版我自己编了「已入库/已跳过」，系统里本来就有更准的四站。</p>
+    </div>
+  </div>
+
+  <h3>系统里已有、但手机上一直没露面的三样</h3>
+  <ul>
+    <li><strong><code>Person.keptRate</code> —— 人的兑现率。</strong>字段注释：「null = 还没有任何一条有结论。<b>给 0% 或 100% 都是拿数字撒谎</b>」。这是 L3 资产层最锋利的一屏，竞品全都没有。</li>
+    <li><strong><code>MeetingAnalysis.methods[] + routingReason</code> —— 这一场用了哪几个方法、为什么。</strong>这是深脑「方法可审计」的用户面，Plaud 的模板给不了。</li>
+    <li><strong><code>recordings/[id]/marks</code> + <code>hotwords</code> —— 标记与热词，服务端早就有。</strong>语音口令与 MARK 键落地时不用新建后端。</li>
+  </ul>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">02</span><h2>信息结构</h2></div>
+  <p class="sub">四栏各自一个回退栈，两条沉浸式路由压在所有栏之上，WebView 是明确标出的边界。每个盒子下面标着它吃哪个端点。</p>
+  <div class="diagram">
+    <svg viewBox="0 0 980 560" role="img" aria-label="深脑 App 信息结构图">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--ink3)"/>
+        </marker>
+      </defs>
+      <style>
+        .bx{fill:var(--surface);stroke:var(--line);stroke-width:1.2;rx:9}
+        .bx.tab{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.5}
+        .bx.imm{fill:var(--sunk);stroke:var(--ink3);stroke-dasharray:4 3}
+        .bx.web{fill:none;stroke:var(--ink3);stroke-dasharray:2 4}
+        .tt{font:600 13px var(--sans);fill:var(--ink)}
+        .tm{font:500 10px var(--mono);fill:var(--ink3)}
+        .tl{font:700 10px var(--mono);fill:var(--accent);letter-spacing:.1em}
+        .ln{stroke:var(--ink3);stroke-width:1.1;fill:none;marker-end:url(#ar)}
+        .lnf{stroke:var(--accent);stroke-width:1.4;fill:none;marker-end:url(#ar)}
+      </style>
+      <text class="tl" x="0" y="14">底栏四栏 · 各自一个回退栈</text>
+      <!-- 四栏 -->
+      <rect class="bx tab" x="0" y="26" width="220" height="46"/>
+      <text class="tt" x="14" y="48">今天 · TodayFeed</text><text class="tm" x="14" y="63">mobile/today</text>
+      <rect class="bx tab" x="250" y="26" width="220" height="46"/>
+      <text class="tt" x="264" y="48">记录 · RecordsList</text><text class="tm" x="264" y="63">mobile/sessions</text>
+      <rect class="bx tab" x="500" y="26" width="220" height="46"/>
+      <text class="tt" x="514" y="48">问 · AskHome</text><text class="tm" x="514" y="63">mobile/ask · search</text>
+      <rect class="bx tab" x="750" y="26" width="220" height="46"/>
+      <text class="tt" x="764" y="48">我的 · MeHome</text><text class="tm" x="764" y="63">本地 + 权益</text>
+
+      <!-- 第二层 -->
+      <path class="ln" d="M110 72 L110 108"/><path class="ln" d="M360 72 L360 108"/>
+      <path class="ln" d="M610 72 L610 108"/><path class="ln" d="M860 72 L860 108"/>
+
+      <rect class="bx" x="0" y="112" width="220" height="44"/>
+      <text class="tt" x="14" y="132">一场的详情</text><text class="tm" x="14" y="147">mobile/transcript/[id]</text>
+      <rect class="bx" x="250" y="112" width="220" height="44"/>
+      <text class="tt" x="264" y="132">同一个详情（共用）</text><text class="tm" x="264" y="147">树里只出现一次</text>
+      <rect class="bx" x="500" y="112" width="220" height="44"/>
+      <text class="tt" x="514" y="132">答案 · 带出处</text><text class="tm" x="514" y="147">跳回详情的原话</text>
+      <rect class="bx" x="750" y="112" width="220" height="44"/>
+      <text class="tt" x="764" y="132">灵魂卡 · 设备列表</text><text class="tm" x="764" y="147">BLE 本地</text>
+
+      <path class="ln" d="M250 134 L226 134"/>
+      <path class="ln" d="M500 134 L476 134"/>
+
+      <!-- 详情三 tab -->
+      <path class="lnf" d="M110 156 L110 186"/>
+      <rect class="bx" x="0" y="190" width="220" height="88"/>
+      <text class="tl" x="14" y="208">详情 · 三个 TAB</text>
+      <text class="tt" x="14" y="228">判断 atoms[]</text>
+      <text class="tt" x="14" y="248">承诺 commitments[]</text>
+      <text class="tt" x="14" y="268">原话 逐句 + 时间戳</text>
+      <path class="lnf" d="M120 200 C170 210 170 250 126 258" stroke-dasharray="0"/>
+      <text class="tm" x="150" y="234" fill="var(--accent)">依据 →</text>
+
+      <!-- 详情延伸 -->
+      <path class="ln" d="M220 234 L268 234"/>
+      <rect class="bx" x="272" y="190" width="198" height="40"/>
+      <text class="tt" x="286" y="215">能发出去的一页</text>
+      <text class="tm" x="286" y="228" style="display:none"></text>
+      <rect class="bx" x="272" y="238" width="198" height="40"/>
+      <text class="tt" x="286" y="263">人 · 兑现率</text>
+      <path class="ln" d="M220 258 L268 258"/>
+
+      <!-- 我的延伸 -->
+      <path class="ln" d="M860 156 L860 190"/>
+      <rect class="bx" x="750" y="194" width="220" height="40"/>
+      <text class="tt" x="764" y="219">语音口令</text>
+      <path class="ln" d="M860 234 L860 258"/>
+      <rect class="bx" x="750" y="262" width="220" height="40"/>
+      <text class="tt" x="764" y="287">深判断用完</text>
+
+      <!-- 问的延伸 -->
+      <path class="ln" d="M610 156 L610 190"/>
+      <rect class="bx" x="500" y="194" width="220" height="40"/>
+      <text class="tt" x="514" y="219">认人 · awaitingSpeaker</text>
+
+      <!-- 沉浸式 -->
+      <text class="tl" x="0" y="332">沉浸式路由 · 不带底栏，压在所有栏之上</text>
+      <rect class="bx imm" x="0" y="344" width="300" height="76"/>
+      <text class="tt" x="14" y="366">开录前 · 选场合</text>
+      <text class="tm" x="14" y="381">选场合 = 选方法</text>
+      <text class="tt" x="14" y="404">→ 录音中 → 停止落盘</text>
+      <rect class="bx imm" x="330" y="344" width="300" height="76"/>
+      <text class="tt" x="344" y="366">配对 · 三步</text>
+      <text class="tm" x="344" y="381">靠近 → 认领 → 录一段试试</text>
+      <text class="tt" x="344" y="404">→ 直接进「开录前」</text>
+      <rect class="bx imm" x="660" y="344" width="310" height="76"/>
+      <text class="tt" x="674" y="366">分享进来 · 确认半屏</text>
+      <text class="tm" x="674" y="381">ACTION_SEND 落地</text>
+      <text class="tt" x="674" y="404">→ 选场合 → 同一条 Ingest</text>
+
+      <!-- WebView 边界 -->
+      <text class="tl" x="0" y="462">WebView 边界 · 界面上明说「网页版」并带外链箭头</text>
+      <rect class="bx web" x="0" y="474" width="970" height="66"/>
+      <text class="tt" x="16" y="498">逐句校对 · 认人面板 · 记忆库 · 概念活页 · 图谱 · 方法广场 · 项目 · 驾驶舱 · 校准 · 简报</text>
+      <text class="tm" x="16" y="520">mobile/web-ticket → web-open，带登录态。这条边界的出处是 today/route.ts 的注释：「那些在浏览器里看更合适」</text>
+    </svg>
+  </div>
+  <p class="cap">实线＝入栈；虚线框＝沉浸式或外部；蓝线＝证据链跳转（判断 → 原话），它是唯一一条跨 tab 的自动跳转。</p>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">03</span><h2>四条闭环</h2></div>
+  <p class="sub">屏幕之间的逻辑关系不是导航图能说清的。真正要画的是这四条——它们各自从哪开始、在哪合上。</p>
+  <div class="diagram">
+    <svg viewBox="0 0 980 470" role="img" aria-label="深脑 App 四条业务闭环">
+      <style>
+        .c1{stroke:#B4541E}.c2{stroke:#1D6B4C}.c3{stroke:#27548F}.c4{stroke:#8A2E5D}
+        .f1{fill:#B4541E}.f2{fill:#1D6B4C}.f3{fill:#27548F}.f4{fill:#8A2E5D}
+        .nd{fill:var(--surface);stroke-width:1.4;rx:8}
+        .nt{font:600 12px var(--sans);fill:var(--ink)}
+        .nm2{font:500 9.5px var(--mono);fill:var(--ink3)}
+        .lb{font:700 11px var(--mono);letter-spacing:.08em}
+        .fl{fill:none;stroke-width:1.4;marker-end:url(#ar2)}
+      </style>
+      <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--ink3)"/></marker></defs>
+
+      <!-- 闭环一：采集 -->
+      <text class="lb f1" x="0" y="14">闭环一 · 采集：六个源，一条管道</text>
+      <rect class="nd c1" x="0" y="24" width="128" height="42"/><text class="nt" x="12" y="42">六个入口</text><text class="nm2" x="12" y="56">卡·手机·分享·链接…</text>
+      <path class="fl c1" d="M132 45 L172 45"/>
+      <rect class="nd c1" x="176" y="24" width="120" height="42"/><text class="nt" x="188" y="42">Ingest.stage()</text><text class="nm2" x="188" y="56">只准加源不加管道</text>
+      <path class="fl c1" d="M300 45 L340 45"/>
+      <rect class="nd c1" x="344" y="24" width="300" height="42"/>
+      <text class="nt" x="356" y="42">链路四站</text>
+      <text class="nm2" x="356" y="56">RECORDED → DELIVERED → TRANSCRIBED → ANALYZED</text>
+      <path class="fl c1" d="M648 45 L688 45"/>
+      <rect class="nd c1" x="692" y="24" width="140" height="42"/><text class="nt" x="704" y="42">台账（记录）</text><text class="nm2" x="704" y="56">卡住了要说人话</text>
+      <path class="fl c1" d="M836 45 L876 45"/>
+      <rect class="nd c1" x="880" y="24" width="98" height="42"/><text class="nt" x="892" y="42">今天</text><text class="nm2" x="892" y="56">长出了什么</text>
+
+      <!-- 闭环二：承诺 -->
+      <text class="lb f2" x="0" y="122">闭环二 · 承诺：说出口 → 有约束力 → 记在人头上</text>
+      <rect class="nd c2" x="0" y="132" width="146" height="42"/><text class="nt" x="12" y="150">会上说了一句</text><text class="nm2" x="12" y="164">「下周三给准数」</text>
+      <path class="fl c2" d="M150 153 L190 153"/>
+      <rect class="nd c2" x="194" y="132" width="150" height="42"/><text class="nt" x="206" y="150">抽成一条承诺</text><text class="nm2" x="206" y="164">cron/extract-commitments</text>
+      <path class="fl c2" d="M348 153 L388 153"/>
+      <rect class="nd c2" x="392" y="132" width="140" height="42"/><text class="nt" x="404" y="150">今天 · 到期</text><text class="nm2" x="404" y="164">overdueDays</text>
+      <path class="fl c2" d="M536 153 L576 153"/>
+      <rect class="nd c2" x="580" y="132" width="150" height="42"/><text class="nt" x="592" y="150">落账 一步就完</text><text class="nm2" x="592" y="164">commitments/[id]</text>
+      <path class="fl c2" d="M734 153 L774 153"/>
+      <rect class="nd c2" x="778" y="132" width="200" height="42"/><text class="nt" x="790" y="150">人 · 兑现率</text><text class="nm2" x="790" y="164">kept / broken / open</text>
+      <path class="fl c2" d="M878 176 C878 208 60 208 60 178" stroke-dasharray="4 3"/>
+      <text class="nm2" x="410" y="203" class="nm2">下次再谈同一件事时，这个人的历史就在手边</text>
+
+      <!-- 闭环三：证据 -->
+      <text class="lb f3" x="0" y="252">闭环三 · 证据：一秒回原文</text>
+      <rect class="nd c3" x="0" y="262" width="150" height="42"/><text class="nt" x="12" y="280">判断（三档标注）</text><text class="nm2" x="12" y="294">亲证 / 推断 / 猜想</text>
+      <path class="fl c3" d="M154 283 L194 283"/>
+      <rect class="nd c3" x="198" y="262" width="130" height="42"/><text class="nt" x="210" y="280">依据 N 处</text><text class="nm2" x="210" y="294">反方 N 处也显示</text>
+      <path class="fl c3" d="M332 283 L372 283"/>
+      <rect class="nd c3" x="376" y="262" width="150" height="42"/><text class="nt" x="388" y="280">原话 tab</text><text class="nm2" x="388" y="294">自动切换 + 定位到秒</text>
+      <path class="fl c3" d="M530 283 L570 283"/>
+      <rect class="nd c3" x="574" y="262" width="140" height="42"/><text class="nt" x="586" y="280">播放那一段</text><text class="nm2" x="586" y="294">音频存 12 个月</text>
+      <path class="fl c3" d="M718 283 L758 283"/>
+      <rect class="nd c3" x="762" y="262" width="216" height="42"/><text class="nt" x="774" y="280">👍👎 / 删掉这条</text><text class="nm2" x="774" y="294">埋点②：删除率 &lt;15%</text>
+
+      <!-- 闭环四：预测 -->
+      <text class="lb f4" x="0" y="362">闭环四 · 预测：可证伪，且公开记账</text>
+      <rect class="nd c4" x="0" y="372" width="168" height="42"/><text class="nt" x="12" y="390">分析时下一条预测</text><text class="nm2" x="12" y="404">带 observableSignal</text>
+      <path class="fl c4" d="M172 393 L212 393"/>
+      <rect class="nd c4" x="216" y="372" width="150" height="42"/><text class="nt" x="228" y="390">到期了</text><text class="nm2" x="228" y="404">今天第三区块</text>
+      <path class="fl c4" d="M370 393 L410 393"/>
+      <rect class="nd c4" x="414" y="372" width="180" height="42"/><text class="nt" x="426" y="390">给个说法</text><text class="nm2" x="426" y="404">应验 / 落空 / 说不清</text>
+      <path class="fl c4" d="M598 393 L638 393"/>
+      <rect class="nd c4" x="642" y="372" width="150" height="42"/><text class="nt" x="654" y="390">命中率记账</text><text class="nm2" x="654" y="404">网页 · calibration</text>
+      <path class="fl c4" d="M796 393 L836 393"/>
+      <rect class="nd c4" x="840" y="372" width="138" height="42"/><text class="nt" x="852" y="390">判断力季报</text><text class="nm2" x="852" y="404">上游 A6</text>
+      <text class="nm2" x="0" y="440">「observableSignal 为空」本身就是一个信号——说明这条预测当初没写清怎么算数。手机上要把它标出来，而不是当成正常预测显示。</text>
+    </svg>
+  </div>
+  <p class="cap">闭环二的虚线是它唯一的回路：承诺落账之后回到「人」，下一次再谈同一件事时，这个人的历史就已经在手边——这是竞品完全没有的一段。</p>
+</section>
+
+<div class="bar">
+  <span>App 主题</span>
+  <button class="tg" id="tL" aria-pressed="true">浅色</button>
+  <button class="tg" id="tD" aria-pressed="false">深色</button>
+  <span style="margin-left:auto">深色取自 Theme.kt 的 darkColorScheme</span>
+</div>
+
+<div id="stage" class="stage">
+
+<div class="grp">
+  <p class="grpname">组一 · 开箱</p>
+  <p class="grpdek">硬件退货窗口 7 天。拆盒 → 配对 → 录第一场 → 出判断，这条链每一环都在 App 里。</p>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb wide col">
+        <div class="ri"></div>
+        <div class="st"><i class="on"></i><i class="on"></i><i></i></div>
+        <div class="rb"></div>
+        <p class="t22">找到了一张灵魂卡</p>
+        <div class="rt"></div>
+        <p class="b14">卡上的灯这会儿应该在慢闪。对不上的话，长按 <b>ON/OFF</b> 一秒。</p>
+        <div class="rb"></div>
+        <div class="cal">
+          <div class="pen"><span class="onoff"></span><span class="mark"></span><span class="lg"></span></div>
+          <span class="tag" style="right:0;top:24px">ON/OFF · 长按 1 秒</span>
+          <span class="ln" style="right:36px;top:30px;width:24px"></span>
+          <span class="tag" style="right:0;top:52px">MARK · 打标记</span>
+          <span class="ln" style="right:36px;top:58px;width:24px"></span>
+        </div>
+        <div class="rb"></div>
+        <div class="cd">
+          <p class="t16">灵魂卡 · SN-A7F2</p>
+          <p class="b13">电量 78% · 里面有 3 段录音，连上就自动过来</p>
+        </div>
+        <div class="grow"></div>
+        <div class="btn p w">就是它</div>
+        <div class="re"></div>
+        <div class="btn w">不是，再找找</div>
+        <div class="ri"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S1 · Pairing(2/3)</p>
+      <h4>配对 · 第 2 步</h4>
+      <p class="route">沉浸式，无底栏 · 第 3 步直接进「开录前」</p>
+      <ul>
+        <li><b>画出实物，标出该按哪个键。</b>用户手里有实物，就该看着实物操作，不是记 SN 号。这是从得到「长按 1 秒开机」那一屏学的。</li>
+        <li><b>第三步不是「完成」，是「录一段试试」</b>——配对成功不是价值，第一份判断才是。它直接落到 S3。</li>
+        <li>卡片写「里面有 3 段录音，连上就自动过来」——<b>先兑现一次，再谈别的</b>。</li>
+        <li>四个失败态各自有话说＋一个动作：蓝牙没开 / 没给权限 / 找不到 / 连上又断。</li>
+        <li><b>扫描不按 service UUID 过滤</b>——厂商常常不把它放进广播（<code>BleGatt.kt</code> 已记）。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col">
+        <div class="ri"></div>
+        <div class="row" style="justify-content:space-between"><span style="font-size:20px;color:var(--s-i400)">‹</span><span class="b13" style="color:var(--s-focus)">使用说明</span></div>
+        <div class="ri"></div>
+        <div class="row" style="gap:18px;align-items:flex-end">
+          <div class="pen" style="width:82px;height:118px;margin:0"><span class="onoff" style="right:9px;top:17px;width:15px;height:9px"></span><span class="mark" style="right:7px;top:37px;width:18px;height:18px"></span><span class="lg" style="width:11px;height:11px"></span></div>
+          <div style="flex:1">
+            <p class="t22">灵魂卡</p>
+            <div class="rt"></div>
+            <p class="b14">录完就出判断，不只是出文字</p>
+          </div>
+        </div>
+        <div class="rb"></div>
+        <p class="sec">你的两张</p>
+        <div class="re"></div>
+        <div class="col" style="gap:10px">
+          <div class="cd t" style="flex-direction:row;align-items:center;gap:12px">
+            <span style="width:7px;height:7px;border-radius:50%;background:var(--s-ok);display:block;flex:none"></span>
+            <div style="flex:1"><p class="t16" style="font-size:15px">随身那张</p><p class="mini">SN-A7F2 · 78% · 12.4/64 GB · 10 分钟前同步</p></div>
+            <span style="font-size:18px;color:var(--s-i300)">›</span>
+          </div>
+          <div class="cd t" style="flex-direction:row;align-items:center;gap:12px">
+            <span style="width:7px;height:7px;border-radius:50%;background:var(--s-i300);display:block;flex:none"></span>
+            <div style="flex:1"><p class="t16" style="font-size:15px">办公室那张</p><p class="mini">SN-C104 · 不在附近 · 昨天 18:20 同步过</p></div>
+            <span style="font-size:18px;color:var(--s-i300)">›</span>
+          </div>
+        </div>
+        <div class="rb"></div>
+        <p class="sec">随卡的权益 · 永久</p>
+        <div class="re"></div>
+        <div class="cd soft" style="gap:7px">
+          <p class="t16" style="color:var(--s-focus)">转写不限 · 深判断每月 20 次</p>
+          <p class="mini" style="color:var(--s-focus);opacity:.85">每张卡每月 10 次，两张叠加。<b>不按分钟计</b>，你录多久都行。权益随卡永久。</p>
+        </div>
+        <div class="re"></div>
+        <div class="cd t" style="flex-direction:row;align-items:center;gap:12px">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--s-ok)" stroke-width="1.6" style="flex:none"><path d="M12 3v12M12 15l-4-4M12 15l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          <div style="flex:1"><p class="t16" style="font-size:15px">你的东西可以带走</p><p class="mini">音频 + 转写 + 判断，随时一键导出。我们不做「服务年票」。</p></div>
+        </div>
+        <div class="ri"></div>
+        <div class="fe">
+          <div><b>一拨即录</b>不用掏手机</div><div><b>8 米拾音</b>会议室够用</div><div><b>60 天</b>不用天天充</div>
+          <div><b>说一句话</b>就能打标记</div><div><b>连上自动</b>全部同步</div><div><b>现场/通话</b>都能录</div>
+        </div>
+        <div class="grow"></div>
+        <div class="btn p w">再连一张</div>
+        <div class="re"></div>
+        <div class="btn w">再买一张 · 送人</div>
+        <div class="ri"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S2 · Device</p>
+      <h4>灵魂卡 · 硬件页</h4>
+      <p class="route">从「我的」与空态两处进 · 支持多张</p>
+      <ul>
+        <li><b>硬件是商业模式，就该有一整页</b>，不是「我的」里一张卡。结构学自得到「录音卡」页：产品图 + 特性 + 底部「连接」/「购买」双按钮——买没买的人共用一个入口。</li>
+        <li><b>一人可多张，所以设备是列表。</b>每张自己命名；不在附近显示灰点＋上次同步时间，<b>不显示成故障</b>——卡不在身边是常态。</li>
+        <li><b>随卡权益写在这一页。</b>「转写不限 · 深判断每月 20 次 · 永久」，两张叠加——这就是「再买一张」的真实理由。</li>
+        <li><b>「你的东西可以带走」提到这一页当卖点</b>（邱定）。得到把「终身免费使用」印成头号标签、Plaud「发现」页第一项是私有云同步——两家都在正面回应「买的是一张服务年票」这个恐惧。<b>对卖判断资产的深脑更该讲，埋在「我的」里等于没说。</b></li>
+        <li><b>特性写结果不写参数。</b>红线是不吹参数，但可以讲它替你省了什么。</li>
+        <li><b>定价 899</b>（与安克录音豆同价，高于钉钉 A1 799 与得到 GetSeed 699）。这一档要求开箱有仪式感但不必奢侈——未绑卡时底部按钮显示价格，已绑的人不再看到价格。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="grp">
+  <p class="grpname">组二 · 采集</p>
+  <p class="grpdek">六个源，一条 <code>Ingest</code>。这一组要同时成立两件事：<strong>开录快</strong>，和<strong>录完之后你知道东西卡在哪一站</strong>。</p>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb wide col">
+        <div class="ri"></div>
+        <div class="row" style="justify-content:space-between"><span style="font-size:19px;color:var(--s-i400)">✕</span><span class="btn s">中文 · 普通话 ∨</span></div>
+        <div class="rb"></div>
+        <p class="t22">这是什么场合？</p>
+        <div class="rt"></div>
+        <p class="b14">选了之后，深脑用对应的方法来看这一场。录完也能改。</p>
+        <div class="ri"></div>
+        <div class="sc">
+          <div class="on"><b>战略会</b><span>战略问骨 +<br>悬空假设</span></div>
+          <div><b>谈判</b><span>谈判拆解 +<br>立场变化</span></div>
+          <div><b>访谈 / 用研</b><span>抽事实<br>与原话</span></div>
+          <div><b>复盘</b><span>执行力追踪 +<br>对照上次</span></div>
+        </div>
+        <div class="ri"></div>
+        <div class="cd soft">
+          <p class="l11" style="color:var(--s-focus);opacity:.8">按下之前，念一句</p>
+          <p class="b15" style="color:var(--s-focus)">我录个音，回头给大家出纪要。</p>
+          <div class="row" style="gap:8px;margin-top:2px"><span class="btn s">复制</span><span class="btn s">换一句</span></div>
+        </div>
+        <div class="grow"></div>
+        <div class="rec"></div>
+        <div class="ri"></div>
+        <p class="b13" style="text-align:center">按下之后就可以把手机扣过去了</p>
+        <div class="rb"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S3 · Recording / pre</p>
+      <h4>开录前 · 选场合</h4>
+      <p class="route">沉浸式第一屏 · 场合 → 方法路由</p>
+      <ul>
+        <li><b>选场合 ＝ 选方法。</b>卡片副标直接写出会用哪几个方法（战略问骨 / 谈判拆解 / 执行力追踪）——<b>这是深脑比 Plaud「录完挑模板」更值的地方</b>：在录之前锚定更准，也省一次操作。</li>
+        <li>服务端有 <code>routingReason</code>，所以这里选的场合<b>不是死绑</b>，只是给路由一个先验；录完还能在详情页看到「为什么最后用了这几个方法」。</li>
+        <li><b>这一步在会前，不违反「会中不看屏幕」。</b>告知文案放这儿正合适——念它的时机就是按下之前。</li>
+        <li>只给四个。红线：不做模板数量竞赛。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb wide col">
+        <div class="rb"></div>
+        <div class="row" style="justify-content:center;gap:8px">
+          <span class="lab att">战略会</span><span class="lab inf">随身那张</span>
+        </div>
+        <div class="rb"></div>
+        <div style="text-align:center"><p class="t30">12:34</p></div>
+        <div class="ri"></div>
+        <div class="wv" style="justify-content:center">
+          <i style="height:9px"></i><i style="height:18px"></i><i style="height:30px"></i><i style="height:15px"></i><i style="height:34px"></i><i style="height:22px"></i><i style="height:12px"></i><i style="height:27px"></i><i style="height:19px"></i><i style="height:10px"></i><i style="height:25px"></i><i style="height:14px"></i><i style="height:32px"></i><i style="height:17px"></i><i style="height:8px"></i><i style="height:21px"></i><i style="height:13px"></i>
+        </div>
+        <div class="ri"></div>
+        <p class="b13" style="text-align:center">剩余空间够 8 小时</p>
+        <div class="rb"></div>
+        <div class="cd soft">
+          <p class="l11" style="color:var(--s-focus);opacity:.8">刚才听到了 · 12:31</p>
+          <p class="b15" style="color:var(--s-focus)">「<b>这条要追</b>，预算下周三给准数」</p>
+          <p class="mini" style="color:var(--s-focus);opacity:.75">已记成一条承诺 · 散会后出现在「今天」</p>
+        </div>
+        <div class="grow"></div>
+        <div class="btn p w">停止并保存</div>
+        <div class="ri"></div>
+        <p class="b13" style="text-align:center">可以锁屏，也可以切走。<br>通知栏能看到它还在录。</p>
+        <div class="rb"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S4 · Recording</p>
+      <h4>录音中 · 可以扣过去</h4>
+      <p class="route">前台服务 + 常驻通知 · marks 落 recordings/[id]/marks</p>
+      <ul>
+        <li><b>这一屏的目标是让人不再看它。</b>宪章级红线：会中不需要看任何屏幕。所以<b>不显示实时转写</b>。</li>
+        <li><b>30sp 巨号只给时长。</b><code>Theme.kt</code>：一屏最多一个，且必须是那一屏的全部意义。</li>
+        <li><b>语音口令必须给回执：屏上留痕 ＋ 一次轻震。</b>不给回执，人不知道它听见没有，下次就不敢用——而这个功能是那条红线唯一的出路。<b>后端已有 <code>recordings/[id]/marks</code>，不用新建。</b></li>
+        <li>顶部两个标签说清「按什么方法看 / 声音从哪来」，多张卡时显示是哪一张。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col">
+        <div class="ri"></div>
+        <p class="t22">记录</p>
+        <div class="ri"></div>
+        <div class="sg"><span class="on">全部</span><span>随身</span><span>办公室</span><span>手机</span><span>分享来的</span></div>
+        <div class="ri"></div>
+        <div class="cd t soft" style="gap:9px">
+          <div class="row" style="gap:9px">
+            <span style="width:7px;height:7px;border-radius:50%;background:var(--s-focus);display:block"></span>
+            <span class="b14" style="color:var(--s-focus);font-weight:500;flex:1">从「随身那张」同步 · 2/3</span>
+            <span class="mini" style="color:var(--s-focus)">27 KB/s</span>
+          </div>
+          <div class="prog"><i style="width:62%"></i></div>
+          <p class="mini" style="color:var(--s-focus);opacity:.8">可以直接切走，同步会在后台继续</p>
+        </div>
+        <div class="rb"></div>
+        <p class="sec">今天</p>
+        <div class="re"></div>
+        <div class="col" style="gap:14px">
+          <div>
+            <div class="row" style="gap:10px"><span class="nm" style="font-size:15px;flex:1">方法评审</span><span class="b13">47:12</span></div>
+            <div class="rt"></div>
+            <div class="pipe"><u class="on"></u><i class="on"></i><u class="on"></u><i class="on"></i><u class="on"></u><i class="on"></i><u class="on"></u></div>
+            <div class="pipel"><span>录到了</span><span>传到了</span><span>转写了</span><span style="color:var(--s-ok)">分析好了</span></div>
+          </div>
+          <div class="hr"></div>
+          <div>
+            <div class="row" style="gap:10px"><span class="nm" style="font-size:15px;flex:1">客户回访</span><span class="b13">31:20</span></div>
+            <div class="rt"></div>
+            <div class="pipe"><u class="on"></u><i class="on"></i><u class="on"></u><i class="on"></i><u class="now"></u><i></i><u></u></div>
+            <div class="pipel"><span>录到了</span><span>传到了</span><span style="color:var(--s-focus)">正在转写</span><span>分析</span></div>
+          </div>
+          <div class="hr"></div>
+          <div>
+            <div class="row" style="gap:10px"><span class="nm" style="font-size:15px;flex:1">note20260904-0840</span><span class="lab no">卡住了</span></div>
+            <div class="rt"></div>
+            <div class="pipe"><u class="on"></u><i></i><u></u><i></i><u></u><i></i><u></u></div>
+            <div class="pipel"><span>录到了</span><span>传</span><span>转写</span><span>分析</span></div>
+            <p class="mini" style="margin-top:7px">网络断了，已收 4.2 MB。<span style="color:var(--s-focus);font-weight:500">接着传</span></p>
+          </div>
+        </div>
+        <div class="grow"></div>
+        <div class="hr"></div>
+        <div class="re"></div>
+        <p class="mini"><b style="color:var(--s-i600)">这里看不到：</b>换账号之前导的、2026-09 之前导的。没落这本账，不代表没导过。</p>
+        <div class="ri"></div>
+      </div>
+      <div class="nb">
+        <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>今天</a>
+        <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg>记录</a>
+        <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>问</a>
+        <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1-3.6 4-5.4 7.5-5.4S18.5 16.4 19.5 20"/></svg>我的</a>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S5 · RecordsList</p>
+      <h4>记录 · 链路四站<span class="new">改</span></h4>
+      <p class="route">mobile/sessions → SessionCard.stage</p>
+      <ul>
+        <li><b>改了：按系统真实的四站画，不是我编的「已入库/已跳过」。</b><code>Stage</code> 枚举本来就有 RECORDED → DELIVERED → TRANSCRIBED → ANALYZED，还有 FAILED 带一条 <code>problem</code>——注释写「服务端保证是人话」。</li>
+        <li><b>四站的价值是它能回答「卡在哪」。</b>用户报「东西没进去」时，一眼能看出是没传上、还是转写排队、还是分析没跑。</li>
+        <li><b>站名用用户的说法</b>：录到了 / 传到了 / 转写了 / 分析好了。<code>Stage</code> 的注释也是这么要求的：「名字按用户能理解的说法取，不用服务端的内部状态名」。</li>
+        <li>分段里<b>每张卡各占一格，与手机、分享来的并列，不做主次视觉差</b>——一个只用手机的人，界面上不该处处看见「你还没有灵魂卡」。</li>
+        <li><b>底部「这里看不到什么」是硬性要求</b>，9-03 事故的直接对策。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col" style="justify-content:flex-end">
+        <div class="cd" style="border-radius:20px 20px 0 0;border-bottom:none;margin:0 -16px -1px;padding:24px 20px 28px;gap:0">
+          <div style="width:36px;height:4px;border-radius:99px;background:var(--s-i200);margin:0 auto 18px"></div>
+          <p class="t22" style="font-size:20px">收到一段音频</p>
+          <div class="re"></div>
+          <div class="cd t flat" style="flex-direction:row;align-items:center;gap:12px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--s-i400)" stroke-width="1.6"><path d="M4 12v-1a8 8 0 0 1 16 0v1M7 13v5M12 10v11M17 13v5"/></svg>
+            <div style="flex:1"><p class="t16" style="font-size:15px">客户回访 0904.m4a</p><p class="mini">来自飞书妙记 · 31 分 20 秒 · 28.4 MB</p></div>
+          </div>
+          <div class="ri"></div>
+          <p class="sec">当成什么场合分析？</p>
+          <div class="re"></div>
+          <div class="sc">
+            <div><b>战略会</b><span>战略问骨</span></div>
+            <div class="on"><b>访谈 / 用研</b><span>抽事实与原话</span></div>
+          </div>
+          <div class="re"></div>
+          <p class="mini">选错了不要紧，进来之后随时能改。</p>
+          <div class="ri"></div>
+          <div class="btn p w">收进深脑</div>
+          <div class="re"></div>
+          <p class="mini" style="text-align:center">和灵魂卡录的走同一条管道，同样不占分钟</p>
+        </div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S6 · ShareIn</p>
+      <h4>分享进来 · 确认半屏<span class="new">新</span></h4>
+      <p class="route">ACTION_SEND / ACTION_SEND_MULTIPLE 落地</p>
+      <ul>
+        <li><b>这是上游 A3（P0 入口）的落地屏。</b>原话「用户已在用硬件与转写工具，<b>不愿换设备</b>」——飞书妙记、通义听悟、讯飞、钉钉、Plaud、GetSeed 的导出文件都从这里进。</li>
+        <li><b>半屏不是全屏。</b>用户是从别的 App 过来的，全屏会让人以为切换了应用；半屏保留「我还在原来那件事里」的感觉。</li>
+        <li><b>只问一件事：当成什么场合。</b>不问命名、不问项目——那些进来之后能改。<b>一个分享动作只该按一次按钮。</b></li>
+        <li>底部那句「同样不占分钟」是在这里把权益差异说给一个还没买卡的人听——<b>这一屏很可能是新用户见到的第一屏</b>。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="grp">
+  <p class="grpname">组三 · 兑现</p>
+  <p class="grpdek">硬件的价值全部在这一组发生。<code>mobile/today</code> 回的是四样：到期承诺、新洞察、到期预测、等着认人的——<strong>屏幕结构照着数据结构走，不自己另编一套</strong>。</p>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col">
+        <div class="ri"></div>
+        <div class="dev"><span class="dot"></span><span class="tx"><b>随身那张</b> 已连接 · 78% · 无待同步</span><span class="go">2 张 ›</span></div>
+        <div class="rb"></div>
+        <div class="row" style="align-items:baseline;gap:9px"><p class="t22">今天</p><p class="b13">9月4日 周四</p></div>
+        <div class="ri"></div>
+        <p class="sec">到期的承诺 · 2 条，1 条逾期</p>
+        <div class="re"></div>
+        <div class="cd risk">
+          <p class="t16">王总：下周三前给预算口径</p>
+          <p class="b13">9-01 战略会 · <span style="color:var(--s-rtext);font-weight:500">已逾期 1 天</span></p>
+          <div class="quo">「预算应该可以往上调一点，我下周三之前给你个准数。」<div class="rt"></div><span class="jump">▶ 回到原话 12:47</span></div>
+          <div class="row" style="gap:8px;margin-top:4px"><span class="btn s p">兑现了</span><span class="btn s">没兑现</span><span class="btn s">改期</span></div>
+        </div>
+        <div class="re"></div>
+        <div class="li" style="padding:10px 0"><span class="nm" style="font-size:14px;color:var(--s-focus);font-weight:500">还有 1 条今天到期</span><span style="font-size:16px;color:var(--s-focus)">›</span></div>
+        <div class="rb"></div>
+        <p class="sec">新洞察 · 3 条</p>
+        <div class="re"></div>
+        <div class="cd">
+          <div class="jd"><span class="lab att">亲证</span><span>三个人对「先做哪一层」带着三个不同的答案散场了。</span></div>
+          <div class="quo">张：「那就先把底座做完。」 李：「我理解是先出插件。」</div>
+        </div>
+        <div class="re"></div>
+        <div class="li" style="padding:10px 0;gap:8px"><span class="lab conj">猜想 1</span><span class="nm" style="font-size:14px;color:var(--s-focus);font-weight:500">还有 2 条 · 含 1 条猜想</span><span style="font-size:16px;color:var(--s-focus)">›</span></div>
+        <div class="rb"></div>
+        <p class="sec">该给说法的预测 · 1 条</p>
+        <div class="re"></div>
+        <div class="cd warn">
+          <p class="t16">「插件延后不会影响 9 月的交付」</p>
+          <p class="mini" style="color:var(--s-warn)">8-21 立 · 今天到期</p>
+          <div class="row" style="gap:8px;margin-top:4px"><span class="btn s">去给个说法</span></div>
+        </div>
+        <div class="rb"></div>
+        <div class="li" style="padding:10px 0;gap:8px"><span class="lab wn">3</span><span class="nm" style="font-size:14px;color:var(--s-focus);font-weight:500">有 3 句还不知道是谁说的</span><span style="font-size:16px;color:var(--s-focus)">›</span></div>
+        <div class="grow"></div>
+      </div>
+      <div class="fab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
+      <div class="nb">
+        <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>今天</a>
+        <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg>记录</a>
+        <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>问</a>
+        <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1-3.6 4-5.4 7.5-5.4S18.5 16.4 19.5 20"/></svg>我的</a>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S7 · TodayFeed</p>
+      <h4>今天 · 四个区块<span class="new">改</span></h4>
+      <p class="route">mobile/today → commitments[] · insights[] · predictions[]</p>
+      <ul>
+        <li><b>改了：从两个区块补到四个，照着 <code>Today</code> 的字段来。</b>上一版我漏了「到期预测」和「等着认人的」——那不是我该发明的，是接口已经在回的。</li>
+        <li><b>认知三档全部上屏：亲证 / 推断 / <span style="color:var(--iris)">猜想</span>。</b><code>Api.kt</code> 原话：「必须显示——手机是一扫而过的场景，<b>一条猜想会被当成事实</b>」。猜想用第三种颜色（Iris），并且明说「没有直接原话支撑」。</li>
+        <li><b>预测那一栏是竞品完全没有的东西。</b>关键在 <code>observableSignal</code>——「看到什么就算应验／落空」必须原样显示，否则「给说法」这个动作没有判据，就变成了拍脑袋。</li>
+        <li>三个按钮是<b>应验 / 落空 / 说不清</b>。「说不清」必须在场——强迫二选一会污染命中率，而命中率是深脑最贵的资产。</li>
+        <li><b>四个区块各只露最要紧的一条，其余收成「还有 N 条 ›」。</b>四个全展开就是一堵墙——手机是一扫而过的场景。<b>数字仍然给全</b>（用户要知道有多少），但不必一次读完。</li>
+        <li><b>猜想在首屏只以计数出现，不展开正文。</b>它最容易被当成事实，而首屏恰恰是最不该细读的地方。</li>
+        <li>第四个区块「有 3 句还不知道是谁说的」是 <code>counts.awaitingSpeaker</code> 的出口，点进 S14。</li>
+        <li><b><code>notReady</code> 与 <code>failed</code> 要分开。</b>字段注释：「迁移没跑必须和『没有承诺』分开——后者用户永远不会主动报告」。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col">
+        <div class="ri"></div>
+        <div class="row" style="justify-content:space-between"><span style="font-size:20px;color:var(--s-i400)">‹</span><span style="font-size:19px;color:var(--s-i400);letter-spacing:2px">···</span></div>
+        <div class="re"></div>
+        <p class="t22" style="font-size:20px;line-height:27px">方法评审</p>
+        <div class="rt"></div>
+        <p class="b13">9-03 14:20 · 47 分钟 · 随身那张 · 4 人</p>
+        <div class="ri"></div>
+        <div class="cd t flat" style="gap:5px">
+          <p class="mini">这一场用了 <b style="color:var(--s-on)">战略问骨 · 执行力追踪</b></p>
+          <p class="mini">因为：现场出现了「先做哪一层」的分歧，且有两条带日期的承诺</p>
+        </div>
+        <div class="ri"></div>
+        <div class="dt"><span class="on">判断 3</span><span>承诺 2</span><span>原话</span></div>
+        <div class="ri"></div>
+        <div class="cd">
+          <div class="jd"><span class="lab att">亲证</span><span>三个人对「先做哪一层」带着三个不同的答案散场了。</span></div>
+          <div class="quo">张：「那就先把底座做完。」<br>李：「我理解是先出插件。」</div>
+          <div class="row" style="align-items:center">
+            <p class="ev">依据 2 处 · 反方 0 处 ›</p>
+            <span class="row" style="margin-left:auto;gap:14px;color:var(--s-i300)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 11v9H4v-9zM7 11l4-8a2 2 0 0 1 3 2l-1 6h5a2 2 0 0 1 2 2.4l-1.3 6A2 2 0 0 1 16.7 21H7"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 13V4h3v9zM17 13l-4 8a2 2 0 0 1-3-2l1-6H6a2 2 0 0 1-2-2.4l1.3-6A2 2 0 0 1 7.3 3H17"/></svg>
+            </span>
+          </div>
+        </div>
+        <div class="re"></div>
+        <div class="cd">
+          <div class="jd"><span class="lab inf">推断</span><span>没人问预算从哪来，这条假设已经悬空两周。</span></div>
+          <p class="ev">依据 1 处 › <span style="color:var(--s-i400);font-weight:400">支持度 中</span></p>
+        </div>
+        <div class="re"></div>
+        <div class="cd t" style="border-style:dashed;flex-direction:row;align-items:center;gap:10px">
+          <span class="lab conj">猜想 1</span>
+          <p class="b14" style="flex:1;color:var(--s-i400)">深脑的猜想 · 点开看它凭什么</p>
+          <span style="font-size:16px;color:var(--s-i300)">›</span>
+        </div>
+        <div class="grow"></div>
+        <div class="btn p w">做成能发出去的一页</div>
+        <div class="re"></div>
+        <div class="btn w">在网页版看逐句转写 ↗</div>
+        <div class="ri"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S8 · Meeting / 判断</p>
+      <h4>一场 · 判断<span class="new">改</span></h4>
+      <p class="route">Meeting.atoms[] + analysis{methods, routingReason}</p>
+      <ul>
+        <li><b>新增顶部那条：「这一场用了哪几个方法、为什么」。</b><code>MeetingAnalysis</code> 里本来就有 <code>methods[]</code> 和 <code>routingReason</code>，一直没上屏。<b>这是深脑「方法可审计」的用户面，Plaud 的模板给不了</b>——它只能告诉你用了哪个模板，不能告诉你为什么。</li>
+        <li><b>猜想默认折叠成一行。</b>它信息量最大、最需要上下文、也最容易被当成事实——展开态里必须给出处（「来自跨录音联想：8-14 那场里他说过…」）和虚线边框，<b>而这些东西不该在一扫而过时糊在脸上</b>。亲证与推断照常展开，它们有原话托底。</li>
+        <li>三档在视觉上一眼分得开：亲证 Focus 蓝 / 推断 中性灰 / 猜想 Iris 紫 + 虚线框，不只靠标签文字。</li>
+        <li><b>👍👎 是埋点②的落点</b>（删除率 &lt;15%）。对判断类产品，「踩」比「赞」值钱——它是过度创造的唯一反证。</li>
+        <li>「反方 0 处」也显示。自曝边界比宣称准确更能建立信任。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col">
+        <div class="ri"></div>
+        <div class="row" style="justify-content:space-between"><span style="font-size:20px;color:var(--s-i400)">‹</span><span style="font-size:19px;color:var(--s-i400);letter-spacing:2px">···</span></div>
+        <div class="re"></div>
+        <p class="t22" style="font-size:20px;line-height:27px">方法评审</p>
+        <div class="ri"></div>
+        <div class="dt"><span>判断 3</span><span>承诺 2</span><span class="on">原话</span></div>
+        <div class="ri"></div>
+        <div class="pl">
+          <span class="pp"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>
+          <div style="flex:1">
+            <div class="prog"><i style="width:64%"></i></div>
+            <div class="row" style="justify-content:space-between;margin-top:5px"><span class="mini">31:02</span><span class="mini">47:12</span></div>
+          </div>
+          <span class="btn s">1.5×</span>
+        </div>
+        <div class="ri"></div>
+        <div class="cd soft" style="gap:5px">
+          <p class="mini" style="color:var(--s-focus);opacity:.8">从「判断」跳来 · 三个人三个答案</p>
+          <p class="b13" style="color:var(--s-focus)">30:48 · 张</p>
+          <p class="b15" style="color:var(--s-focus)">那就先把底座做完，插件的事下个迭代再说。</p>
+        </div>
+        <div class="ri"></div>
+        <div class="col" style="gap:20px">
+          <div><p class="b13">31:02 · 李</p><div class="rt"></div><p class="b15">我理解是先出插件？上周不是说插件那边有个 deadline 吗。</p></div>
+          <div>
+            <p class="b13">31:19 · <span style="color:var(--s-focus)">说话人 3</span> <span class="lab wn">谁在说</span></p>
+            <div class="rt"></div>
+            <p class="b15">这个我们回头再对一下吧，预算那边我下周三之前给你个准数。</p>
+          </div>
+          <div><p class="b13">31:35 · 邱</p><div class="rt"></div><p class="b15">行，那就先这样。</p></div>
+        </div>
+        <div class="grow"></div>
+        <div class="btn w">在网页版看完整转写 ↗</div>
+        <div class="ri"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S9 · Meeting / 原话</p>
+      <h4>一场 · 原话</h4>
+      <p class="route">证据链的落地屏 · 从判断自动切来并定位到秒</p>
+      <ul>
+        <li><b>这一屏是证据链在界面上的兑现。</b>点「依据 2 处」→ tab 切到原话 → 滚到 30:48 → 那一段高亮，顶上写着「从判断跳来」。<b>一秒回原文是这类产品最难被抄的信任动作。</b></li>
+        <li>高亮块用 Focus 面色，不是黄色荧光笔——这是判断的依据，不是划重点。</li>
+        <li><b>没命名的说话人就地挂一个「谁在说」的钩子</b>，点开就是 S15 认人。<code>counts.awaitingSpeaker</code> 的数字来源就是这些。</li>
+        <li><b>只做浅层</b>：能读、能播、能定位。逐句校对、说话人面板交给网页版，按钮明写「网页版」并带外链箭头。</li>
+        <li>播放条常驻在 tab 下，切回「判断」时收成迷你条继续播——路上听是真实场景。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col">
+        <div class="ri"></div>
+        <div class="row" style="justify-content:space-between"><span style="font-size:20px;color:var(--s-i400)">‹</span><span style="font-size:19px;color:var(--s-i400);letter-spacing:2px">···</span></div>
+        <div class="re"></div>
+        <p class="t22" style="font-size:20px;line-height:27px">方法评审</p>
+        <div class="ri"></div>
+        <div class="dt"><span>判断 3</span><span class="on">承诺 2</span><span>原话</span></div>
+        <div class="ri"></div>
+        <div class="cd">
+          <div class="row" style="gap:8px"><p class="t16" style="flex:1">王总 → 给预算口径</p><span class="lab no">逾期 1 天</span></div>
+          <p class="b13">9-01 说的 · 原定 9-10</p>
+          <div class="quo">「预算应该可以往上调一点，我下周三之前给你个准数。」<div class="rt"></div><span class="jump">▶ 31:19</span></div>
+          <div class="row" style="gap:8px;margin-top:4px"><span class="btn s p">兑现了</span><span class="btn s">没兑现</span><span class="btn s">改期</span></div>
+        </div>
+        <div class="re"></div>
+        <div class="cd">
+          <div class="row" style="gap:8px"><p class="t16" style="flex:1">我 → 整理 K12 方法目录</p><span class="lab wn">今天到期</span></div>
+          <p class="b13">9-03 说的 · 给张老师</p>
+          <div class="row" style="gap:8px;margin-top:4px"><span class="btn s p">兑现了</span><span class="btn s">没兑现</span></div>
+        </div>
+        <div class="rb"></div>
+        <div class="cd t flat">
+          <p class="mini"><b style="color:var(--s-on)">王总在这个季度</b>：兑现 3 · 没兑现 2 · 还欠 1</p>
+          <p class="ev">看他的全部 ›</p>
+        </div>
+        <div class="grow"></div>
+        <div class="btn p w">做成能发出去的一页</div>
+        <div class="ri"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S10 · Meeting / 承诺</p>
+      <h4>一场 · 承诺<span class="new">新</span></h4>
+      <p class="route">Meeting.commitments[] · 落账走 mobile/commitments/[id]</p>
+      <ul>
+        <li><b>承诺在一场里也要能落账，不只在「今天」。</b>复盘一场会的时候人会顺手处理，不该逼他回首屏找。</li>
+        <li><b>底下那张灰卡是闭环二的关键一跳</b>：从「这一场的承诺」跳到「这个人一贯怎么样」。<code>Person</code> 已经有 kept/broken/open，<b>这是竞品完全没有的一段</b>。</li>
+        <li>每条承诺都带原话与时间戳，可跳回原话 tab。承诺是最需要证据支撑的一类判断——因为它要拿去追人。</li>
+        <li>状态用三档：逾期（Risk）/ 今天到期（Warn）/ 在途（无色）。<code>overdueDays</code> 负数=还没到。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col">
+        <div class="ri"></div>
+        <div class="row"><span style="font-size:20px;color:var(--s-i400)">‹</span></div>
+        <div class="re"></div>
+        <p class="t22" style="font-size:20px;line-height:27px">能发出去的一页</p>
+        <div class="ri"></div>
+        <div class="sg"><span class="on">给团队</span><span>给客户</span><span>给自己</span></div>
+        <div class="ri"></div>
+        <div class="cd" style="gap:18px">
+          <p class="t16">方法评审 · 9 月 3 日</p>
+          <div><p class="sec" style="color:var(--s-i600);font-weight:500">定了</p><div class="rt"></div><p class="b15">· 先做底座，插件延后到下个迭代</p></div>
+          <div><p class="sec" style="color:var(--s-i600);font-weight:500">谁在什么时候之前做什么</p><div class="rt"></div><p class="b15">· 邱 → 9/4 前整理 K12 方法目录<br>· 王 → 9/10 前给预算口径</p></div>
+          <div><p class="sec" style="color:var(--s-i600);font-weight:500">还没定的</p><div class="rt"></div><p class="b15">· 预算从哪来，会上没人问</p></div>
+          <div class="hr"></div>
+          <p class="mini">由深脑生成 · 每条可回原话</p>
+        </div>
+        <div class="ri"></div>
+        <div class="cd t flat">
+          <p class="mini">给客户的那版会自动去掉「还没定的」和内部人名。<span style="color:var(--s-focus);font-weight:500">看看差别 ›</span></p>
+        </div>
+        <div class="grow"></div>
+        <div class="row" style="gap:12px">
+          <span class="btn p" style="flex:1;padding:14px;font-size:15px">分享…</span>
+          <span class="btn" style="flex:1;padding:14px;font-size:15px">复制</span>
+        </div>
+        <div class="ri"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S11 · Deliver</p>
+      <h4>能发出去的一页</h4>
+      <p class="route">mobile/transcript/[id]/share</p>
+      <ul>
+        <li><b>只有三档口径，不是模板市场。</b>Plaud 一万+ 模板、TicNote 3000+ 行业模板是资源战。红线：不做模板数量竞赛。</li>
+        <li><b>小标题用用户的话</b>：「定了 / 谁在什么时候之前做什么 / 还没定的」，不是「决议 / 待办 / 悬空假设」。这一页是发给别人看的。</li>
+        <li><b>「还没定的」必须在场</b>——别人告诉你说了什么，我们告诉你哪里没谈成。</li>
+        <li><b>「给客户」那版自动去掉内部人名与未定项</b>，并且明说去掉了什么。悄悄删是欺骗，说明白才是专业。</li>
+        <li>埋点⑤要连<b>分享给了谁</b>一起记（给谁看＝真实买单理由，健康线 ≥20%）。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="grp">
+  <p class="grpname">组四 · 长期</p>
+  <p class="grpdek">L3 资产层。这一组决定<strong>第二个月还打不打开它</strong>，也是竞品完全没有覆盖的一段。</p>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col">
+        <div class="ri"></div>
+        <div class="row"><span style="font-size:20px;color:var(--s-i400)">‹</span></div>
+        <div class="rb"></div>
+        <div class="ringwrap">
+          <svg class="ring" viewBox="0 0 74 74">
+            <circle cx="37" cy="37" r="31" fill="none" stroke="var(--s-i100)" stroke-width="8"/>
+            <circle cx="37" cy="37" r="31" fill="none" stroke="var(--s-ok)" stroke-width="8"
+                    stroke-dasharray="195" stroke-dashoffset="78" stroke-linecap="round" transform="rotate(-90 37 37)"/>
+            <text x="37" y="41" text-anchor="middle" style="font:600 17px var(--sans);fill:var(--s-on)">60%</text>
+          </svg>
+          <div style="flex:1">
+            <p class="t22">王建国</p>
+            <div class="rt"></div>
+            <p class="b13">合作方 CTO · 一起开过 7 场</p>
+          </div>
+        </div>
+        <div class="ri"></div>
+        <div class="row" style="gap:8px">
+          <span class="lab ok">兑现 3</span><span class="lab no">没兑现 2</span><span class="lab inf">还欠 1</span>
+        </div>
+        <div class="re"></div>
+        <p class="mini">兑现率按有结论的 5 条算。还欠的那 1 条没到期，不计入。</p>
+        <div class="rb"></div>
+        <p class="sec">他还欠着的</p>
+        <div class="re"></div>
+        <div class="cd t">
+          <div class="row" style="gap:8px"><p class="t16" style="font-size:15px;flex:1">给预算口径</p><span class="lab no">逾期 1 天</span></div>
+          <p class="mini">9-01 战略会说的</p>
+        </div>
+        <div class="rb"></div>
+        <p class="sec">关于他的判断</p>
+        <div class="re"></div>
+        <div class="cd">
+          <div class="jd"><span class="lab inf">推断</span><span>他答应的事，凡是涉及预算的都拖过。</span></div>
+          <p class="mini">3 条里 3 条。<span style="color:var(--s-focus);font-weight:500">看这三条 ›</span></p>
+        </div>
+        <div class="re"></div>
+        <div class="cd t" style="border-style:dashed;flex-direction:row;align-items:center;gap:10px">
+          <span class="lab conj">猜想 2</span>
+          <p class="b14" style="flex:1;color:var(--s-i400)">深脑对他的两条猜想</p>
+          <span style="font-size:16px;color:var(--s-i300)">›</span>
+        </div>
+        <div class="grow"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S12 · Person</p>
+      <h4>人 · 兑现率<span class="new">新</span></h4>
+      <p class="route">mobile/people/[id] → kept/broken/open/keptRate</p>
+      <ul>
+        <li><b>这是全 App 最锋利的一屏，也是竞品完全没有的。</b>Plaud、得到、飞书妙记都能告诉你「谁说了什么」；<b>只有深脑能告诉你「这个人说的话，历史上兑现了几成」</b>。</li>
+        <li><b><code>keptRate</code> 为 null 时不画环。</b>字段注释：「null = 还没有任何一条有结论。<b>给 0% 或 100% 都是拿数字撒谎</b>」——那时显示「还没有能算数的记录」。</li>
+        <li><b>分母要写出来</b>：「按有结论的 5 条算，还欠的那 1 条没到期，不计入」。一个不解释分母的百分比，在这种场合是危险的。</li>
+        <li>「他答应的事，凡是涉及预算的都拖过。3 条里 3 条」——<b>这才是跨录音联想值钱的样子</b>，而不是「搜索强一点」。</li>
+        <li>这一屏从 S7 承诺卡、S10 底部灰卡、S9 说话人三处都能进。它是闭环二的收口。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col">
+        <div class="ri"></div>
+        <p class="t22">问</p>
+        <div class="rt"></div>
+        <p class="b14">跨所有录音找，答案带原话出处</p>
+        <div class="rb"></div>
+        <p class="sec">你可以这样问</p>
+        <div class="re"></div>
+        <div class="col" style="gap:10px">
+          <div class="cd t"><p class="b15">上周哪个承诺没人跟进？</p></div>
+          <div class="cd t"><p class="b15">王总在这三次会里改口了吗？</p></div>
+          <div class="cd t"><p class="b15">这个季度我有哪些判断被推翻了？</p></div>
+          <div class="cd t"><p class="b15">「先做底座」最早是谁提的？</p></div>
+        </div>
+        <div class="rb"></div>
+        <p class="sec">最近问过</p>
+        <div class="re"></div>
+        <div class="col">
+          <div class="li" style="padding:9px 0"><span class="nm" style="font-size:14px;color:var(--s-i400)">预算这条线一共谈过几次</span></div>
+          <div class="li" style="padding:9px 0"><span class="nm" style="font-size:14px;color:var(--s-i400)">谁最常做出没兑现的承诺</span></div>
+        </div>
+        <div class="grow"></div>
+        <div class="cd t" style="flex-direction:row;align-items:center;gap:12px;border-radius:99px;padding:13px 18px">
+          <span class="b15" style="color:var(--s-i300);flex:1">问点什么…</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--s-focus)" stroke-width="1.8"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </div>
+        <div class="ri"></div>
+      </div>
+      <div class="nb">
+        <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>今天</a>
+        <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg>记录</a>
+        <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>问</a>
+        <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1-3.6 4-5.4 7.5-5.4S18.5 16.4 19.5 20"/></svg>我的</a>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S13 · AskHome</p>
+      <h4>问 · 给问法不给空框</h4>
+      <p class="route">mobile/ask · mobile/search</p>
+      <ul>
+        <li><b>四条预设各对应深脑一个方法</b>：承诺追踪 / 立场变化 / 预测记账 / 溯源。它们同时是一份能力说明书——解决「不知道能问什么」这个冷启动障碍（学自得到「最近听的书里，哪个结论值得怀疑一下」）。</li>
+        <li><b>「最近问过」是埋点⑦的用户面</b>——存<b>原话</b>不存关键词，每 200 条聚一次类，那是下一个功能的富矿。</li>
+        <li>输入框带麦克风：路上想起来的问题是说出来的，不是打出来的。</li>
+        <li>答案必须带出处并可跳转，跳到 S9 原话的那一秒。<b>没有出处就退化成「搜索强一点」——上游原话：那不值钱。</b></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb wide col">
+        <div class="ri"></div>
+        <div class="row" style="justify-content:space-between"><span style="font-size:19px;color:var(--s-i400)">✕</span><span class="b13">1 / 3</span></div>
+        <div class="rb"></div>
+        <p class="sec">谁在说这一句</p>
+        <div class="re"></div>
+        <div class="cd">
+          <p class="b13">方法评审 · 31:19</p>
+          <div class="rt"></div>
+          <p class="b15">这个我们回头再对一下吧，预算那边我下周三之前给你个准数。</p>
+          <div class="row" style="gap:10px;margin-top:6px">
+            <span class="btn s"><span style="margin-right:4px">▶</span>听这一段</span>
+            <span class="btn s">前后各听 10 秒</span>
+          </div>
+        </div>
+        <div class="ri"></div>
+        <p class="sec">深脑猜是</p>
+        <div class="re"></div>
+        <div class="cd soft" style="flex-direction:row;align-items:center;gap:12px">
+          <div style="width:38px;height:38px;border-radius:50%;background:var(--s-focus);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;flex:none">王</div>
+          <div style="flex:1"><p class="t16" style="font-size:15px;color:var(--s-focus)">王建国</p><p class="mini" style="color:var(--s-focus);opacity:.8">在场，且这场里说过 12 句</p></div>
+          <span class="btn s p">就是他</span>
+        </div>
+        <div class="ri"></div>
+        <p class="sec">或者选别人</p>
+        <div class="re"></div>
+        <div class="col">
+          <div class="li"><div style="width:32px;height:32px;border-radius:50%;background:var(--s-i100);color:var(--s-i400);display:flex;align-items:center;justify-content:center;font-size:13px;flex:none">张</div><span class="nm">张伟</span><span class="rt">已说 8 句</span></div>
+          <div class="hr"></div>
+          <div class="li"><div style="width:32px;height:32px;border-radius:50%;background:var(--s-i100);color:var(--s-i400);display:flex;align-items:center;justify-content:center;font-size:13px;flex:none">李</div><span class="nm">李明</span><span class="rt">已说 15 句</span></div>
+          <div class="hr"></div>
+          <div class="li"><div style="width:32px;height:32px;border-radius:50%;background:var(--s-i100);color:var(--s-i400);display:flex;align-items:center;justify-content:center;font-size:13px;flex:none">＋</div><span class="nm">加一个新的人</span></div>
+        </div>
+        <div class="grow"></div>
+        <div class="btn w">这句听不出来，跳过</div>
+        <div class="ri"></div>
+        <p class="mini" style="text-align:center">认了之后，这个人在所有录音里的那些话会一起归位。</p>
+        <div class="rb"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S14 · SpeakerClaim</p>
+      <h4>认人<span class="new">新</span></h4>
+      <p class="route">counts.awaitingSpeaker · speaker-candidates</p>
+      <ul>
+        <li><b>这一屏是「今天」第四个区块的落地，我上一版整个漏了。</b><code>TodayCounts.awaitingSpeaker</code> 一直在回这个数字，但手机上无处可去。</li>
+        <li><b>认人是深脑的地基，不是锦上添花。</b>说话人不落到具体的人，S12 的兑现率、闭环二的整条链、「他第三次这么说了」全都立不起来。</li>
+        <li><b>一次只问一句，配一段音频。</b>让人听着判断，而不是看着一堆「说话人 2」去猜。「前后各听 10 秒」是必需的——单句常常听不出来。</li>
+        <li><b>给候选并说明理由</b>：「在场，且这场里说过 12 句」。有理由的建议才敢点，没理由的建议只会被跳过。</li>
+        <li><b>「听不出来就跳过」必须在场。</b>逼人猜会污染整个人物档案——这跟预测的「说不清」是同一条原则。</li>
+        <li>底部那句说明这个动作的杠杆：认一次，全库归位。<b>这是让人愿意做这件苦差事的唯一理由。</b></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb wide col">
+        <div class="ri"></div>
+        <div class="row"><span style="font-size:19px;color:var(--s-i400)">✕</span></div>
+        <div class="rb"></div>
+        <p class="sec">8 月 21 日，你判断</p>
+        <div class="re"></div>
+        <div class="cd warn">
+          <p class="t16" style="color:var(--s-warn)">插件延后不会影响 9 月的交付</p>
+          <div class="hr" style="background:rgba(0,0,0,.08)"></div>
+          <p class="mini" style="color:var(--s-warn)"><b>当初写的判据</b><br>9 月排期表里没有插件相关的阻塞项</p>
+        </div>
+        <div class="ri"></div>
+        <p class="b14">今天到期了。照当初那条判据，现在算什么？</p>
+        <div class="ri"></div>
+        <div class="col" style="gap:10px">
+          <div class="cd t" style="flex-direction:row;align-items:center;gap:12px"><span class="lab ok">应验</span><p class="b15" style="flex:1">排期表里确实没有</p></div>
+          <div class="cd t" style="flex-direction:row;align-items:center;gap:12px"><span class="lab no">落空</span><p class="b15" style="flex:1">出现了阻塞项</p></div>
+          <div class="cd t" style="flex-direction:row;align-items:center;gap:12px"><span class="lab inf">说不清</span><p class="b15" style="flex:1">判据本身没法核对</p></div>
+        </div>
+        <div class="rb"></div>
+        <div class="cd t flat">
+          <p class="mini">给了说法之后，它会进你的命中率。<b style="color:var(--s-on)">本季度 12 条，已有结论 7 条，命中 5 条。</b></p>
+          <p class="ev">在网页版看校准表 ↗</p>
+        </div>
+        <div class="grow"></div>
+        <p class="mini" style="text-align:center">「说不清」也是一个结果。<br>逼自己二选一，命中率就没有意义了。</p>
+        <div class="rb"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S15 · PredictionSettle</p>
+      <h4>给预测一个说法<span class="new">新</span></h4>
+      <p class="route">Prediction.observableSignal · 网页 calibration</p>
+      <ul>
+        <li><b>这是深脑独有的闭环四，市面上没有第二家在做。</b>《赛道报告》核心判断四：判断类产品必须解决三个信任问题——可回溯、可审计、<b>命中率可验证</b>。前两个在证据链，第三个就在这一屏。</li>
+        <li><b>关键是把当初写的 <code>observableSignal</code> 原样摆出来。</b>「看到什么就算应验／落空」——没有它，「给说法」就变成拍脑袋，命中率也就没有意义。</li>
+        <li><b>「说不清」必须是平等的第三个选项</b>，不是灰掉的逃生门。逼人二选一会污染命中率，而命中率是这套东西的全部价值。</li>
+        <li><b><code>observableSignal</code> 为空的预测要单独标出来</b>——字段注释：「为空说明这条当初没写清怎么算数，<b>那本身是个信号</b>」。这种预测不该混在正常列表里让人硬给说法。</li>
+        <li>上游 A6「判断力季报」的原料就是这一屏的产出。<b>这是竞品结构上不愿意做的事——它们不能承认 AI 判断会错。</b></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="grp">
+  <p class="grpname">组五 · 商业与系统</p>
+  <p class="grpdek">硬件成为商业模式之后，这一组从「账号页」升级成硬件的控制台。<strong>额度焦虑是差评第一来源</strong>，所以这三屏的每一处措辞都是对策。</p>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col">
+        <div class="ri"></div>
+        <p class="t22">我的</p>
+        <div class="rb"></div>
+        <p class="sec">灵魂卡 · 2 张</p>
+        <div class="re"></div>
+        <div class="cd t" style="flex-direction:row;align-items:center;gap:14px">
+          <div class="pen" style="width:34px;height:48px;border-radius:6px;margin:0"><span class="onoff" style="right:4px;top:7px;width:7px;height:4px"></span><span class="mark" style="right:3px;top:15px;width:8px;height:8px"></span></div>
+          <div style="flex:1"><p class="t16" style="font-size:15px">随身那张 · 办公室那张</p><p class="mini">78% 已连接 · 另一张昨天同步过</p></div>
+          <span style="font-size:18px;color:var(--s-i300)">›</span>
+        </div>
+        <div class="rb"></div>
+        <p class="sec">这个月</p>
+        <div class="re"></div>
+        <div class="cd" style="gap:14px">
+          <div>
+            <div class="row" style="justify-content:space-between;align-items:baseline">
+              <p class="t16">深判断 用了 4 次</p><p class="mini">随卡 20 次 / 月</p>
+            </div>
+            <div class="rt"></div>
+            <div class="prog calm"><i style="width:20%"></i></div>
+            <p class="mini" style="margin-top:6px">多方法组合 + 跨录音联想。两张卡各 10 次，叠加。</p>
+          </div>
+          <div class="hr"></div>
+          <div class="row" style="justify-content:space-between;align-items:baseline">
+            <p class="t16" style="font-size:15px">快判断 · 转写 · 导入</p><span class="lab ok">不限</span>
+          </div>
+          <div class="hr"></div>
+          <p class="b14">权益随卡永久。你已经买到的东西，我们不会往回调。</p>
+        </div>
+        <div class="re"></div>
+        <div class="cd t flat">
+          <p class="mini"><b style="color:var(--s-on)">Pro 另外给的是</b>：深判断不限 · 判断力季报 · 优先分析队列。<br>承诺账本、人的兑现率、预测记账<b style="color:var(--s-on)">不锁</b>——那是深脑本身。</p>
+        </div>
+        <div class="rb"></div>
+        <p class="sec">你的数据</p>
+        <div class="re"></div>
+        <div class="cd t"><p class="t16" style="font-size:15px">导出全部</p><p class="mini">音频 + 转写 + 判断，一个压缩包。你的东西可以带走。</p></div>
+        <div class="re"></div>
+        <div class="cd t"><p class="t16" style="font-size:15px">原始音频保留 12 个月</p><p class="mini">转写与判断永久。我们不承诺「无限存储」——那是会被砍的权益。</p></div>
+        <div class="re"></div>
+        <div class="cd t"><p class="t16" style="font-size:15px">语音口令 · 已开</p><p class="mini">录音中说一句话就能标记</p></div>
+        <div class="grow"></div>
+      </div>
+      <div class="nb">
+        <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>今天</a>
+        <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg>记录</a>
+        <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>问</a>
+        <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1-3.6 4-5.4 7.5-5.4S18.5 16.4 19.5 20"/></svg>我的</a>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S16 · MeHome</p>
+      <h4>我的 · 硬件的控制台</h4>
+      <p class="route">权益方案的落地面</p>
+      <ul>
+        <li><b>计量单位是判断次数不是分钟。</b>《机会地图》6.1 判死了分钟制。<b>转写与导入直接不限，并且当卖点讲</b>——全行业都在这里制造焦虑（得到 600 分钟/月、钉钉 1000、安克 1200）。</li>
+        <li><b>不限的东西不给数字</b>，只给一枚绿标。有数字就有焦虑。</li>
+        <li><b>显示「用了 4 次」不显示「剩余」。</b>剩余是倒计时，已用是陈述。全行业在另一边，<b>我们故意反着做——这是有意的，别当 bug 改回去</b>。</li>
+        <li><b>「权益随卡永久」印在界面上。</b>得到「先免费后砍权益」引爆过差评潮，那是所有额度型定价的必然结局。写在界面上，改起来就有成本。</li>
+        <li><b>存储说实话：音频 12 个月，转写与判断永久。</b>不承诺「无限存储」——那是一定会被砍的权益。</li>
+        <li><b>卡 899 买断，Pro ￥99/月，两者卖的东西必须分开</b>，否则买断会把订阅吃掉。<b>卡卖「单场深度」，Pro 卖「长期复利」</b>（次数不限 + 判断力季报）。而承诺账本、兑现率、预测记账<b>一律不锁</b>——锁起来等于把差异化藏了。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb wide col">
+        <div class="ri"></div>
+        <div class="row"><span style="font-size:20px;color:var(--s-i400)">‹</span></div>
+        <div class="rb"></div>
+        <p class="t22">这个月的深判断用完了</p>
+        <div class="ri"></div>
+        <p class="b15">你已经用掉随卡的 20 次。10 月 1 日回满。</p>
+        <div class="rb"></div>
+        <div class="cd" style="gap:14px">
+          <p class="sec" style="color:var(--s-i600);font-weight:500">现在仍然可以</p>
+          <div class="row" style="gap:10px;align-items:flex-start"><span class="lab ok">不限</span><p class="b15" style="flex:1">继续录、继续导，一分钟都不扣</p></div>
+          <div class="row" style="gap:10px;align-items:flex-start"><span class="lab ok">不限</span><p class="b15" style="flex:1">快判断：单方法出结论，带证据</p></div>
+          <div class="hr"></div>
+          <p class="mini">用不了的只有「多方法组合 + 跨录音联想」这一种。</p>
+        </div>
+        <div class="ri"></div>
+        <div class="cd t"><p class="t16" style="font-size:15px">这一场先用快判断</p><p class="mini">出结论，之后随时可以升成深判断</p></div>
+        <div class="grow"></div>
+        <div class="btn p w">先用快判断看看</div>
+        <div class="re"></div>
+        <div class="btn w">再连一张卡 · 每月多 10 次</div>
+        <div class="re"></div>
+        <div class="btn w">升级 Pro · 深判断不限</div>
+        <div class="ri"></div>
+        <p class="mini" style="text-align:center">我们不会因为你用完了就藏起已经生成的东西。</p>
+        <div class="rb"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S17 · QuotaWall</p>
+      <h4>深判断用完</h4>
+      <p class="route">付费转化的唯一路口 · 埋点⑧</p>
+      <ul>
+        <li><b>这不是墙，是一次降级。</b>额度焦虑是差评第一来源，所以最大篇幅讲「你<b>仍然</b>能做什么」。用不了的只有一种动作。</li>
+        <li><b>主按钮是「先用快判断看看」，不是「升级」。</b>让人当场还能拿到结果，才能把这一屏从流失点变成转化点。</li>
+        <li><b>「再连一张卡」和「升级 Pro」并列</b>，两条路都通。硬件那条对已认可产品的人更自然，也是复购。</li>
+        <li>底下那句直接回应行业最脏的做法。<b>埋点⑧记三个按钮各自的点击率——如果「先用快判断」占九成，说明 10 次/月定低了。</b></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb wide col">
+        <div class="ri"></div>
+        <div class="row"><span style="font-size:20px;color:var(--s-i400)">‹</span></div>
+        <div class="rb"></div>
+        <p class="t22">语音口令</p>
+        <div class="rt"></div>
+        <p class="b14">录音中说一句话，深脑就知道这一段要留下</p>
+        <div class="ri"></div>
+        <div class="cd soft" style="gap:6px">
+          <p class="mini" style="color:var(--s-focus);opacity:.8">开启后长这样 · 录音中 00:12:31</p>
+          <p class="b15" style="color:var(--s-focus)">你：「<b>这条要追</b>，预算下周三给准数。」</p>
+          <p class="mini" style="color:var(--s-focus);opacity:.8">↳ 记成一条承诺，散会后出现在「今天」</p>
+        </div>
+        <div class="ri"></div>
+        <div class="cd t" style="flex-direction:row;align-items:center;gap:14px">
+          <div style="flex:1"><p class="t16" style="font-size:15px">启用语音口令</p><p class="mini">不用掏手机，也不用打断别人</p></div>
+          <span style="width:42px;height:24px;border-radius:99px;background:var(--s-pri);position:relative;flex:none;display:block"><span style="position:absolute;right:3px;top:3px;width:18px;height:18px;border-radius:50%;background:var(--s-onpri);display:block"></span></span>
+        </div>
+        <div class="rb"></div>
+        <p class="sec">我的口令词 · 3 / 3</p>
+        <div class="re"></div>
+        <div class="col">
+          <div style="padding:14px 0"><p class="t16" style="font-size:15px">「这条要追」</p><p class="mini">记成一条承诺，进承诺账本</p></div>
+          <div class="hr"></div>
+          <div style="padding:14px 0"><p class="t16" style="font-size:15px">「这个假设有问题」</p><p class="mini">记成悬空假设，下次开场必问</p></div>
+          <div class="hr"></div>
+          <div style="padding:14px 0"><p class="t16" style="font-size:15px">「记一下」</p><p class="mini">只标记，不归类</p></div>
+        </div>
+        <div class="grow"></div>
+        <p class="mini">卡身上的 MARK 键做同一件事，等于「记一下」。<br>两条路都落 <b style="color:var(--s-i600)">recordings/[id]/marks</b>。</p>
+        <div class="ri"></div>
+        <div class="btn w">管理口令词</div>
+        <div class="ri"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S18 · VoiceCommand</p>
+      <h4>语音口令</h4>
+      <p class="route">后端已有 recordings/[id]/marks + hotwords</p>
+      <ul>
+        <li><b>这是「会中不看屏幕」那条红线唯一的出路。</b>红线否掉了实时转写、弹窗、副驾驶，但人在现场确实知道哪句重要。</li>
+        <li><b>得到做到「说『记一下』标记重点」，深脑能更狠：口令直接对应产物。</b>「这条要追」→ 承诺账本；「这个假设有问题」→ 悬空清单。<b>标记不再是书签，是在现场就完成了归类。</b></li>
+        <li><b>后端不用新建</b>——<code>recordings/[id]/marks</code> 与 <code>hotwords</code> 服务端早就有，这一屏是把已有能力接到手机上。</li>
+        <li>顶部那张卡是「开启后长这样」的示例，学自得到声纹页的「开启前/开启后」。<b>抽象功能必须演一遍，不能只描述。</b></li>
+        <li>口令词有上限。上限是特性不是限制：口令太多，说话时反而要想。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="grp">
+  <p class="grpname">边界态</p>
+  <p class="grpdek">「取不到」「没有内容」「迁移没跑」是三件事，绝不画成同一屏。<strong><code>Today.notReady</code> 与 <code>failed</code> 在接口层就是分开的字段</strong>——字段注释：「后者用户永远不会主动报告」。</p>
+  <div class="trio">
+    <figure>
+      <div class="ph sm">
+        <div class="sb"><span>9:41</span><em>▮▮ 78%</em></div>
+        <div class="pb col" style="padding:0 14px">
+          <div class="ri"></div>
+          <div class="row" style="align-items:baseline;gap:8px"><p class="t22" style="font-size:19px">今天</p><p class="b13" style="font-size:12px">9月4日</p></div>
+          <div class="mid">
+            <div class="art"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--s-i300)" stroke-width="1.6"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
+            <div>
+              <p class="t16" style="font-size:15px">还没有第一场</p>
+              <div class="rt"></div>
+              <p class="b13" style="line-height:19px">录一段十分钟的对话就行，<br>不用等一整场会。</p>
+            </div>
+            <span class="btn p" style="padding:11px 22px">录一段试试</span>
+            <p class="mini">或者 <span style="color:var(--s-focus);font-weight:500">从别的 App 分享一段进来</span></p>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>空态</b>不写「暂无数据」，写下一步，并给一个低门槛的第一次。分享入口在这里被介绍给还没买卡的人。</figcaption>
+    </figure>
+    <figure>
+      <div class="ph sm">
+        <div class="sb"><span>9:41</span><em>▮▮ 离线</em></div>
+        <div class="pb col" style="padding:0 14px">
+          <div class="ri"></div>
+          <div class="cd t flat" style="flex-direction:row;align-items:center;padding:10px 12px"><p class="mini">离线 · 显示的是 20 分钟前的</p></div>
+          <div class="ri"></div>
+          <p class="t22" style="font-size:19px">今天</p>
+          <div class="ri"></div>
+          <p class="sec" style="font-size:12px">到期的承诺 · 2</p>
+          <div class="re"></div>
+          <div class="cd risk" style="padding:14px">
+            <p class="t16" style="font-size:14px">王总：下周三前给预算口径</p>
+            <p class="mini" style="color:var(--s-rtext)">已逾期 1 天</p>
+            <div class="row" style="gap:6px;margin-top:4px"><span class="btn s" style="opacity:.45">兑现了</span><span class="btn s" style="opacity:.45">没兑现</span></div>
+          </div>
+          <div class="re"></div>
+          <p class="mini">联网后可以落账。内容照常可读。</p>
+        </div>
+      </div>
+      <figcaption><b>离线</b>说「显示的是 20 分钟前的」，不是一个转圈。内容照常可读，只禁掉需要联网的动作并说明。</figcaption>
+    </figure>
+    <figure>
+      <div class="ph sm">
+        <div class="sb"><span>9:41</span><em>▮▮ 78%</em></div>
+        <div class="pb col" style="padding:0 14px">
+          <div class="ri"></div>
+          <p class="t22" style="font-size:19px">今天</p>
+          <div class="ri"></div>
+          <div class="cd t" style="border-color:var(--s-warn);background:var(--s-wsurf);gap:7px">
+            <p class="t16" style="font-size:14px;color:var(--s-warn)">承诺账本还没开起来</p>
+            <p class="mini" style="color:var(--s-warn)">你的账号上这个功能还没启用，不是「没有承诺」。已经反馈给我们了。</p>
+            <div class="row" style="gap:8px;margin-top:2px"><span class="btn s">再试一次</span></div>
+          </div>
+          <div class="ri"></div>
+          <p class="sec" style="font-size:12px">新洞察 · 3</p>
+          <div class="re"></div>
+          <div class="cd" style="padding:14px">
+            <div class="jd" style="font-size:13.5px"><span class="lab att">亲证</span><span>三个人带着三个答案散场了。</span></div>
+          </div>
+        </div>
+      </div>
+      <figcaption><b><code>notReady</code></b> 单独一态：迁移没跑 ≠ 没有承诺。<b>后者用户永远不会主动报告</b>，所以必须自己说出来，且其余区块照常显示。</figcaption>
+    </figure>
+  </div>
+</div>
+
+
+<div class="grp">
+  <p class="grpname">组六 · 问的答案</p>
+  <p class="grpdek">契约代码里已经定死了：SSE、六种事件、agent 模式常在二十秒以上。<code>Ask.kt</code> 的注释把设计目标也写了——<strong>「智能体正在翻哪一篇，这是二十秒里唯一能让人安心的东西」</strong>。</p>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col">
+        <div class="ri"></div>
+        <div class="row"><span style="font-size:20px;color:var(--s-i400)">‹</span></div>
+        <div class="re"></div>
+        <p class="t22" style="font-size:19px;line-height:26px">王总在这三次会里改口了吗？</p>
+        <div class="ri"></div>
+        <div class="row" style="gap:8px"><span class="lab conj">智能体模式</span><span class="b13">会慢一点，它在翻东西</span></div>
+        <div class="ri"></div>
+        <div class="cd t flat" style="gap:11px">
+          <div class="row" style="gap:9px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--s-ok)" stroke-width="2.4"><path d="m5 12 5 5L20 7"/></svg><p class="b14" style="flex:1">在翻承诺</p><span class="mini">3 条</span></div>
+          <div class="row" style="gap:9px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--s-ok)" stroke-width="2.4"><path d="m5 12 5 5L20 7"/></svg><p class="b14" style="flex:1">在翻人物档案</p><span class="mini">王建国</span></div>
+          <div class="row" style="gap:9px"><span style="width:15px;height:15px;border-radius:50%;border:2px solid var(--s-i200);border-top-color:var(--s-focus);display:block;flex:none"></span><p class="b14" style="flex:1;color:var(--s-focus)">在翻原文</p><span class="mini">第 2 / 3 场</span></div>
+        </div>
+        <div class="ri"></div>
+        <p class="b15">他在 8-14 和 9-01 两场里对预算的说法确实不一致。8-14 他说「这个我得回去问」，把决定权推给了别人；9-01 却直接给了<span style="border-right:2px solid var(--s-focus);padding-right:2px"></span></p>
+        <div class="grow"></div>
+        <div class="btn w">先停下</div>
+        <div class="ri"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S19 · AskAnswer / streaming</p>
+      <h4>问 · 正在答<span class="new">新</span></h4>
+      <p class="route">mobile/ask · SSE · Ask.Event 六种</p>
+      <ul>
+        <li><b>二十秒的等待必须有东西在动。</b><code>Ask.kt</code> 注释：「中间什么都不显示的话，用户在第八秒就会认为它挂了——而它没有」。</li>
+        <li><b>把工具名翻成人话，这件事代码里已经做了</b>——<code>humanTool()</code> 把 <code>search_atoms</code> 翻成「在翻判断」。界面照搬，不再自己编一套。</li>
+        <li><b>mode 要说出来。</b>「智能体模式 · 会慢一点」是一句预期管理；走快路时这条标签换成「快路」或者干脆不显示。</li>
+        <li>每一步带上找到了什么（3 条 / 王建国 / 第 2 场）——<b>过程本身就是证据的预告</b>，答完之后这些就是出处。</li>
+        <li>「先停下」不是「取消」。已经流出来的那半段留着，人可能已经看够了。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col">
+        <div class="ri"></div>
+        <div class="row" style="justify-content:space-between"><span style="font-size:20px;color:var(--s-i400)">‹</span><span style="font-size:19px;color:var(--s-i400);letter-spacing:2px">···</span></div>
+        <div class="re"></div>
+        <p class="t22" style="font-size:19px;line-height:26px">王总在这三次会里改口了吗？</p>
+        <div class="ri"></div>
+        <p class="b15">改了一次。8-14 他把预算的决定权推给了别人（「这个我得回去问」），9-01 却直接给了时间承诺。中间这半个月发生了什么，三场录音里没有交代。</p>
+        <div class="ri"></div>
+        <div class="row" style="gap:8px">
+          <span style="color:var(--s-i300)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 11v9H4v-9zM7 11l4-8a2 2 0 0 1 3 2l-1 6h5a2 2 0 0 1 2 2.4l-1.3 6A2 2 0 0 1 16.7 21H7"/></svg></span>
+          <span style="color:var(--s-i300)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 13V4h3v9zM17 13l-4 8a2 2 0 0 1-3-2l1-6H6a2 2 0 0 1-2-2.4l1.3-6A2 2 0 0 1 7.3 3H17"/></svg></span>
+          <span class="btn s" style="margin-left:auto">复制</span>
+        </div>
+        <div class="rb"></div>
+        <p class="sec">这个答案的依据 · 3 处</p>
+        <div class="re"></div>
+        <div class="col" style="gap:10px">
+          <div class="cd t" style="gap:5px">
+            <div class="row" style="gap:8px"><span class="lab inf">原话</span><span class="mini">8-14 产品对齐 · 22:07</span></div>
+            <p class="b14" style="color:var(--s-on)">「这个我得回去问，不是我一个人能定的。」</p>
+          </div>
+          <div class="cd t" style="gap:5px">
+            <div class="row" style="gap:8px"><span class="lab no">承诺</span><span class="mini">9-01 战略会 · 王建国</span></div>
+            <p class="b14" style="color:var(--s-on)">下周三前给预算口径 · 已逾期 1 天</p>
+          </div>
+          <div class="cd t" style="gap:5px">
+            <div class="row" style="gap:8px"><span class="lab att">判断</span><span class="mini">9-03 方法评审</span></div>
+            <p class="b14" style="color:var(--s-on)">他答应的事，凡是涉及预算的都拖过。</p>
+          </div>
+        </div>
+        <div class="grow"></div>
+        <div class="btn w">接着问</div>
+        <div class="ri"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S20 · AskAnswer / done</p>
+      <h4>问 · 答完了<span class="new">新</span></h4>
+      <p class="route">Hit{kind, text, who, transcriptId}</p>
+      <ul>
+        <li><b>出处是这一屏的主体，不是脚注。</b>答案三行，依据三张卡——<b>没有出处的答案在这个产品里就是幻觉</b>。上游原话：被当成「搜索强一点」就不值钱了。</li>
+        <li><b>三种 kind 各有各的徽章</b>（原话 / 承诺 / 判断），对应 <code>Hit.kind</code> 的 judgment / commitment / meeting。每张可点，跳到 S9 原话的那一秒或 S12 那个人。</li>
+        <li>答案里主动说出「<b>中间这半个月发生了什么，三场录音里没有交代</b>」——<b>自曝盲区比多说两句更能建立信任</b>。</li>
+        <li>👍👎 在这里也是埋点②。<b>「问」的答案比判断更容易过度创造</b>，这一处的踩率要单独看。</li>
+        <li>「接着问」而不是「返回」——一个问题问完往往带出下一个，这是「问」这一栏的复访动力。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb wide col">
+        <div class="ri"></div>
+        <div class="row"><span style="font-size:20px;color:var(--s-i400)">‹</span></div>
+        <div class="re"></div>
+        <p class="t22" style="font-size:19px;line-height:26px">李明对定价是什么态度？</p>
+        <div class="rb"></div>
+        <div class="art" style="width:56px;height:56px;border-radius:20px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--s-i300)" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></svg></div>
+        <div class="ri"></div>
+        <p class="t22" style="font-size:20px">这个我答不了</p>
+        <div class="rt"></div>
+        <p class="b15">库里没有足够的依据。<b>我不想编一个像样的答案给你。</b></p>
+        <div class="rb"></div>
+        <div class="cd t flat" style="gap:10px">
+          <p class="mini"><b style="color:var(--s-i600)">我找过这些地方</b></p>
+          <div class="row" style="gap:9px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--s-i300)" stroke-width="2.4"><path d="m5 12 5 5L20 7"/></svg><p class="b14" style="flex:1">李明的人物档案</p><span class="mini">0 条关于定价</span></div>
+          <div class="row" style="gap:9px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--s-i300)" stroke-width="2.4"><path d="m5 12 5 5L20 7"/></svg><p class="b14" style="flex:1">他在场的 5 场录音</p><span class="mini">没谈过定价</span></div>
+        </div>
+        <div class="ri"></div>
+        <p class="sec">你可以</p>
+        <div class="re"></div>
+        <div class="col" style="gap:10px">
+          <div class="cd t"><p class="b15">换个问法：他对成本是什么态度？</p></div>
+          <div class="cd t"><p class="b15">下次和他谈定价时录一场，之后再问我</p></div>
+        </div>
+        <div class="grow"></div>
+        <p class="mini" style="text-align:center">深脑宁可说不知道，也不编。<br>这条「不知道」也会记进它自己的账。</p>
+        <div class="rb"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S21 · AskAnswer / insufficient</p>
+      <h4>问 · 依据不够<span class="new">新</span></h4>
+      <p class="route">Ask.Event.Insufficient</p>
+      <ul>
+        <li><b>这一屏是全 App 最值钱的一屏，而且市面上没有第二家会画。</b>事件的注释已经把立场写死了：「库里没有足够的依据。<b>这不是失败</b>，是深脑在说『我不知道』」。</li>
+        <li><b>所以它不能长得像错误页。</b>没有红色、没有「重试」、没有感叹号——用的是中性图形和正常语气。<b>错误态是系统坏了，这一屏是系统正常工作的结果。</b></li>
+        <li><b>「我找过这些地方」必须给。</b>说「不知道」而不说找过哪里，用户会当成敷衍；说了，它就变成一次可信度展示——<b>它证明这套东西真的在库里翻过</b>。</li>
+        <li>两条出路一条向内（换问法）一条向外（去录一场）。<b>后者是把「不知道」转成采集动机</b>——这是这一屏隐藏的增长位。</li>
+        <li>「这条『不知道』也会记进它自己的账」——呼应闭环四。<b>敢承认不知道的比例，本身就是一个可以对外公布的指标。</b></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+
+<div class="grp">
+  <p class="grpname">组七 · 补齐</p>
+  <p class="grpdek">三块之前列在「没画」里的：其余采集入口、卡的二级流程、以及通知——<strong>通知是这个 App 存在理由的一半</strong>，网页做不到在你不打开它的时候叫你。</p>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col" style="justify-content:flex-end">
+        <div class="cd" style="border-radius:20px 20px 0 0;border-bottom:none;margin:0 -16px -1px;padding:24px 20px 28px;gap:0">
+          <div style="width:36px;height:4px;border-radius:99px;background:var(--s-i200);margin:0 auto 18px"></div>
+          <p class="t22" style="font-size:20px">还能从哪儿进来</p>
+          <div class="rt"></div>
+          <p class="mini">都走同一条管道，都不占分钟。</p>
+          <div class="ri"></div>
+          <div class="col">
+            <div class="li" style="gap:14px">
+              <div class="art" style="width:40px;height:40px;border-radius:12px"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--s-i400)" stroke-width="1.7"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></div>
+              <div style="flex:1"><p class="t16" style="font-size:15px">粘贴一个链接</p><p class="mini">播客、视频、公众号文章</p></div>
+              <span style="font-size:17px;color:var(--s-i300)">›</span>
+            </div>
+            <div class="hr"></div>
+            <div class="li" style="gap:14px">
+              <div class="art" style="width:40px;height:40px;border-radius:12px"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--s-i400)" stroke-width="1.7"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="12.5" r="3.2"/></svg></div>
+              <div style="flex:1"><p class="t16" style="font-size:15px">拍一张</p><p class="mini">白板、纸质纪要、名片</p></div>
+              <span style="font-size:17px;color:var(--s-i300)">›</span>
+            </div>
+            <div class="hr"></div>
+            <div class="li" style="gap:14px">
+              <div class="art" style="width:40px;height:40px;border-radius:12px;background:var(--s-oksurf)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--s-ok)" stroke-width="1.7"><path d="M8.5 10.5h.01M12.5 10.5h.01M3 10.2c0-3.4 3.4-6.2 7.6-6.2s7.6 2.8 7.6 6.2-3.4 6.2-7.6 6.2c-.9 0-1.7-.1-2.5-.3L4.6 17.6l.9-2.6C4 13.9 3 12.2 3 10.2z"/><path d="M14.4 13.2c0 2.7 2.7 4.9 6 4.9.7 0 1.4-.1 2-.3l2.5 1.3-.7-2c1-.9 1.6-2.1 1.6-3.4" transform="translate(-3.5 -.6) scale(.86)"/></svg></div>
+              <div style="flex:1"><p class="t16" style="font-size:15px">微信里收到的文件</p><p class="mini">别人发来的录音，直接选</p></div>
+              <span style="font-size:17px;color:var(--s-i300)">›</span>
+            </div>
+            <div class="hr"></div>
+            <div class="li" style="gap:14px">
+              <div class="art" style="width:40px;height:40px;border-radius:12px"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--s-i400)" stroke-width="1.7"><path d="M4 6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg></div>
+              <div style="flex:1"><p class="t16" style="font-size:15px">手机里的音视频</p><p class="mini">MP3 / WAV / MP4 / M4A</p></div>
+              <span style="font-size:17px;color:var(--s-i300)">›</span>
+            </div>
+          </div>
+          <div class="ri"></div>
+          <div class="cd t flat"><p class="mini">从别的 App 用「分享」也可以，不用先存到手机。<b style="color:var(--s-i600)">深脑会出现在分享列表里。</b></p></div>
+        </div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S22 · MoreSources</p>
+      <h4>其余采集入口<span class="new">新</span></h4>
+      <p class="route">下一期 · 从「记录」右上与空态两处进</p>
+      <ul>
+        <li><b>入口数量就是「采集面永不排他」的兑现方式</b>，它不能只是一句立场。得到的「更多方式」有六个入口，我们本期三个、下一期补到六个。</li>
+        <li><b>微信文件在中国场景里权重被严重低估。</b>大量录音是别人在微信发过来的——今天用户要先存到文件再分享，两步就够劝退。这一条用绿色图标单独区分。</li>
+        <li>每条都写清「进来之后会发生什么」，不只写格式。<b>「别人发来的录音，直接选」比「支持 M4A」有用。</b></li>
+        <li>底部那句是在教用户<b>更快的那条路</b>——分享菜单比这一屏还短一步。把捷径主动说出去，不怕它取代自己。</li>
+        <li>「都不占分钟」在这里再说一次。<b>这是深脑与全行业最直接的差异，值得重复。</b></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col">
+        <div class="ri"></div>
+        <div class="row"><span style="font-size:20px;color:var(--s-i400)">‹</span></div>
+        <div class="ri"></div>
+        <div class="row" style="gap:16px;align-items:center">
+          <div class="pen" style="width:56px;height:80px;border-radius:9px;margin:0"><span class="onoff" style="right:6px;top:12px;width:11px;height:6px"></span><span class="mark" style="right:5px;top:26px;width:13px;height:13px"></span></div>
+          <div style="flex:1">
+            <div class="row" style="gap:8px"><p class="t22" style="font-size:20px;flex:1">随身那张</p><span class="btn s">改名</span></div>
+            <div class="rt"></div>
+            <p class="b13">SN-A7F2 · 已连接</p>
+          </div>
+        </div>
+        <div class="rb"></div>
+        <div class="cd" style="gap:14px">
+          <div class="row" style="justify-content:space-between"><p class="b15">电量</p><p class="b15">78%</p></div>
+          <div class="hr"></div>
+          <div class="row" style="justify-content:space-between"><p class="b15">卡里还没导走的</p><p class="b15">0 段</p></div>
+          <div class="hr"></div>
+          <div class="row" style="justify-content:space-between"><p class="b15">存储</p><p class="b15">12.4 / 64 GB</p></div>
+          <div class="hr"></div>
+          <div class="row" style="justify-content:space-between;align-items:center"><div><p class="b15">固件 1.2.0</p><p class="mini">有新版本 1.3.0</p></div><span class="btn s p">更新</span></div>
+        </div>
+        <div class="rb"></div>
+        <p class="sec">这张卡的权益</p>
+        <div class="re"></div>
+        <div class="cd t soft"><p class="b14" style="color:var(--s-focus)">深判断 10 次 / 月 · 永久 · 跟着卡走</p><p class="mini" style="color:var(--s-focus);opacity:.85">解绑后这份权益会跟卡去到新账号。</p></div>
+        <div class="grow"></div>
+        <div class="hr"></div>
+        <div class="ri"></div>
+        <p class="sec" style="color:var(--s-rtext)">危险操作</p>
+        <div class="re"></div>
+        <div class="cd t" style="border-color:var(--s-risk);gap:6px">
+          <p class="t16" style="font-size:15px;color:var(--s-rtext)">从这个账号解绑</p>
+          <p class="mini">已经导进来的录音<b style="color:var(--s-i600)">不会</b>被删。卡上还没导走的会留在卡里。<b style="color:var(--s-i600)">这张卡的 10 次/月会一起走。</b></p>
+        </div>
+        <div class="ri"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S23 · DeviceDetail</p>
+      <h4>卡的设置 · 改名 / 解绑<span class="new">新</span></h4>
+      <p class="route">多设备带出来的二级流程</p>
+      <ul>
+        <li><b>「卡里还没导走的：0 段」是这一屏最该在的一行。</b>解绑之前人真正担心的是「我的东西会不会丢」——先把这个数摆出来，再谈解绑。</li>
+        <li><b>解绑的后果要逐条说，而且要说清楚「不会」发生什么。</b>三句话：已导入的不删 / 没导走的留在卡里 / <b>权益跟卡走</b>。第三句是钱的事，最容易被忽略也最容易引发投诉。</li>
+        <li><b>「权益跟卡走」是买断制的必然推论</b>，也顺带让二手转让成立——这对 899 的硬件是加分项，不是漏洞。</li>
+        <li>固件更新放在这里而不是「我的」。<b>更新固件是对着一张具体的卡做的事</b>，多张时放在全局会指向不明。</li>
+        <li>危险区在页面底部、单独分组、Risk 描边、二次确认。<b>不可逆动作不与日常动作混排。</b></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph" style="background:linear-gradient(165deg,#1B2430,#2E3A46 55%,#3A4654)">
+      <div class="sb" style="color:#fff"><span>9:41</span><em style="color:rgba(255,255,255,.6)">▮▮▮ 78%</em></div>
+      <div class="pb col" style="padding:0 12px">
+        <div class="rb"></div>
+        <div style="text-align:center;color:#fff">
+          <p style="font-size:56px;line-height:60px;font-weight:300;margin:0;letter-spacing:-.02em">9:41</p>
+          <p style="font-size:14px;margin:4px 0 0;opacity:.7">9月4日 周四</p>
+        </div>
+        <div class="rb"></div>
+        <div class="col" style="gap:10px">
+          <div style="background:rgba(255,255,255,.93);border-radius:16px;padding:13px 15px;display:flex;gap:11px;align-items:flex-start">
+            <span style="width:9px;height:9px;border-radius:50%;background:#DC2626;flex:none;margin-top:5px"></span>
+            <div style="flex:1">
+              <p style="font-size:13.5px;font-weight:600;margin:0;color:#1C1C1E">正在录音 · 12:34</p>
+              <p style="font-size:12px;margin:2px 0 0;color:#646B7D">战略会 · 手机麦克风 · 不可划掉</p>
+            </div>
+            <span style="font-size:12px;font-weight:600;color:#B91C1C">停止</span>
+          </div>
+          <div style="background:rgba(255,255,255,.93);border-radius:16px;padding:13px 15px;display:flex;gap:11px;align-items:flex-start">
+            <span style="width:9px;height:9px;border-radius:50%;background:#0052D9;flex:none;margin-top:5px"></span>
+            <div style="flex:1">
+              <p style="font-size:13.5px;font-weight:600;margin:0;color:#1C1C1E">从「随身那张」同步 2/3</p>
+              <div style="height:3px;border-radius:99px;background:#E8EAEF;margin-top:7px;overflow:hidden"><i style="display:block;height:100%;width:62%;background:#0052D9;border-radius:99px"></i></div>
+            </div>
+          </div>
+          <div style="background:rgba(255,255,255,.93);border-radius:16px;padding:13px 15px;display:flex;gap:11px;align-items:flex-start">
+            <span style="width:9px;height:9px;border-radius:50%;background:#DC2626;flex:none;margin-top:5px"></span>
+            <div style="flex:1">
+              <p style="font-size:13.5px;font-weight:600;margin:0;color:#1C1C1E">王总答应的预算口径，逾期 1 天了</p>
+              <p style="font-size:12px;margin:2px 0 0;color:#646B7D">今天还有 1 件事到期 · 每天 9:00</p>
+            </div>
+          </div>
+          <div style="background:rgba(255,255,255,.93);border-radius:16px;padding:13px 15px;display:flex;gap:11px;align-items:flex-start">
+            <span style="width:9px;height:9px;border-radius:50%;background:#0F7B4F;flex:none;margin-top:5px"></span>
+            <div style="flex:1">
+              <p style="font-size:13.5px;font-weight:600;margin:0;color:#1C1C1E">方法评审 · 出了 3 条判断</p>
+              <p style="font-size:12px;margin:2px 0 0;color:#646B7D">其中一条：三个人带着三个答案散场了</p>
+            </div>
+          </div>
+        </div>
+        <div class="grow"></div>
+        <p style="font-size:11.5px;color:rgba(255,255,255,.5);text-align:center">深脑不会因为「有新内容」就打扰你</p>
+        <div class="rb"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S24 · Notifications</p>
+      <h4>四类通知<span class="new">新</span></h4>
+      <p class="route">锁屏形态 · 系统 chrome，不随 App 主题变</p>
+      <ul>
+        <li><b>通知是这个 App 存在理由的一半。</b><code>README</code> 原话：「『看』要成立有个前提：<b>必须有通知。否则它就是个更差的浏览器</b>」。</li>
+        <li><b>录音中：常驻前台通知，不可划掉，带时长与「停止」。</b>它同时是「显性录音」那条红线的执行面——手机扣过去之后，锁屏上仍然看得见它在录。</li>
+        <li><b>同步进度：完成后自动转成结果</b>（「3 段已入库」），不留一条已经没用的进度条。</li>
+        <li><b>到期提醒每天一次，固定 9:00。</b>它是唯一一条按时间推的——承诺是有时效的，其余都可以等人自己来看。</li>
+        <li><b>分析完成只在「有新判断」时推</b>，并且<b>把最狠的那一条带出来</b>。推「分析完成了」没有意义，推「三个人带着三个答案散场了」才会让人点开。</li>
+        <li>底部那句是产品立场：<b>不做「有新内容」型打扰</b>。四类之外一概不推。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+
+<div class="grp">
+  <p class="grpname">组八 · 进门</p>
+  <p class="grpdek">登录、首次引导、权限。<strong>APK 是外发的，没有商店的信任背书</strong>——这三屏是用户对这个 App 的第一印象，也是它唯一一次解释自己的机会。</p>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb wide col">
+        <div class="grow"></div>
+        <p class="t22" style="font-size:26px;line-height:34px">深脑</p>
+        <div class="re"></div>
+        <p class="b15" style="color:var(--s-i600)">别人告诉你说了什么，<br>我们告诉你哪里没谈成。</p>
+        <div class="rb"></div>
+        <div class="cd t" style="gap:0;padding:0">
+          <div style="padding:15px 16px"><p class="mini">邮箱</p><p class="b15" style="margin-top:2px">qiuyiwu@…</p></div>
+          <div class="hr"></div>
+          <div style="padding:15px 16px"><p class="mini">密码</p><p class="b15" style="margin-top:2px;letter-spacing:3px">••••••••</p></div>
+        </div>
+        <div class="ri"></div>
+        <div class="btn p w">登录</div>
+        <div class="re"></div>
+        <p class="mini" style="text-align:center">还没有账号？<span style="color:var(--s-focus);font-weight:500">去注册</span> · <span style="color:var(--s-focus);font-weight:500">忘了密码</span></p>
+        <div class="grow"></div>
+        <div class="cd t flat"><p class="mini">录音与判断都在你自己的组织里，<b style="color:var(--s-i600)">不参与模型训练</b>。企业版可私有部署。</p></div>
+        <div class="ri"></div>
+        <p class="mini" style="text-align:center">v3.2.0 · 直接下载安装的版本</p>
+        <div class="rb"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S25 · Login</p>
+      <h4>登录<span class="new">新</span></h4>
+      <p class="route">邮箱 + 密码（网页走 magic link，安卓走密码）</p>
+      <ul>
+        <li><b>主张放在登录屏上，而不是等进去才说。</b>「别人告诉你说了什么，我们告诉你哪里没谈成」——APK 是外发的，<b>没有应用商店那一页做介绍</b>，登录屏是唯一一次自我介绍的机会。</li>
+        <li><b>「不参与模型训练」写在这一屏。</b>录音类产品最大的心理门槛就是这个，等用户进设置里去找等于没说。</li>
+        <li>底部标出版本号并注明「直接下载安装的版本」——<b>外发 APK 没有自动更新</b>，用户需要知道自己停在哪一版。这也呼应 mobile BFF 把提炼留在服务端的理由。</li>
+        <li>不做第三方登录。深脑是多租户 org 模型，<b>身份必须落到一个明确的组织</b>，微信/手机号登录会引出一堆归属歧义。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb wide col">
+        <div class="ri"></div>
+        <div class="row" style="justify-content:flex-end"><span class="b13">跳过</span></div>
+        <div class="rb"></div>
+        <p class="t22">先从哪儿开始？</p>
+        <div class="rt"></div>
+        <p class="b14">选一个就行，其余的随时能加。</p>
+        <div class="rb"></div>
+        <div class="col" style="gap:12px">
+          <div class="cd" style="gap:7px;border-color:var(--s-focus);background:var(--s-fsoft)">
+            <div class="row" style="gap:10px">
+              <div class="pen" style="width:26px;height:37px;border-radius:5px;margin:0"><span class="onoff" style="right:3px;top:5px;width:5px;height:3px"></span></div>
+              <p class="t16" style="color:var(--s-focus);flex:1">我有一张灵魂卡</p>
+            </div>
+            <p class="mini" style="color:var(--s-focus);opacity:.85">连上它，卡里的录音会自动过来</p>
+          </div>
+          <div class="cd" style="gap:7px">
+            <p class="t16">先用手机录一段</p>
+            <p class="mini">十分钟的对话就够，不用等一整场会</p>
+          </div>
+          <div class="cd" style="gap:7px">
+            <p class="t16">我已经在用别的录音工具</p>
+            <p class="mini">飞书妙记 / 通义听悟 / 讯飞 / 钉钉 / Plaud 导出的文件，直接丢进来</p>
+          </div>
+        </div>
+        <div class="rb"></div>
+        <div class="cd t flat">
+          <p class="mini"><b style="color:var(--s-i600)">三条路一样通。</b>深脑不要求你换设备——判断是自己的，入口是谁的都行。</p>
+        </div>
+        <div class="grow"></div>
+        <div class="btn p w">就这个</div>
+        <div class="ri"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S26 · Onboarding</p>
+      <h4>首次引导 · 三条路<span class="new">新</span></h4>
+      <p class="route">登录成功后一次，可跳过</p>
+      <ul>
+        <li><b>三条路对应三个入口，而且并列摆放。</b>这是「采集面永不排他」第一次、也是最重要的一次露面——<b>如果第一屏就暗示「你得先买卡」，后面所有的平等都是假的</b>。</li>
+        <li>第三条把竞品名字直接写出来（飞书妙记 / 通义听悟 / 讯飞 / 钉钉 / Plaud）。<b>上游 A3 的原话是「用户已在用硬件与转写工具，不愿换设备」</b>——那就明说我们接得住。</li>
+        <li><b>「十分钟的对话就够，不用等一整场会」</b>——降低第一次的门槛。首周必须撞上一次价值，这是对抗「同质化疲劳」的唯一办法。</li>
+        <li>可跳过，且只出现一次。<b>引导不是教程</b>，它只负责把人送到第一个动作上。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col" style="justify-content:center;padding:0 24px">
+        <div class="cd" style="gap:0;padding:0;border-radius:20px;overflow:hidden">
+          <div style="padding:24px 22px 20px">
+            <p class="t22" style="font-size:19px">让深脑在到期那天叫你</p>
+            <div class="re"></div>
+            <p class="b15" style="color:var(--s-i600)">承诺是有时效的。你不打开 App 的时候，只有通知能提醒你——这也是它比网页多出来的唯一一件事。</p>
+            <div class="ri"></div>
+            <div class="cd t flat" style="gap:8px">
+              <div class="row" style="gap:9px"><span style="width:6px;height:6px;border-radius:50%;background:var(--s-risk);display:block;flex:none"></span><p class="b14" style="flex:1">到期与逾期的承诺 · 每天一次</p></div>
+              <div class="row" style="gap:9px"><span style="width:6px;height:6px;border-radius:50%;background:var(--s-ok);display:block;flex:none"></span><p class="b14" style="flex:1">分析出了新判断</p></div>
+              <div class="row" style="gap:9px"><span style="width:6px;height:6px;border-radius:50%;background:var(--s-focus);display:block;flex:none"></span><p class="b14" style="flex:1">录音中与同步进度</p></div>
+            </div>
+            <div class="re"></div>
+            <p class="mini">不做「有新内容」型打扰。四类之外一概不推。</p>
+          </div>
+          <div class="hr"></div>
+          <div style="display:flex">
+            <div style="flex:1;padding:16px;text-align:center"><p class="b15" style="color:var(--s-i400)">以后再说</p></div>
+            <div style="width:1px;background:var(--s-i100)"></div>
+            <div style="flex:1;padding:16px;text-align:center"><p class="b15" style="color:var(--s-focus);font-weight:600">好，去开</p></div>
+          </div>
+        </div>
+        <div class="ri"></div>
+        <p class="mini" style="text-align:center">点「好」之后才会弹系统那一层的授权框</p>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S27 · NotifyPrimer</p>
+      <h4>通知权限 · 先解释再要<span class="new">新</span></h4>
+      <p class="route">Android 13+ POST_NOTIFICATIONS · 登录之后才问</p>
+      <ul>
+        <li><b>时机是现有代码已经定好的</b>：「在登录之后才问——<b>一个还没登录的人不知道你要提醒他什么，开屏就弹权限框的应用，大多数人会直接拒</b>」。</li>
+        <li><b>先自己解释一屏，再弹系统框。</b>系统那一层只有一句干巴巴的「允许发送通知？」，被拒之后<b>安卓不会再给第二次机会</b>——这一屏就是那唯一一次机会的成本。</li>
+        <li><b>把要推什么全列出来，并且承诺不推什么。</b>「不做『有新内容』型打扰」写在授权之前说，比写在设置里可信。</li>
+        <li>「以后再说」不是灰的。<b>逼着点同意换来的授权，用户回头会在系统设置里关掉，而且不会告诉你。</b></li>
+        <li>同一套写法适用于蓝牙（配对前）和麦克风（第一次录之前）——<b>都在真正要用的那一刻问，不在开屏问</b>。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="grp">
+  <p class="grpname">组九 · 日常里剩下的</p>
+  <p class="grpdek">搜索、展开态、还没分析的那一场、以及 App 内的网页版。<strong>S29 那一屏把权益模型和判断页接上了</strong>——「快判断还是深判断」之前一直没有落点。</p>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col">
+        <div class="ri"></div>
+        <div class="row" style="gap:10px">
+          <span style="font-size:20px;color:var(--s-i400)">‹</span>
+          <div class="cd t" style="flex:1;flex-direction:row;align-items:center;gap:10px;border-radius:99px;padding:10px 14px">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--s-i400)" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <span class="b15" style="flex:1">预算</span>
+            <span style="font-size:15px;color:var(--s-i300)">✕</span>
+          </div>
+        </div>
+        <div class="ri"></div>
+        <div class="sg"><span class="on">全部 14</span><span>判断 6</span><span>承诺 3</span><span>会议 5</span></div>
+        <div class="ri"></div>
+        <div class="col" style="gap:10px">
+          <div class="cd t" style="gap:5px">
+            <div class="row" style="gap:8px"><span class="lab att">判断</span><span class="mini">9-03 方法评审</span></div>
+            <p class="b14" style="color:var(--s-on)">没人问<b style="background:var(--s-fsoft);color:var(--s-focus)">预算</b>从哪来，这条假设已经悬空两周。</p>
+          </div>
+          <div class="cd t" style="gap:5px">
+            <div class="row" style="gap:8px"><span class="lab no">承诺</span><span class="mini">王建国 · 逾期 1 天</span></div>
+            <p class="b14" style="color:var(--s-on)">下周三前给<b style="background:var(--s-fsoft);color:var(--s-focus)">预算</b>口径</p>
+          </div>
+          <div class="cd t" style="gap:5px">
+            <div class="row" style="gap:8px"><span class="lab inf">会议</span><span class="mini">8-14 产品对齐 · 22:07</span></div>
+            <p class="b14" style="color:var(--s-on)">「这个我得回去问，<b style="background:var(--s-fsoft);color:var(--s-focus)">预算</b>不是我一个人能定的。」</p>
+          </div>
+        </div>
+        <div class="rb"></div>
+        <div class="cd t soft" style="gap:6px">
+          <p class="b14" style="color:var(--s-focus)">这 14 条里想问点什么吗？</p>
+          <p class="mini" style="color:var(--s-focus);opacity:.85">比如「预算这条线一共谈过几次」</p>
+        </div>
+        <div class="grow"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S28 · Search</p>
+      <h4>搜索 · 关键词<span class="new">新</span></h4>
+      <p class="route">mobile/search → Hit{kind, text, who, transcriptId}</p>
+      <ul>
+        <li><b>搜索和「问」是两件事，不能合并。</b>搜索回的是 <code>Hit[]</code>（判断 / 承诺 / 会议三类），要的是「找到那一条」；「问」回的是一段带出处的答案，要的是「给我个说法」。</li>
+        <li><b>现有代码里「搜索」这一栏已经改名叫「问」了</b>，注释写的是「人在路上想起来的是问题，不是关键词」。所以搜索<b>不占底栏</b>，它挪到「问」的顶部输入框和这一屏。</li>
+        <li>命中词高亮，且<b>按 kind 分段计数</b>——「判断 6 / 承诺 3 / 会议 5」本身就是一个有用的回答。</li>
+        <li><b>底部那张卡是搜索转「问」的桥。</b>找到 14 条之后人往往还是要一个结论，这里把下一步递过去，并且给一个具体问法。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col">
+        <div class="ri"></div>
+        <div class="row"><span style="font-size:20px;color:var(--s-i400)">‹</span></div>
+        <div class="re"></div>
+        <p class="t22" style="font-size:20px;line-height:27px">客户回访</p>
+        <div class="rt"></div>
+        <p class="b13">9-04 10:12 · 31 分钟 · 从飞书妙记导入</p>
+        <div class="rb"></div>
+        <div class="art" style="width:56px;height:56px;border-radius:20px;margin:0 auto"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--s-i300)" stroke-width="1.6"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/></svg></div>
+        <div class="ri"></div>
+        <p class="t22" style="font-size:19px;text-align:center">这一场还没分析</p>
+        <div class="rt"></div>
+        <p class="b14" style="text-align:center">不到 5 分钟的录音不会自动分析。<br>这一场 31 分钟，你没点过分析。</p>
+        <div class="rb"></div>
+        <p class="sec">要怎么看这一场？</p>
+        <div class="re"></div>
+        <div class="col" style="gap:10px">
+          <div class="cd" style="gap:6px">
+            <div class="row" style="gap:8px"><p class="t16" style="flex:1">快判断</p><span class="lab ok">不限</span></div>
+            <p class="mini">按「访谈 / 用研」这一个方法看，出判断和承诺，带证据。约 1 分钟。</p>
+          </div>
+          <div class="cd" style="gap:6px;border-color:var(--s-focus)">
+            <div class="row" style="gap:8px"><p class="t16" style="flex:1;color:var(--s-focus)">深判断</p><span class="lab a">本月还剩 16 次</span></div>
+            <p class="mini" style="color:var(--s-focus)">多方法组合 + 跨录音联想：和这个客户之前 4 场对照着看，找立场变化。约 3 分钟。</p>
+          </div>
+        </div>
+        <div class="ri"></div>
+        <div class="cd t flat"><p class="mini">场合当时选的是「访谈 / 用研」。<span style="color:var(--s-focus);font-weight:500">改一下 ›</span></p></div>
+        <div class="grow"></div>
+        <div class="btn p w">用深判断看</div>
+        <div class="ri"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S29 · AnalyzePicker</p>
+      <h4>还没分析 · 选快还是深<span class="new">新</span></h4>
+      <p class="route">Meeting.analysisAbsentReason · mobile/transcript/[id]/analyze</p>
+      <ul>
+        <li><b>这一屏把权益模型和判断页接上了。</b>之前 S17 说「先用快判断看看」，但选择本身没有落点——现在它在这儿，而且是唯一的落点。</li>
+        <li><b>没分析的理由由服务端给，客户端不自己算。</b>字段注释：「那条规矩（不到 5 分钟不自动分析）只有服务端知道，抄一份到手机上，<b>下次改阈值必然只改一处</b>」。</li>
+        <li><b>两个选项讲的是「你会看到什么」，不是「消耗什么」。</b>深判断那条写「和这个客户之前 4 场对照着看，找立场变化」——<b>额度只是右上角一枚标签，不是主语</b>。</li>
+        <li>快判断标「不限」，深判断标「本月还剩 16 次」。这是全 App 唯一一处显示「剩余」的地方——<b>因为此刻用户正要花掉一次，他有权知道还剩多少</b>。「我的」那一屏仍然显示「已用」。</li>
+        <li>底部可改场合，呼应 S3：<b>录前选的只是先验，不是死绑</b>。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb col" style="padding:0">
+        <div style="padding:14px 16px 12px;border-bottom:1px solid var(--s-i200);background:var(--s-surf);flex:none">
+          <div class="row" style="gap:10px">
+            <span style="font-size:19px;color:var(--s-i400)">‹</span>
+            <div style="flex:1;min-width:0">
+              <p class="t16" style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">方法评审 · 逐句转写</p>
+              <div class="row" style="gap:5px;margin-top:1px">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--s-i400)" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18"/></svg>
+                <p class="mini">网页版 · shennao.zaowuyun.com</p>
+              </div>
+            </div>
+            <span style="font-size:17px;color:var(--s-i400)">⤢</span>
+          </div>
+        </div>
+        <div style="flex:1;background:var(--s-surf);padding:18px 16px;overflow:hidden;display:flex;flex-direction:column;gap:16px">
+          <div><p class="b13">30:48 · 张伟</p><div class="rt"></div><p class="b15">那就先把底座做完，插件的事下个迭代再说。</p></div>
+          <div><p class="b13">31:02 · 李明</p><div class="rt"></div><p class="b15">我理解是先出插件？上周不是说插件那边有个 deadline 吗。</p></div>
+          <div><p class="b13">31:19 · 王建国</p><div class="rt"></div><p class="b15">这个我们回头再对一下吧，预算那边我下周三之前给你个准数。</p></div>
+          <div class="hr"></div>
+          <p class="mini">在这里可以逐句改字、认人、调时间轴——<br>这些手机上不做。</p>
+        </div>
+        <div style="padding:12px 16px 18px;border-top:1px solid var(--s-i200);background:var(--s-bg);flex:none">
+          <p class="mini" style="text-align:center">已带着你的登录态打开 · 改完返回会自动刷新</p>
+        </div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S30 · WebPage</p>
+      <h4>App 内的网页版<span class="new">新</span></h4>
+      <p class="route">mobile/web-ticket → web-open</p>
+      <ul>
+        <li><b>界面上明说它是网页，不假装原生。</b>顶栏第二行带地球图标和域名——<b>用户有权知道自己现在在哪</b>，也解释了为什么这一页的交互和别处不一样。</li>
+        <li><b>带登录态是硬要求。</b>现有代码里踩过：早先甩给系统浏览器一个裸链接，「用户在 Chrome 里多半没登录，点开看到的是登录页，<b>而他刚刚明明就在 App 里登着</b>」。</li>
+        <li><b>返回的目的地由调用方给，不猜。</b>也是踩过的：从 path 反推「返回哪去」，从「我的」打开首页时会拿 <code>zh</code> 当会议 id 去查，<b>用户点返回看到的是一个错误页而不是他刚才在的地方</b>。</li>
+        <li>底部那句说明「改完返回会自动刷新」——跨端编辑最怕的是<b>不知道改了到底生没生效</b>。</li>
+        <li>这一屏是 010 那条边界的物理形态：<b>逐句改字、认人、调时间轴，手机上一律不做。</b></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="grp">
+  <p class="grpname">组十 · 换人用</p>
+  <p class="grpdek">899 买断 + 权益跟卡走，必然带出转让。<strong>这是二手转让、团队内换人、以及送人之后的必经流程</strong>——不画清楚，第一个卖二手的人就会来投诉。</p>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb wide col">
+        <div class="ri"></div>
+        <div class="row"><span style="font-size:20px;color:var(--s-i400)">‹</span></div>
+        <div class="rb"></div>
+        <p class="t22">把这张卡交给别人</p>
+        <div class="rt"></div>
+        <p class="b14">三步。你的录音和判断不会跟着走。</p>
+        <div class="rb"></div>
+        <div class="col" style="gap:14px">
+          <div class="row" style="gap:12px;align-items:flex-start">
+            <div style="width:26px;height:26px;border-radius:50%;background:var(--s-ok);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex:none">✓</div>
+            <div style="flex:1"><p class="t16" style="font-size:15px">卡里的都导完了</p><p class="mini">还没导走的：0 段</p></div>
+          </div>
+          <div class="row" style="gap:12px;align-items:flex-start">
+            <div style="width:26px;height:26px;border-radius:50%;background:var(--s-focus);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex:none">2</div>
+            <div style="flex:1">
+              <p class="t16" style="font-size:15px">要不要先备份一份</p>
+              <p class="mini">音频 + 转写 + 判断打包带走。不是必须的，你的东西留在账号里。</p>
+              <div class="re"></div>
+              <span class="btn s">导出全部</span>
+            </div>
+          </div>
+          <div class="row" style="gap:12px;align-items:flex-start">
+            <div style="width:26px;height:26px;border-radius:50%;background:var(--s-i100);color:var(--s-i400);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex:none">3</div>
+            <div style="flex:1"><p class="t16" style="font-size:15px">解绑</p><p class="mini">解绑后这张卡可以被任何账号重新连上</p></div>
+          </div>
+        </div>
+        <div class="rb"></div>
+        <div class="cd t warn" style="gap:6px">
+          <p class="t16" style="font-size:15px;color:var(--s-warn)">这张卡的权益会一起走</p>
+          <p class="mini" style="color:var(--s-warn)">深判断 10 次 / 月是跟着卡的，不是跟着你。解绑之后你这边每月从 20 次变成 10 次。</p>
+        </div>
+        <div class="grow"></div>
+        <div class="btn w" style="border-color:var(--s-risk);color:var(--s-rtext)">我明白了，解绑</div>
+        <div class="ri"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S31 · HandOver</p>
+      <h4>换人用 · 交接<span class="new">新</span></h4>
+      <p class="route">导出 → 解绑 · 权益随卡转移</p>
+      <ul>
+        <li><b>买断 + 权益跟卡走，必然带出转让。</b>二手、团队换人、送人之后——<b>不画清楚，第一个卖二手的人就是第一个投诉的人</b>。</li>
+        <li><b>第一步是「卡里的都导完了」并且给数字。</b>人在这一步真正担心的是东西会不会丢，先把 0 段摆出来，其余才谈得下去。</li>
+        <li><b>第二步说清「不是必须的」。</b>导出在这里是安心用的，不是流程要求——<b>把可选的说成必需的，会让人以为解绑会删数据</b>。</li>
+        <li><b>权益变化用具体数字说</b>：「每月从 20 次变成 10 次」。说「权益会转移」是抽象的，说这句话人才真的懂。</li>
+        <li>确认按钮用 Risk 描边而不是 Risk 填充。<b>这是一个正当操作，不是错误</b>——填充色会把它渲染成惩罚。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="ph">
+      <div class="sb"><span>9:41</span><em>▮▮▮ 78%</em></div>
+      <div class="pb wide col">
+        <div class="grow"></div>
+        <div class="art" style="width:64px;height:64px;border-radius:22px;background:var(--s-oksurf);margin:0 auto"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--s-ok)" stroke-width="2"><path d="m5 12.5 4.5 4.5L19 7"/></svg></div>
+        <div class="ri"></div>
+        <p class="t22" style="text-align:center">已经解绑了</p>
+        <div class="rt"></div>
+        <p class="b15" style="text-align:center;color:var(--s-i600)">这张卡现在可以被任何账号连上。<br>下一个人长按 ON/OFF 一秒就能开始。</p>
+        <div class="rb"></div>
+        <div class="cd t flat" style="gap:9px">
+          <div class="row" style="justify-content:space-between"><p class="b14">你的录音与判断</p><span class="lab ok">都还在</span></div>
+          <div class="hr"></div>
+          <div class="row" style="justify-content:space-between"><p class="b14">还剩的卡</p><p class="b14" style="color:var(--s-on)">1 张 · 办公室那张</p></div>
+          <div class="hr"></div>
+          <div class="row" style="justify-content:space-between"><p class="b14">深判断</p><p class="b14" style="color:var(--s-on)">10 次 / 月</p></div>
+        </div>
+        <div class="grow"></div>
+        <div class="btn p w">回到今天</div>
+        <div class="ri"></div>
+        <p class="mini" style="text-align:center">要是转错了人，让对方解绑，你再连回来就行。<br>权益会跟着卡回来。</p>
+        <div class="rb"></div>
+      </div>
+    </div>
+    <div class="side">
+      <p class="sid">S32 · HandOverDone</p>
+      <h4>换人用 · 完成<span class="new">新</span></h4>
+      <p class="route">解绑后的收口</p>
+      <ul>
+        <li><b>不可逆动作做完之后必须结一次账。</b>三行：你的东西都还在 / 还剩几张卡 / 现在每月几次。<b>把刚刚发生的变化摆出来，人才敢信自己没做错。</b></li>
+        <li><b>「下一个人长按 ON/OFF 一秒就能开始」</b>——转让方需要一句能转述给对方的话。这一句就是。</li>
+        <li><b>底部那句是这一屏最重要的一句：「要是转错了人……你再连回来就行」。</b>不可逆动作之后告诉人还有退路，<b>是把恐慌变成从容的最低成本手段</b>——而且它是真的，权益本来就跟卡走。</li>
+        <li>主按钮是「回到今天」，不是「完成」。<b>结束一个流程时把人送回主路径，而不是留在一个死胡同里。</b></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+</div><!-- /stage -->
+
+<section>
+  <div class="shead"><span class="snum">04</span><h2>亮点覆盖：市面上有的，和我们独有的</h2></div>
+  <p class="sub">左边是竞品做到的，中间是我们这一版怎么接，右边是屏。最后四行是<strong>竞品完全没有</strong>的部分。</p>
+  <div class="scroller">
+    <table>
+      <thead><tr><th>亮点</th><th>谁在做</th><th>我们怎么接</th><th>屏</th></tr></thead>
+      <tbody>
+        <tr><td class="k">录音中打标记</td><td class="q">Plaud 物理键 · 得到语音口令</td><td>口令直接对应产物：「这条要追」→ 承诺账本，不只是书签。MARK 键与口令进同一条 marks 流</td><td>S4 S18</td></tr>
+        <tr><td class="k">详情页切 tab</td><td class="q">Plaud 来源/笔记 · 得到六 tab</td><td>判断 / 承诺 / 原话。<strong>它同时是证据链的骨架</strong>，点依据自动切 tab 并定位到秒</td><td>S8 S9 S10</td></tr>
+        <tr><td class="k">录前选场景</td><td class="q">得到四种录音场景</td><td><strong>选场合 ＝ 选方法</strong>，卡片直接写出会用哪几个方法。比录完挑模板更准</td><td>S3</td></tr>
+        <tr><td class="k">硬件独立成页</td><td class="q">得到「录音卡」页</td><td>产品图 + 特性 + 「连接」/「购买」双按钮，并支持多张与随卡权益</td><td>S2</td></tr>
+        <tr><td class="k">采集入口铺满</td><td class="q">得到六个入口（含微信文件）</td><td>本期三个（卡 / 手机 / 分享），分享做成半屏只问一件事</td><td>S6</td></tr>
+        <tr><td class="k">AI 给问法</td><td class="q">得到预设问题</td><td>四条预设各对应一个方法，同时是能力说明书</td><td>S13</td></tr>
+        <tr><td class="k">声纹认人</td><td class="q">得到「让 AI 认识每个人」· 飞书自动标注</td><td>一次一句 + 配音频 + 给理由 + <strong>可跳过</strong>。认一次全库归位</td><td>S14</td></tr>
+        <tr><td class="k">生成物反馈</td><td class="q">得到重来/复制/踩 · Plaud 👍👎</td><td>判断卡右下 👍👎。<strong>对判断类产品「踩」比「赞」值钱</strong></td><td>S8</td></tr>
+        <tr><td class="k">自曝边界说得亲切</td><td class="q">得到「一些不太确定的猜测」</td><td>三档标注：亲证 / 推断 / 猜想，猜想用虚线框 + 明说「没有直接原话支撑」</td><td>S7 S8</td></tr>
+        <tr><td class="k">把隐私做成功能</td><td class="q">Granola 不存原始音频</td><td>「导出全部 · 你的东西可以带走」+ 存储期限说实话，不承诺无限</td><td>S16</td></tr>
+        <tr style="background:var(--accent-soft)"><td class="k">人的兑现率</td><td class="q"><strong>没有第二家</strong></td><td>kept / broken / open + 分母写出来；null 时不画环——「给 0% 或 100% 都是拿数字撒谎」</td><td>S12</td></tr>
+        <tr style="background:var(--accent-soft)"><td class="k">可证伪预测记账</td><td class="q"><strong>没有第二家</strong></td><td>到期提醒 + 原样摆出当初的判据 + 应验/落空/<strong>说不清</strong>三选</td><td>S7 S15</td></tr>
+        <tr style="background:var(--accent-soft)"><td class="k">方法可审计</td><td class="q"><strong>没有第二家</strong></td><td>详情页顶部写明「这一场用了哪几个方法、为什么」（methods + routingReason）</td><td>S8</td></tr>
+        <tr style="background:var(--accent-soft)"><td class="k">一秒回原文</td><td class="q">部分有跳转，无一做成闭环</td><td>判断 → 依据 → 原话高亮 → 播放那一秒 → 👍👎，五步在一屏内走完</td><td>S8 S9</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">05</span><h2>信息密度：一屏只让人做一个决定</h2></div>
+  <p class="sub">「信息量不能太大」是这一版新加的硬约束，不是审美偏好。<strong>密度失控在这个产品里不是难看，是危险</strong>——《用户价值洞察》缺口 5 说手机是「一扫而过的场景」，<code>Api.kt</code> 说「一条猜想会被当成事实」。两句话指的是同一件事。</p>
+  <div class="grid2">
+    <div class="box">
+      <h4>规则一 · 每区块只露一条</h4>
+      <p style="font-size:14px;margin:0">其余收成一行「还有 N 条 ›」。<strong>数字仍然给全</strong>——用户要知道有多少，但不必一次读完。「今天」四个区块全展开就是一堵墙。</p>
+    </div>
+    <div class="box">
+      <h4>规则二 · 猜想默认折叠</h4>
+      <p style="font-size:14px;margin:0">它信息量最大、最需要上下文、也最容易被当成事实。折叠态只给「猜想 N · 点开看它凭什么」。<strong>亲证与推断照常展开</strong>——那两档有原话托底。</p>
+    </div>
+    <div class="box">
+      <h4>规则三 · 一屏一个决定</h4>
+      <p style="font-size:14px;margin:0">出现两个并列主按钮就是超载的信号。次要动作降级为文字链或收进「···」。S7 的预测卡因此从三个按钮收成一个「去给个说法」，判断留给 S15。</p>
+    </div>
+  </div>
+  <p style="margin-top:18px"><strong>验收</strong>：任意一屏在 360×780 的首屏内，需要用户读的正文不超过 <strong>5 条</strong>；超过就折叠。这条要在设计走查里逐屏过，不靠自觉。</p>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">06</span><h2>还没画的，和仍需你拍的</h2></div>
+  <div class="grid2">
+    <div class="box">
+      <h4>三条已定（2026-09-04）</h4>
+      <ul>
+        <li><strong>灵魂卡 899。</strong>在 499 那条线之上，所以 10 次/月不用下调。与安克录音豆同价。</li>
+        <li><strong>猜想默认折叠</strong>，并升级成全局的三条密度规则（见上一节）。</li>
+        <li><strong>「你的东西可以带走」提到硬件页当卖点</strong>，S2 已加。</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h4>由 899 带出的一条，需要你点头</h4>
+      <ul>
+        <li><strong>买断的永久权益会不会把 Pro 订阅吃掉。</strong>如果 10 次/月够用，用户就永远不买 ￥99/月。</li>
+        <li>我的做法：<strong>卡卖「单场深度」，Pro 卖「长期复利」</strong>——Pro 加的是深判断不限 + 判断力季报 + 优先分析队列。</li>
+        <li><strong>承诺账本、人的兑现率、预测记账一律不锁</strong>——它们是深脑的立身之本和最强口碑资产，锁起来等于把差异化藏起来。</li>
+        <li>这张分层表里只有「899」是你定的，<strong>其余是我据此推的</strong>。</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h4>已经画完了</h4>
+      <ul>
+        <li>32 屏 + 3 边界态，<strong>主路径上没有留白</strong>：进门、开箱、采集、兑现、长期、商业、补齐、换人用八组全通。</li>
+        <li>剩下的都是<strong>不该在手机上做的</strong>：逐句校对、说话人面板、记忆库、概念活页、图谱、方法广场、项目、驾驶舱、校准、简报——统一走 S30 的 WebView，并且界面上明说是网页。</li>
+        <li>真正还缺的只有<strong>注册流程</strong>（多租户 org 归属要先想清楚，不是画图的事）和<strong>企业版/团队席位</strong>（B 端形态未定）。</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h4>落到工程的三条门禁</h4>
+      <ul>
+        <li>每个 <code>Route</code> 在 <code>when</code> 里<strong>只出现一次</strong>，有测试断言</li>
+        <li>三个采集入口在代码里<strong>只有一条 <code>Ingest</code> 路径</strong></li>
+        <li>字面量 dp 归零（现存 69 处），并有测试挡住新增</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>全量原型 v8，配套 <code>specs/010-android-client.md</code> v4。数据模型取自 <code>clients/android/.../Api.kt</code> 与 <code>apps/web/src/app/api/mobile/*</code>；色值字阶取自 <code>Theme.kt</code>，间距圆角动效取自 <code>DS.kt</code>，形制「卡片白底 + 1px 发丝边不用阴影」取自 <code>DsCard</code>。判据来源为《深脑用户价值洞察》《AI 录音设备赛道深度研究报告》《深脑产品机会地图与 90 天验证计划》；竞品拆解基于 Plaud 与得到大脑 2026-09 版本的 26 张真机截图。屏内为示例数据，非真实用户内容。</p>
+</footer>
+
+</div>
+
+<script>
+(function(){
+  var st=document.getElementById('stage'),L=document.getElementById('tL'),D=document.getElementById('tD');
+  function set(d){st.classList.toggle('dark',d);L.setAttribute('aria-pressed',String(!d));D.setAttribute('aria-pressed',String(d));}
+  L.addEventListener('click',function(){set(false)});
+  D.addEventListener('click',function(){set(true)});
+})();
+</script>
