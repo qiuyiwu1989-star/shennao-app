@@ -20,6 +20,9 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
         android:maxSdkVersion="30" />
+    <!-- 系统规则：申请了 FINE 就必须同时申请 COARSE（lint CoarseFineLocation）。
+         API 29/30 上蓝牙扫描要定位权限；31 起走 BLUETOOTH_SCAN，这两条就用不上了。 -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="30" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
     <!-- 关掉云备份。备份会把应用目录整包上云：里面有还没上传的录音，也有凭证。

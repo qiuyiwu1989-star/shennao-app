@@ -431,7 +431,10 @@ private fun LoginScreen(state: AppState.Login, onSubmit: (String, String) -> Uni
     ) {
         Text("深脑", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(DS.Rhythm.tight))
-        Text("登录后看你的下文", style = MaterialTheme.typography.bodyMedium)
+        // 主张放在登录屏上。APK 是外发的，没有应用商店那一页做介绍——
+        // 这是它唯一一次自我介绍的机会。口径取自《用户价值洞察》7.1。
+        Text("别人告诉你说了什么，我们告诉你哪里没谈成。",
+             style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(DS.Rhythm.inner))
         OutlinedTextField(
             value = email, onValueChange = { email = it },
@@ -457,5 +460,13 @@ private fun LoginScreen(state: AppState.Login, onSubmit: (String, String) -> Uni
             enabled = !state.busy && email.isNotBlank() && pw.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
         ) { Text(if (state.busy) "登录中…" else "登录") }
+        Spacer(Modifier.height(DS.Rhythm.block))
+        // 录音类产品最大的心理门槛就是这一句。写在登录屏，别让人进设置里去找。
+        Text("录音与判断都在你自己的组织里，不参与模型训练。",
+             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(DS.Rhythm.tight))
+        // 外发 APK 没有自动更新，用户要知道自己停在哪一版。
+        Text("v${BuildConfig.VERSION_NAME} · 直接下载安装的版本",
+             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
