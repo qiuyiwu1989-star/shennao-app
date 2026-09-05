@@ -84,6 +84,28 @@ fun MeScreen(
             }
         }
 
+        // 录音不被杀。会中不看屏幕是第一原则，而国内 ROM 默认锁屏几分钟就杀后台——
+        // 这张卡只说查到的事实（系统豁免了没），厂商开关查不到就只给路径。
+        var exempt by remember { mutableStateOf(com.qiuyiwu.shennao.record.KeepAlive.isExempt(ctx)) }
+        val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current
+        androidx.compose.runtime.DisposableEffect(lifecycle) {
+            val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+                if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) exempt = com.qiuyiwu.shennao.record.KeepAlive.isExempt(ctx)
+            }
+            lifecycle.lifecycle.addObserver(obs)
+            onDispose { lifecycle.lifecycle.removeObserver(obs) }
+        }
+        val (keepTitle, keepBody) = com.qiuyiwu.shennao.record.KeepAlive.summary(exempt, com.qiuyiwu.shennao.record.KeepAlive.romHint())
+        DsCard(Modifier.fillMaxWidth(), onClick = {
+            if (!exempt) runCatching { ctx.startActivity(com.qiuyiwu.shennao.record.KeepAlive.requestIntent(ctx)) }
+        }) {
+            Column(Modifier.padding(DS.Pad.tight)) {
+                Text(keepTitle, style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(DS.Rhythm.tight))
+                Text(keepBody, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
         // 账号与版本合成一张卡。密度规则：首屏 ≤ 5 块。这两样都是「看一眼确认一下」的信息，
         // 分两张卡各占一块，是把版面让给了最不需要注意的东西。
         DsCard(Modifier.fillMaxWidth()) {

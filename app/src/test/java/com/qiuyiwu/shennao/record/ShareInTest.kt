@@ -66,3 +66,23 @@ class ScenesTest {
         assertNull(SessionMeta.fromJson(SessionMeta("k", "t", 1L).toJson())!!.scene)
     }
 }
+
+/** 后台存活：厂商路径只给认得出的，措辞按「查到的事实」分四种。 */
+class KeepAliveTest {
+    @Test fun `认得出的厂商给路径，认不出的不编`() {
+        assertTrue(KeepAlive.romHint("Xiaomi")!!.contains("自启动"))
+        assertTrue(KeepAlive.romHint("HUAWEI")!!.contains("应用启动管理"))
+        assertTrue(KeepAlive.romHint("HONOR")!!.contains("应用启动管理"))
+        assertTrue(KeepAlive.romHint("OnePlus")!!.contains("后台运行"))
+        assertTrue(KeepAlive.romHint("vivo")!!.contains("自启动"))
+        assertNull(KeepAlive.romHint("Google"))
+        assertNull(KeepAlive.romHint(null))
+    }
+
+    @Test fun `四种组合各有各的话，没豁免的一定说「可能被停掉」`() {
+        assertTrue(KeepAlive.summary(false, null).second.contains("可能被系统停掉"))
+        assertTrue(KeepAlive.summary(false, "路径").second.contains("路径"))
+        assertEquals("系统已允许后台一直录", KeepAlive.summary(true, null).first)
+        assertTrue(KeepAlive.summary(true, "路径").second.contains("厂商还有一道开关"))
+    }
+}

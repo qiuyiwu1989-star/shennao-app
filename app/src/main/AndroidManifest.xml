@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <!-- 安卓 13 起通知要用户点头。拿不到也能录，只是状态栏那条看不见 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 手机录音要在锁屏后活下来。只申请，不强求：用户在系统对话框里说不也行。spec 011 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- 蓝牙录音笔导入。安卓 12（API 31）把蓝牙权限拆成了新的两个；
          31 以下扫描仍然要定位权限——**这是最常被忘的一条**，

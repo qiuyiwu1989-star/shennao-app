@@ -440,7 +440,8 @@ class ScreenTest {
         compose.onNodeWithText("你的数据").assertExists()
         compose.onNodeWithText("原始音频保留 12 个月，转写与判断永久保留。").assertExists()
         compose.onAllNodesWithText("无限", substring = true).assertCountEquals(0)
-        compose.onNodeWithText("导出全部 · 网页版").performClick()
+        // 「我的」多了一张「录音不被杀」卡，这一块落到了首屏之外——先滚到再点
+        compose.onNodeWithText("导出全部 · 网页版").performScrollTo().performClick()
         assert(path == "/zh/settings") { "导出该走网页版的设置页，实际 $path" }
     }
 
