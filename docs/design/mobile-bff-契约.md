@@ -48,7 +48,7 @@
 | `sessions[].scene` · `POST /api/recordings {scene}` | 白名单 meeting / one_on_one / interview / negotiation / lecture / memo；400 会把合法值列出来 | 录音 · 录前一行场合 |
 | `transcript/[id].segments[]` | `{startMs,endMs,speaker,text}`，毫秒，封顶 2000 | 详情 · 原话 tab 逐句 + 依据跳转 |
 | `POST insights/[id]/feedback` | `{verdict: up/down/hide}`，每人每条留最新一份；今天页过滤本人 hide 的。网页端 `POST /api/insights/[id]/feedback` 共用同一函数 | 判断卡展开态「对 / 不对 / 别再看」 |
-| `GET card` · `POST card {address}` | 我名下的灵魂卡 `{cards:[{deviceNo,boundAt,granted,monthly}],monthly}`；两者都顺手补发欠的月份；绑定幂等，别人的卡 409 | 灵魂卡页 · 连上即绑、权益行 |
+| `GET card` · `POST card {address, takeover?}` | 我名下的灵魂卡 `{cards:[{deviceNo,boundAt,granted,monthly}],monthly}`；两者都顺手补发欠的月份；绑定走 `lib/devices/self-bind.ts`（与 spec 019 自助绑定共用），provider=cb08、device_no=CB08-<MAC>；别的账号名下还开着 → 409 code=taken，客户端把警告给人看过再带 takeover=true | 灵魂卡页 · 连上先对账号再同步、权益行 |
 
 迁移两份：`20260905T0940_session_scene`、`20260905T0941_insight_feedback`。部署顺序见《phase2-部署手册》。
 

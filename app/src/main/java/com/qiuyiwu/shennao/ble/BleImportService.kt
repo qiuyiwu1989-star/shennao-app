@@ -1,5 +1,11 @@
 package com.qiuyiwu.shennao.ble
 
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -30,6 +36,8 @@ import java.io.File
  * 界面轮询，服务活着时它是真相。不引入额外的 IPC。
  */
 class BleImportService : Service() {
+    /** 绑定要调服务端，在这上面跑；服务销毁时一起取消。 */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     companion object {
         const val ACTION_SCAN = "scan"
@@ -75,6 +83,15 @@ class BleImportService : Service() {
          * 界面上显示「—」，不编数。
          */
         @Volatile var info: DeviceInfo = DeviceInfo(); private set
+        /**
+         * 账号不匹配（spec 019）：这张卡上次同步进的是另一个账号。同步停在这里等人决定。
+         * 值是上次那个账号的邮箱（本地记的），给弹窗用；null = 没有待决定的事。
+         */
+        @Volatile var needsDecision: String? = null; private set
+
+        /** 用户看过警告、点了「继续」：换到当前账号，接着同步。 */
+        fun continueWithCurrentAccount(ctx: Context) = send(ctx, ACTION_TAKEOVER)
+        const val ACTION_TAKEOVER = "com.qiuyiwu.shennao.ble.TAKEOVER"
 
         /**
          * 一键同步：列完文件后自动挨个下载**还没导过的**，不用用户一个个点。
@@ -152,11 +169,8 @@ class BleImportService : Service() {
                 gatt.write(Proto.buildFrame(Proto.T.CTRL, Proto.CtrlCmd.FW_REQ))
                 // 连上就同步全部还没导过的（2026-09-03 用户反馈「手动搬」不算同步）。
                 // 以前这句在 BleScreen 的 LaunchedEffect 里；靠近即同步时没有界面在，所以挪到服务里——
-                // 服务是真相，界面只是看。
-                if (imp.state is ImportState.Idle) {
-                    autoSyncOnListed = true
-                    imp.startListing(); onImporterMoved(imp)
-                }
+                // 服务是真相，界面只是看。**但先对账号**（spec 019）：这张卡上次同步进的不是当前账号就停住等人决定。
+                if (imp.state is ImportState.Idle) bindThenSync(imp, takeover = false)
             } else if (it == BleState.DISCONNECTED || it == BleState.IDLE) {
                 info = DeviceInfo()
             }
@@ -207,11 +221,42 @@ class BleImportService : Service() {
                 if (entry != null) importer?.let { it.startDownload(entry); onImporterMoved(it) }
             }
             ACTION_RESUME -> importer?.let { it.resume(); onImporterMoved(it) }
+            ACTION_TAKEOVER -> importer?.let { if (it.state is ImportState.Idle) bindThenSync(it, takeover = true) }
             // 同步中途断线，用户点了「接着传」——这仍然算在同一次同步里，
             // 完成之后要继续排队里剩下的文件，不能表现得像一次孤立的手动下载。
             ACTION_STOP -> { shutdown(); return START_NOT_STICKY }
         }
         return START_STICKY
+    }
+
+    /**
+     * 先绑定（对账号），再同步。在 IO 线程调服务端；界面用 needsDecision 知道要不要弹窗。
+     *
+     * 顺序：本地记录 → 服务端。本地记过别的账号，或服务端说「别的账号名下还开着」，都停在 needsDecision。
+     * 服务端没网 / 老版本（404）：不拦——拦不住的东西别假装拦住了；本地那一层照常起作用。
+     */
+    private fun bindThenSync(imp: Importer, takeover: Boolean) {
+        val addr = connectedAddress ?: return
+        val creds = com.qiuyiwu.shennao.PrefsStore(this).load()
+        val binding = CardBinding(this)
+        if (!takeover && CardBinding.mismatch(binding.boundOrgId(addr), creds?.orgId)) {
+            needsDecision = binding.lastEmail(addr) ?: "另一个账号"; refresh(); return
+        }
+        scope.launch {
+            val r = withContext(Dispatchers.IO) {
+                runCatching { com.qiuyiwu.shennao.Session.client(this@BleImportService).bindCard(addr, takeover) }.getOrNull()
+            }
+            when {
+                r is com.qiuyiwu.shennao.ApiResult.Failed && r.message.startsWith("这张卡已经绑在别的账号") && !takeover -> {
+                    needsDecision = binding.lastEmail(addr) ?: "另一个账号"; refresh(); return@launch
+                }
+                r is com.qiuyiwu.shennao.ApiResult.Ok && creds != null -> binding.bind(addr, creds.orgId, creds.email)
+                else -> Unit   // 没网 / 老服务端 / 登录失效：不拦
+            }
+            needsDecision = null
+            autoSyncOnListed = true
+            imp.startListing(); onImporterMoved(imp)
+        }
     }
 
     /**
@@ -413,6 +458,7 @@ class BleImportService : Service() {
     }
 
     override fun onDestroy() {
+        scope.cancel()
         // 进程被杀时也要断干净，否则下次连会撞上一个还没释放的 GATT 客户端
         // （一个 App 只有 32 个）。
         runCatching { gatt.disconnect() }

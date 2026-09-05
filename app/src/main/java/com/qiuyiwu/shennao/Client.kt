@@ -368,9 +368,14 @@ class DeepBrainClient(
     /** 我名下的灵魂卡。老服务端 404 → Failed，界面按「没这功能」处理。 */
     fun myCards(): ApiResult<CardsPage> = get("/api/mobile/card") { CardsParser.parse(it) }
 
-    /** 把连上的这张卡绑到我名下。幂等：自己重复绑不重复发权益；别人的卡 409。 */
-    fun bindCard(address: String): ApiResult<BoundCard> {
-        val r = postJson("/api/mobile/card", JSONObject().put("address", address).toString())
+    /**
+     * 把连上的这张卡绑到我名下。幂等：自己重复绑不重复发权益。
+     * 别的账号名下还开着 → 409 taken（Failed 且 message 以「这张卡已经绑在别的账号」开头）；
+     * 用户看过警告点了继续，再带 takeover=true 来。
+     */
+    fun bindCard(address: String, takeover: Boolean = false): ApiResult<BoundCard> {
+        val body = JSONObject().put("address", address).apply { if (takeover) put("takeover", true) }
+        val r = postJson("/api/mobile/card", body.toString())
         return when (r) {
             is ApiResult.Ok -> runCatching { ApiResult.Ok(CardsParser.card(JSONObject(r.value).getJSONObject("card"))) }
                 .getOrElse { ApiResult.Failed("回包读不懂") }

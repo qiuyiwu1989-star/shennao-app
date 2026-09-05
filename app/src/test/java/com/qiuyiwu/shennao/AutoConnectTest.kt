@@ -27,3 +27,13 @@ class AutoConnectTest {
         assertTrue(AutoConnect.shouldTry(false, true, false, t - AutoConnect.MIN_INTERVAL_MS, t))
     }
 }
+
+/** spec 019：本地记过别的账号才算不匹配；第一次不拦。 */
+class CardBindingTest {
+    @Test fun `不匹配的判据`() {
+        assertFalse("没记过 = 第一次 = 不拦", com.qiuyiwu.shennao.ble.CardBinding.mismatch(null, "o1"))
+        assertFalse("没登录也不拦——拦了也没法决定", com.qiuyiwu.shennao.ble.CardBinding.mismatch("o1", null))
+        assertFalse(com.qiuyiwu.shennao.ble.CardBinding.mismatch("o1", "o1"))
+        assertTrue(com.qiuyiwu.shennao.ble.CardBinding.mismatch("o1", "o2"))
+    }
+}

@@ -53,6 +53,20 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
      * 服务端没这个端点（老版本）或没网：bound 留 null，权益那行说固定的那句——不编数字。
      */
     var bound by remember { mutableStateOf<BoundCard?>(null) }
+    /** 账号不匹配（spec 019）：上次这张卡同步进的账号邮箱。非 null 就弹那句重话。 */
+    var decision by remember { mutableStateOf<String?>(null) }
+    val currentEmail = remember { com.qiuyiwu.shennao.PrefsStore(ctx).load()?.email ?: "当前账号" }
+    decision?.let { previous ->
+        ConfirmDialog(
+            title = "这张卡上次同步到的是另一个账号",
+            // 2026-09-03 那次事故就是因为界面上完全没有这句话。
+            detail = "这张卡上次同步到的是「$previous」，现在登录的是「$currentEmail」。" +
+                "继续会把接下来同步的内容放进后者，不会动前面已经同步过的内容。",
+            confirmLabel = "继续，同步到当前账号",
+            onConfirm = { BleImportService.continueWithCurrentAccount(ctx) },
+            onDismiss = { BleImportService.stop(ctx) },
+        )
+    }
     var bindError by remember { mutableStateOf<String?>(null) }
     val notice = LocalNotice.current
     val scope = rememberCoroutineScope()
@@ -97,6 +111,7 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
                 known = names.known()
             }
             note = BleImportService.note
+            decision = BleImportService.needsDecision
             syncTotal = BleImportService.syncTotal
             syncDone = BleImportService.syncDone
             BleImportService.consumeStaged()?.let { notice("已导入「$it」，正在推送到深脑") }
