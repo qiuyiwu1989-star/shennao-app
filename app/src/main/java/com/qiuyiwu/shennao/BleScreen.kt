@@ -62,6 +62,11 @@ fun BleScreen(onDone: () -> Unit) {
     var ready by remember { mutableStateOf(Readiness.READY) }
     var syncTotal by remember { mutableStateOf(0) }
     var syncDone by remember { mutableStateOf(0) }
+    val names = remember { com.qiuyiwu.shennao.ble.CardNames(ctx) }
+    var known by remember { mutableStateOf(names.known()) }
+    var info by remember { mutableStateOf(BleImportService.info) }
+    var addr by remember { mutableStateOf(BleImportService.connectedAddress) }
+    var renaming by remember { mutableStateOf<String?>(null) }
     // 手动兜底列表要说清楚"这份是不是已经同步过了"——不然全部已同步之后
     // 回来看这一屏，会让人怀疑"是不是没传"。
     val registry = remember { com.qiuyiwu.shennao.ble.ImportedRegistry(ctx) }
@@ -74,6 +79,13 @@ fun BleScreen(onDone: () -> Unit) {
             conn = BleImportService.conn
             devices = BleImportService.devices
             st = BleImportService.state
+            info = BleImportService.info
+            addr = BleImportService.connectedAddress
+            if (conn == BleState.READY && addr != null) {
+                // 连过的卡记下来：卡不在附近是常态，列表里要能看到它
+                names.markSeen(addr!!, devices.firstOrNull { it.id == addr }?.name ?: "灵魂卡")
+                known = names.known()
+            }
             note = BleImportService.note
             syncTotal = BleImportService.syncTotal
             syncDone = BleImportService.syncDone
@@ -118,15 +130,34 @@ fun BleScreen(onDone: () -> Unit) {
         BleImportService.scan(ctx)
     }
 
+    renaming?.let { target ->
+        var text by remember(target) { mutableStateOf(names.nameOf(target) ?: "") }
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text("给这张卡起个名") },
+            text = {
+                Column {
+                    Text("比如「随身那张」「办公室那张」。一人多张的时候，靠它认。",
+                         style = MaterialTheme.typography.bodyMedium,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(DS.Rhythm.element))
+                    OutlinedTextField(value = text, onValueChange = { text = it.take(20) }, singleLine = true)
+                }
+            },
+            confirmButton = { TextButton(onClick = { names.rename(target, text); known = names.known(); renaming = null }) { Text("好") } },
+            dismissButton = { TextButton(onClick = { renaming = null }) { Text("算了") } },
+        )
+    }
+
     ListPage(
-        title = "从录音笔导入",
+        title = "灵魂卡",
         subtitle = when (conn) {
-            BleState.SCANNING -> "正在找附近的录音笔…"
+            BleState.SCANNING -> "正在找附近的灵魂卡…"
             BleState.CONNECTING -> "正在连接…"
             BleState.READY -> "已连上"
             BleState.DISCONNECTED -> "连接断了"
             BleState.FAILED -> "连不上"
-            else -> "打开录音笔的蓝牙，然后点「查找设备」"
+            else -> "长按卡上的 ON/OFF 一秒开机，然后点「查找灵魂卡」"
         },
         isEmpty = false,
         empty = {},
@@ -163,6 +194,59 @@ fun BleScreen(onDone: () -> Unit) {
                  color = MaterialTheme.colorScheme.error)
         } }
 
+        // ---- 0. 我的卡 ----
+        // 硬件是商业模式，它在 App 里就该有一页，不是设置里一行。已连的那张：名字、三个数、改名；
+        // 没连时列出见过的卡——卡不在身边是常态，标成故障会天天吓人。
+        if (conn == BleState.READY && addr != null) item {
+            val a = addr!!
+            DsCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(DS.Pad.default)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(names.displayName(a, devices.firstOrNull { it.id == a }?.name ?: "灵魂卡"),
+                             style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold,
+                             modifier = Modifier.weight(1f))
+                        TextButton(onClick = { renaming = a }) { Text("改名") }
+                    }
+                    Spacer(Modifier.height(DS.Rhythm.tight))
+                    // 三个数没读到就显示「—」。TYPE=0 是按文档新写的没有真机验证，编一个数比留白危险。
+                    Text(
+                        listOf(
+                            "电量 " + (info.batteryLabel ?: "—"),
+                            "存储 " + (info.storageLabel ?: "—"),
+                            "固件 " + (info.firmware ?: "—"),
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(DS.Rhythm.element))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Spacer(Modifier.height(DS.Rhythm.element))
+                    // 随卡权益。数字要等「设备 → 权益」那张表（Phase 2），先说不会变的那句。
+                    Text("随卡权益：转写不限，你录多久都行。权益随卡永久，不会往回调。",
+                         style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+        if (conn != BleState.READY && known.isNotEmpty()) {
+            item {
+                Text("我的卡", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            }
+            items(known, key = { "k" + it.first }) { (kAddr, kName) ->
+                val nearby = devices.any { it.id == kAddr }
+                DsCard(Modifier.fillMaxWidth(), onClick = { if (nearby) BleImportService.connect(ctx, kAddr) }) {
+                    Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(kName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Text(if (nearby) "在附近，点一下连接" else "不在附近",
+                                 style = MaterialTheme.typography.bodySmall,
+                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton(onClick = { renaming = kAddr }) { Text("改名") }
+                    }
+                }
+            }
+        }
+
         // ---- 1. 找设备 ----
         if (conn != BleState.READY) {
             item {
@@ -170,7 +254,7 @@ fun BleScreen(onDone: () -> Unit) {
                     onClick = { startScan() },
                     enabled = ready == Readiness.READY || ready == Readiness.NO_PERMISSION,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                ) { Text(if (conn == BleState.SCANNING) "重新查找" else "查找设备") }
+                ) { Text(if (conn == BleState.SCANNING) "重新查找" else "查找灵魂卡") }
             }
             // 连接失败的真实原因。Android 的 GATT 只给一个 status 数字，
             // 不翻出来的话用户只知道「连不上」，而 133 和 8 要做的事完全不同。
@@ -186,8 +270,8 @@ fun BleScreen(onDone: () -> Unit) {
                 Text(
                     // 不按服务 UUID 过滤，所以列表里会有别的蓝牙设备。
                     // 直说，别让用户以为「这些都是录音笔」。
-                    "附近所有蓝牙设备都列在这里——录音笔多半叫 CB08 或类似名字。" +
-                        "带「疑似录音笔」的排在最前。",
+                    "附近所有蓝牙设备都列在这里——灵魂卡多半叫 CB08 或类似名字。" +
+                        "带「疑似灵魂卡」的排在最前。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -201,7 +285,7 @@ fun BleScreen(onDone: () -> Unit) {
                                      fontWeight = FontWeight.SemiBold)
                                 if (d.advertisesOurService) {
                                     Spacer(Modifier.width(DS.Rhythm.element))
-                                    Text("疑似录音笔", style = MaterialTheme.typography.labelSmall,
+                                    Text("疑似灵魂卡", style = MaterialTheme.typography.labelSmall,
                                          color = MaterialTheme.colorScheme.primary)
                                 }
                             }
@@ -221,7 +305,7 @@ fun BleScreen(onDone: () -> Unit) {
             if (conn == BleState.SCANNING && devices.isEmpty()) item {
                 Empty(
                     "还没找到",
-                    "确认三件事：录音笔开着、手机蓝牙开着、" +
+                    "确认三件事：灵魂卡开着、手机蓝牙开着、" +
                         "而且它**没有连在电脑或别的手机上**——BLE 一次只能被一个主机连。",
                 )
             }
@@ -270,7 +354,7 @@ fun BleScreen(onDone: () -> Unit) {
                 is ImportState.Listing -> item { Loading() }
                 is ImportState.Listed -> {
                     if (s.files.isEmpty()) item {
-                        Empty("录音笔里是空的", "先用它录一段，再回来导。")
+                        Empty("灵魂卡里是空的", "先用它录一段，再回来导。")
                     }
                     // key 不能只用文件名——2026-09-02 真实崩溃：CB08 曾经返回过
                     // 两条同名文件（重名本身不算错，设备允许），LazyColumn 要求

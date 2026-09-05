@@ -69,6 +69,12 @@ class BleImportService : Service() {
         @Volatile var syncDone: Int = 0; private set
         /** 当前连着的设备地址。界面要用它去问 ImportedRegistry「这份文件同步过没有」。 */
         @Volatile var connectedAddress: String? = null; private set
+        /**
+         * 连着的这张卡的电量 / 容量 / 固件。连上就问一次，应答到了就并进来。
+         * **TYPE=0 是 2026-09-05 按协议文档新写的，没有真机验证**——解不出的字段是 null，
+         * 界面上显示「—」，不编数。
+         */
+        @Volatile var info: DeviceInfo = DeviceInfo(); private set
 
         /**
          * 一键同步：列完文件后自动挨个下载**还没导过的**，不用用户一个个点。
@@ -128,14 +134,32 @@ class BleImportService : Service() {
     override fun onCreate() {
         super.onCreate()
         getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL, "从录音笔导入", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(CHANNEL, "从灵魂卡导入", NotificationManager.IMPORTANCE_LOW)
         )
         gatt = BleGatt(this)
         val imp = Importer(gatt)
         importer = imp
-        gatt.observeState { conn = it; lastError = gatt.lastError; refresh() }
+        gatt.observeState {
+            conn = it; lastError = gatt.lastError
+            if (it == BleState.READY) {
+                // 刚连上：先对表，再问三个数。
+                // 对表是因为灵魂卡的文件名带录音时刻，它的钟偏了整条时间轴都跟着偏。
+                // 四条都是发出去就完的命令，不等应答——应答到了在下面的 onNotify 里并进 info。
+                info = DeviceInfo()
+                gatt.write(Proto.buildSyncTime(System.currentTimeMillis()))
+                gatt.write(Proto.buildFrame(Proto.T.CTRL, Proto.CtrlCmd.BAT_REQ))
+                gatt.write(Proto.buildFrame(Proto.T.CTRL, Proto.CtrlCmd.CAP_REQ))
+                gatt.write(Proto.buildFrame(Proto.T.CTRL, Proto.CtrlCmd.FW_REQ))
+            } else if (it == BleState.DISCONNECTED || it == BleState.IDLE) {
+                info = DeviceInfo()
+            }
+            refresh()
+        }
         gatt.onNotify(Proto.CHAR_NOTIFY) { bytes ->
-            parser.feed(bytes).forEach { imp.onFrame(it) }
+            parser.feed(bytes).forEach { f ->
+                imp.onFrame(f)
+                info = DeviceInfo.merge(info, f)
+            }
             onImporterMoved(imp)
         }
         registry = ImportedRegistry(this)
@@ -145,7 +169,7 @@ class BleImportService : Service() {
         running = true
         // startForeground 必须在服务被拉起后很短时间内调用，所以放在最前面，
         // 且在任何可能抛的动作之前——晚一步系统会直接判 ANR 杀掉。
-        runCatching { startForeground(NOTIF_ID, notification("正在从录音笔导入", "保持蓝牙开着就行")) }
+        runCatching { startForeground(NOTIF_ID, notification("正在从灵魂卡导入", "保持蓝牙开着就行")) }
 
         when (intent?.action) {
             ACTION_SCAN -> {
@@ -321,13 +345,13 @@ class BleImportService : Service() {
                     if (s.total > 0) "${s.got / 1024} / ${s.total / 1024} KB"
                     else "${s.got / 1024} KB"
                 )
-            is ImportState.Listing -> "正在读录音笔" to "列文件中"
+            is ImportState.Listing -> "正在读灵魂卡" to "列文件中"
             is ImportState.Done -> "${syncPrefix}导好了" to "正在推送到深脑"
             is ImportState.Failed -> "导入中断" to s.reason
             is ImportState.Listed ->
                 if (syncTotal > 0 && syncDone >= syncTotal) "同步完成" to "共 $syncTotal 份，已推送到深脑"
-                else "从录音笔导入" to "保持蓝牙开着就行"
-            else -> "从录音笔导入" to "保持蓝牙开着就行"
+                else "从灵魂卡导入" to "保持蓝牙开着就行"
+            else -> "从灵魂卡导入" to "保持蓝牙开着就行"
         }
         runCatching {
             getSystemService(NotificationManager::class.java)

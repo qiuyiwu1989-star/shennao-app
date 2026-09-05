@@ -27,7 +27,7 @@ enum class Readiness {
 
     /** 说清楚是什么问题、以及**该做什么**。只说问题不给出路等于没说。 */
     val message: String? get() = when (this) {
-        NO_BLE -> "这台手机不支持低功耗蓝牙，没法连录音笔。"
+        NO_BLE -> "这台手机不支持低功耗蓝牙，没法连灵魂卡。"
         BLUETOOTH_OFF -> "手机蓝牙没打开。从屏幕顶上下拉，打开蓝牙再回来。"
         NO_PERMISSION -> null      // 权限有专门的申请流程，不在这里说
         READY -> null

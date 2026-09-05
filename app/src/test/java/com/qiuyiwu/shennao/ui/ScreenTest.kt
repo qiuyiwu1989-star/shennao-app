@@ -389,4 +389,25 @@ class ScreenTest {
         compose.onNodeWithText("我录一下，方便之后整理，可以吧？").assertExists()
     }
 
+    // ---- 灵魂卡页：硬件是商业模式，它得有自己的一页 ----
+
+    @Test fun `灵魂卡页的口径是灵魂卡，且告诉人先开机再找`() {
+        compose.setContent { ShennaoTheme { BleScreen(onDone = {}) } }
+        compose.onNodeWithText("灵魂卡").assertExists()
+        compose.onNodeWithText("长按卡上的 ON/OFF 一秒开机，然后点「查找灵魂卡」").assertExists()
+        compose.onAllNodesWithText("录音笔", substring = true).assertCountEquals(0)
+    }
+
+    /** 卡不在附近是常态。见过的卡要列出来，标「不在附近」而不是标成故障。 */
+    @Test fun `见过的卡不在附近也要列出来`() {
+        val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        com.qiuyiwu.shennao.ble.CardNames(ctx).apply {
+            markSeen("AA:BB:CC:DD:EE:01", "CB08"); rename("AA:BB:CC:DD:EE:01", "办公室那张")
+        }
+        compose.setContent { ShennaoTheme { BleScreen(onDone = {}) } }
+        compose.onNodeWithText("我的卡").assertExists()
+        compose.onNodeWithText("办公室那张").assertExists()
+        compose.onNodeWithText("不在附近").assertExists()
+    }
+
 }

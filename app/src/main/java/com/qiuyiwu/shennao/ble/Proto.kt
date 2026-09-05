@@ -43,6 +43,39 @@ object Proto {
         // 故意不定义 delAll(9)：批量删除发出去无法挽回，且旧固件不回应答。
     }
 
+    /**
+     * 控制命令（TYPE=0）。**2026-09-05 按 CB08 协议 §4 新写，没有已验证的参考实现**——
+     * Mac 端的 Protocol.swift 只定义了 ctrl=0 这个常量，从没发过这几条。
+     * 唯一的依据是协议文档和 lomehong/record 那份真机跑通的 Python（无 license，只照文档写）。
+     *
+     * 都是只读查询，发错了顶多设备不理。**解出来的值在真机上核对之前只能当参考**，
+     * 界面上解析不出就显示「—」，不编数。
+     */
+    object CtrlCmd {
+        const val SYNC_TIME = 0      // App→Dev：year:2B LE + month/day/hour/minute/second 各 1B
+        const val CAP_REQ = 1;  const val CAP_ACK = 2     // remain:4B LE + total:4B LE
+        const val BAT_REQ = 3;  const val BAT_ACK = 4     // 1B：0~100；110 = 充电中
+        const val FW_REQ = 10;  const val FW_ACK = 11     // 6B ASCII，如 V1.0.0
+    }
+
+    /**
+     * 同步时间。连上就发一次：灵魂卡的文件名里带录音时刻（note20260828-205856），
+     * 它的钟走偏了，深脑那边的时间轴就跟着偏——而那条时间轴是整套判断的坐标。
+     */
+    fun buildSyncTime(epochMs: Long, zone: java.util.TimeZone = java.util.TimeZone.getDefault()): ByteArray {
+        val c = java.util.Calendar.getInstance(zone).apply { timeInMillis = epochMs }
+        val y = c.get(java.util.Calendar.YEAR)
+        val p = byteArrayOf(
+            (y and 0xFF).toByte(), (y shr 8).toByte(),
+            (c.get(java.util.Calendar.MONTH) + 1).toByte(),
+            c.get(java.util.Calendar.DAY_OF_MONTH).toByte(),
+            c.get(java.util.Calendar.HOUR_OF_DAY).toByte(),
+            c.get(java.util.Calendar.MINUTE).toByte(),
+            c.get(java.util.Calendar.SECOND).toByte(),
+        )
+        return buildFrame(T.CTRL, CtrlCmd.SYNC_TIME, p)
+    }
+
     object KeyCmd {
         const val STATUS_REQ = 19; const val STATUS_ACK = 20   // 1录音中 2未录音 3暂停
         const val CUR_NAME_REQ = 23; const val CUR_NAME_ACK = 24
