@@ -99,7 +99,7 @@
 
 - 真机 + 灵魂卡：全链路掐表「拆盒到第一份判断」
 - 各家 ROM 后台录音存活：**011 已立、代码能做的已做（3.5.0：系统豁免查与申请、六家厂商路径、「我的」一张卡）**，真机矩阵在 011 里等你填
-- 正式签名 APK（**未签名 release 已能构建**：`assembleRelease` 10 MB；差的只是你 `local.properties` 里的 keystore）
+- ~~正式签名 APK~~ ✅ 09-05：3.5.1 正式签名已发布到首页（`scripts/publish-android.sh`）。**签名换过**：旧 keystore 口令丢失，新建（指纹 a90c88…），之前装 3.1.2 的 8 台要卸载重装
 
 ## 必须你配合的清单
 
@@ -111,7 +111,7 @@
 | `SHENNAO_REPO_TOKEN` | CI 的色值漂移检查要读主仓库 | 随时 |
 | 灵魂卡固件支持 OTA 吗 | 协议文档没提，S23「固件更新」画不画取决于它 | 1.6 已按「不画」处理，有 OTA 再加 |
 | **真机核对 TYPE=0 三个数** | 电量/容量/固件是按协议 §4 新写的，全项目从没发过这几条命令 | Phase 3 第一件事 |
-| 出正式 APK 的口令 | keystore 在 `~/Developer/android-toolchain/shennao-release.jks`（指纹脚本会在构建时核对，和线上不一致就拒发），但 `local.properties` 缺 `shennao.ksPath` / `shennao.ksPass` 两行；填上后 `bash scripts/publish-android.sh` 一条到首页 | **现在** |
+| ~~出正式 APK 的口令~~ | ✅ 09-05 新建 keystore，口令在 `~/Developer/android-toolchain/shennao-release.password.txt`（抄进密码管理器后删）。**这把再丢就又得全员重装** | 已解决 |
 
 其余一律我自己定。
 
@@ -120,6 +120,7 @@
 | 日期 | 事 |
 | --- | --- |
 | 09-04 | 独立成库，59 提交带历史 |
+| 09-05 晚 | **3.5.1 正式签名发布到 shennao.zaowuyun.com 首页**（新 keystore）。发布脚本一条到位：构建→指纹核对→上传→回读。 |
 | 09-06 | **权益改回规格**：每月每卡 30 积分永久叠加，不是一次性 300；安卓 3.5.1 措辞随之改。 |
 | 09-06 | 部署手册、契约文档补齐；Uploader 场合发送测试；未签名 release 构建通过。 |
 | 09-06 | **安卓 3.5.0 (39)**：后台存活（spec 011）——电池优化豁免、厂商开关路径；284 单测。 |

@@ -20,8 +20,10 @@ SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519_skill_deploy}"
 SSH_HOST="${SSH_HOST:-ubuntu@122.51.221.171}"
 REMOTE_DIR=/var/www/shennao-downloads
 BASE_URL=https://shennao.zaowuyun.com/downloads
-# 线上历史版本一直用的签名。换签名 = 所有人得卸载重装并丢掉本地凭证，所以这里写死、对不上就拒发。
-EXPECTED_SIGNER=c1fb934ed207073275cebe4bb2be0621518a7fefe50bb66cad7bbb9684cba24b
+# 正式签名的指纹，写死、对不上就拒发：换签名 = 所有人得卸载重装并丢掉本地凭证。
+# 2026-09-05 换过一次：旧 keystore（c1fb93…，3.1.2 及之前）口令丢失，邱亲手跑 scripts/new-keystore.sh 新建了这把。
+# 之前装过的 8 台要卸载重装一次。
+EXPECTED_SIGNER=a90c8803c55e774354607c8ced98ba9820f9fa03295730b66b0013e414d22dfa
 
 fail() { printf '\n✗ %s\n' "$1" >&2; exit 1; }
 ok()   { printf '✓ %s\n' "$1"; }
