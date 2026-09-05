@@ -32,12 +32,19 @@ package com.qiuyiwu.shennao
  * 分开之后，`AppState` 一换，`NavState` 整个重建，不用逐栏收拾。
  */
 
-/** 底栏。顺序即显示顺序。 */
+/**
+ * 底栏。顺序即显示顺序。
+ *
+ * **四栏，「录音」不占栏。**录是动作不是地方：放进导航栏占掉五分之一的常驻位置，
+ * 却只在按下那一秒有意义。它改成「今天」右下的主按钮，进去是沉浸式（不带底栏）。
+ *
+ * 「记录」＝ 历史 + 收发台账。「有什么」和「进来了没有」是同一个问题的两面，
+ * 拆在两栏里用户就得自己对账。
+ */
 enum class Tab(val label: String) {
     TODAY("今天"),
-    RECORD("录音"),
-    SEARCH("问"),
-    HISTORY("会议"),
+    RECORDS("记录"),
+    ASK("问"),
     ME("我的"),
 }
 
@@ -49,19 +56,28 @@ enum class Tab(val label: String) {
  */
 sealed interface Route {
 
-    /** 这个位置属于哪一栏。null = 沉浸式，压在所有栏之上，不带底栏。 */
+    /** 这个位置属于哪一栏。null = 详情或沉浸式，压在跳转发起的那一栏上。 */
     val tab: Tab?
 
-    // ── 五个栈底，与 Tab 一一对应 ────────────────────────────────
+    /** 沉浸式：不带底栏。只有录音、配对这类「按下之后不该再看别处」的屏才是。 */
+    val immersive: Boolean get() = false
+
+    // ── 四个栈底，与 Tab 一一对应 ────────────────────────────────
     data object Today : Route { override val tab = Tab.TODAY }
-    data object Record : Route { override val tab = Tab.RECORD }
-    data object Ask : Route { override val tab = Tab.SEARCH }
-    data object History : Route { override val tab = Tab.HISTORY }
+    data object Records : Route { override val tab = Tab.RECORDS }
+    data object Ask : Route { override val tab = Tab.ASK }
     data object Me : Route { override val tab = Tab.ME }
 
+    // ── 沉浸式：压在任何栏上，不带底栏 ─────────────────────────
+    /**
+     * 录音。**沉浸式**——录音时底栏点了也没用，显示出来只会让人以为点错了；
+     * 而这一屏的设计目标是让人不再看它（会中不需要看任何屏幕）。
+     */
+    data object Record : Route { override val tab: Tab? = null; override val immersive get() = true }
+
     // ── 可以压栈的详情 ──────────────────────────────────────────
-    /** 从录音笔导入。和「录」是同一件事的两个来源，所以压在「录音」栏上。 */
-    data object Ble : Route { override val tab = Tab.RECORD }
+    /** 灵魂卡：扫描、连接、同步。从「记录」和「我的」都能进。 */
+    data object Ble : Route { override val tab: Tab? = null }
     data class Meeting(val transcriptId: String) : Route { override val tab: Tab? = null }
     data class Person(val personId: String) : Route { override val tab: Tab? = null }
 
@@ -79,12 +95,11 @@ sealed interface Route {
     val isDetail: Boolean get() = tab == null
 }
 
-/** 五个栈底。改这里就等于改「每一栏进去先看到什么」。 */
+/** 四个栈底。改这里就等于改「每一栏进去先看到什么」。 */
 private val ROOTS: Map<Tab, Route> = mapOf(
     Tab.TODAY to Route.Today,
-    Tab.RECORD to Route.Record,
-    Tab.SEARCH to Route.Ask,
-    Tab.HISTORY to Route.History,
+    Tab.RECORDS to Route.Records,
+    Tab.ASK to Route.Ask,
     Tab.ME to Route.Me,
 )
 
@@ -100,6 +115,9 @@ data class NavState(
 ) {
     /** 现在这一屏。栈永远非空，所以这里不会抛。 */
     val current: Route get() = stacks.getValue(tab).last()
+
+    /** 有没有底栏。沉浸式路由没有。 */
+    val showChrome: Boolean get() = !current.immersive
 
     /** 当前栈还能不能弹。 */
     val canPop: Boolean get() = stacks.getValue(tab).size > 1
@@ -137,7 +155,7 @@ data class NavState(
     fun open(tab: Tab, route: Route): NavState = copy(tab = tab).push(route)
 
     companion object {
-        /** 开机位置：今天，五个栈各自见底。 */
+        /** 开机位置：今天，四个栈各自见底。 */
         fun initial(): NavState = NavState(Tab.TODAY, ROOTS.mapValues { (_, r) -> listOf(r) })
     }
 }

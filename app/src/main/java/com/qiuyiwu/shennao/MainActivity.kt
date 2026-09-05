@@ -176,6 +176,25 @@ private fun App(client: DeepBrainClient) {
 
     Scaffold(
         snackbarHost = { androidx.compose.material3.SnackbarHost(notices) },
+        /*
+         * 录音是「今天」右下的主按钮，不占底栏。
+         *
+         * 录是动作不是地方：放进导航栏占掉五分之一的常驻位置，却只在按下那一秒
+         * 有意义——而且老实现正因为它既是栏又是屏，RecordScreen 被渲染在两个地方。
+         * 只在「今天」栈底显示：别的屏各有各的主动作，再叠一个会抢。
+         */
+        floatingActionButton = {
+            val nav = ready?.nav ?: return@Scaffold
+            if (nav.current == Route.Today) {
+                FloatingActionButton(
+                    onClick = { go(nav.push(Route.Record)) },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ) {
+                    androidx.compose.material3.Icon(MicOutlined, contentDescription = "录音")
+                }
+            }
+        },
         // 内容区自己让开状态栏；底栏由 NavigationBar 让开手势条（它自带 inset）。
         // 两处都交给系统算，不写死 dp——不同机型的刘海和手势条高度不一样。
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets.safeDrawing
@@ -184,6 +203,8 @@ private fun App(client: DeepBrainClient) {
             // 登录、加载、出错这三种状态不该有底栏——底栏在那时点了也没用，
             // 只会让人以为「是不是我点错了地方」。
             val nav = ready?.nav ?: return@Scaffold
+            // 沉浸式（录音中）不带底栏：那时候点底栏也没用，显示出来只会让人以为点错了。
+            if (!nav.showChrome) return@Scaffold
             NavigationBar {
                 Tab.entries.forEach { t ->
                     NavigationBarItem(
@@ -244,7 +265,7 @@ private fun App(client: DeepBrainClient) {
                                 // Chrome 里多半没登录，点开「今天」的一条判断，
                                 // 看到的是深脑的登录页，而他刚刚明明就在 App 里登着。
                                 onOpenTranscript = { tid -> go(nav.push(Route.Meeting(tid))) },
-                                onRecord = { go(nav.select(Tab.RECORD)) },
+                                onRecord = { go(nav.push(Route.Record)) },
                                 onRefresh = { scope.launch { load() } },
                                 staleLabel = stale,
                                 onPullRefresh = { load() },
@@ -268,18 +289,18 @@ private fun App(client: DeepBrainClient) {
                         }
 
                         is Route.Record -> RecordScreen(
-                            onBack = { go(nav.select(Tab.TODAY)); scope.launch { load() } },
+                            onBack = { nav.pop()?.let { go(it) }; scope.launch { load() } },
                             onImport = { go(nav.push(Route.Ble)) },
-                            onOpenHistory = { go(nav.select(Tab.HISTORY)) },
+                            onOpenHistory = { go(nav.select(Tab.RECORDS)) },
                         )
 
-                        is Route.Ble -> BleScreen(onDone = { go(nav.select(Tab.HISTORY)) })
+                        is Route.Ble -> BleScreen(onDone = { go(nav.select(Tab.RECORDS)) })
 
                         is Route.Ask -> AskScreen(client) { tid -> go(nav.push(Route.Meeting(tid))) }
 
-                        is Route.History -> HistoryScreen(
+                        is Route.Records -> HistoryScreen(
                             client = client,
-                            onRecord = { go(nav.select(Tab.RECORD)) },
+                            onRecord = { go(nav.push(Route.Record)) },
                             onOpen = { tid -> go(nav.push(Route.Meeting(tid))) },
                         )
 
@@ -303,7 +324,7 @@ private fun App(client: DeepBrainClient) {
                             client, r.personId,
                             onBack = { nav.pop()?.let { go(it) } },
                             onOpen = { tid -> go(nav.push(Route.Meeting(tid))) },
-                            onRecord = { go(nav.select(Tab.RECORD)) },
+                            onRecord = { go(nav.push(Route.Record)) },
                         )
 
                         is Route.Web -> MeetingWebScreen(
@@ -323,11 +344,10 @@ private fun App(client: DeepBrainClient) {
 private fun TabIcon(t: Tab) {
     val v = when (t) {
         Tab.TODAY -> Icons.Outlined.Home
-        Tab.RECORD -> MicOutlined
-        // 放大镜说的是「搜索」。这一栏现在是问答，图标得跟着改口，
+        Tab.RECORDS -> Icons.Outlined.List
+        // 放大镜说的是「搜索」。这一栏是问答，图标得跟着改口，
         // 否则底栏和屏幕里说的是两件事。
-        Tab.SEARCH -> Icons.Outlined.Send
-        Tab.HISTORY -> Icons.Outlined.List
+        Tab.ASK -> Icons.Outlined.Send
         Tab.ME -> Icons.Outlined.Person
     }
     // 明确用 material3 的 Icon：material 和 material3 各有一个同名可组合项，

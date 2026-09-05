@@ -14,7 +14,7 @@ import java.io.File
  */
 class NavTest {
 
-    @Test fun `开机在今天，五个栈各自见底`() {
+    @Test fun `开机在今天，四个栈各自见底`() {
         val n = NavState.initial()
         assertEquals(Tab.TODAY, n.tab)
         assertEquals(Route.Today, n.current)
@@ -23,19 +23,19 @@ class NavTest {
     }
 
     @Test fun `压详情之后能弹回原来那一栏`() {
-        val n = NavState.initial().select(Tab.HISTORY).push(Route.Meeting("t1"))
+        val n = NavState.initial().select(Tab.RECORDS).push(Route.Meeting("t1"))
         assertEquals(Route.Meeting("t1"), n.current)
         assertTrue(n.canPop)
         val back = n.pop()!!
-        assertEquals("弹完该回会议栏的栈底", Route.History, back.current)
-        assertEquals(Tab.HISTORY, back.tab)
+        assertEquals("弹完该回记录栏的栈底", Route.Records, back.current)
+        assertEquals(Tab.RECORDS, back.tab)
     }
 
     /**
      * 老实现里，从「今天」点进一场会，返回会落到「会议」栏——因为返回的目的地
      * 是手写死的。**回到的不是他刚才在的地方**，用户会以为自己按错了。
      */
-    @Test fun `从今天进详情，返回回到今天而不是会议栏`() {
+    @Test fun `从今天进详情，返回回到今天而不是记录栏`() {
         val n = NavState.initial().push(Route.Meeting("t1"))
         val back = n.pop()!!
         assertEquals(Tab.TODAY, back.tab)
@@ -44,18 +44,18 @@ class NavTest {
 
     @Test fun `每一栏的栈互不干扰`() {
         val n = NavState.initial()
-            .select(Tab.HISTORY).push(Route.Meeting("t1"))
+            .select(Tab.RECORDS).push(Route.Meeting("t1"))
             .select(Tab.ME).push(Route.Web("/zh", "首页"))
         assertEquals(Route.Web("/zh", "首页"), n.current)
-        // 切回会议栏，它还停在刚才那一场
-        val back = n.select(Tab.HISTORY)
+        // 切回记录栏，它还停在刚才那一场
+        val back = n.select(Tab.RECORDS)
         assertEquals(Route.Meeting("t1"), back.current)
     }
 
     @Test fun `再点一次已选中的栏，弹回那一栏的栈底`() {
-        val n = NavState.initial().select(Tab.HISTORY).push(Route.Meeting("t1"))
-        val again = n.select(Tab.HISTORY)
-        assertEquals(Route.History, again.current)
+        val n = NavState.initial().select(Tab.RECORDS).push(Route.Meeting("t1"))
+        val again = n.select(Tab.RECORDS)
+        assertEquals(Route.Records, again.current)
         assertFalse(again.canPop)
     }
 
@@ -73,23 +73,34 @@ class NavTest {
         assertEquals("有东西可弹就先弹", Tab.ME, deep.pop()!!.tab)
     }
 
+    /**
+     * 录音是沉浸式：不带底栏。录音时点底栏也没用，显示出来只会让人以为点错了；
+     * 而这一屏的设计目标是让人不再看它。弹出来底栏要回来。
+     */
+    @Test fun `录音是沉浸式，进去没底栏，出来有`() {
+        val n = NavState.initial().push(Route.Record)
+        assertFalse("录音中不该有底栏", n.showChrome)
+        assertTrue("其余位置都有底栏", n.pop()!!.showChrome)
+        assertTrue(NavState.initial().select(Tab.ME).push(Route.Web("/a", "a")).showChrome)
+    }
+
     @Test fun `同一个位置连着压两次会被忽略`() {
         val n = NavState.initial().push(Route.Meeting("t1")).push(Route.Meeting("t1"))
         assertEquals(2, n.stacks.getValue(Tab.TODAY).size)
     }
 
     @Test fun `跨栏跳转是一个动作，不是两步`() {
-        val n = NavState.initial().open(Tab.RECORD, Route.Ble)
-        assertEquals(Tab.RECORD, n.tab)
+        val n = NavState.initial().open(Tab.RECORDS, Route.Ble)
+        assertEquals(Tab.RECORDS, n.tab)
         assertEquals(Route.Ble, n.current)
-        assertEquals("弹完该回录音栏栈底", Route.Record, n.pop()!!.current)
+        assertEquals("弹完该回记录栏栈底", Route.Records, n.pop()!!.current)
     }
 
     @Test fun `栈底路由和栏一一对应，详情不占栈底`() {
-        val roots = listOf(Route.Today, Route.Record, Route.Ask, Route.History, Route.Me)
+        val roots = listOf(Route.Today, Route.Records, Route.Ask, Route.Me)
         assertEquals("每一栏必须有且只有一个栈底", Tab.entries.size, roots.map { it.tab }.toSet().size)
         roots.forEach { assertFalse("${it} 是栈底，不该是详情", it.isDetail) }
-        listOf(Route.Meeting("x"), Route.Person("x"), Route.Web("/a", "a"))
+        listOf(Route.Record, Route.Ble, Route.Meeting("x"), Route.Person("x"), Route.Web("/a", "a"))
             .forEach { assertTrue("$it 该是详情", it.isDetail) }
     }
 }
@@ -123,7 +134,7 @@ class NavRenderTest {
 
     @Test fun `每个 Route 在渲染里只出现一次`() {
         val block = renderBlock()
-        val names = listOf("Today", "Record", "Ask", "History", "Me", "Ble", "Meeting", "Person", "Web")
+        val names = listOf("Today", "Records", "Ask", "Me", "Record", "Ble", "Meeting", "Person", "Web")
         val dup = names.filter { n ->
             Regex("""\bis\s+Route\.$n\b|\bRoute\.$n\s*->""").findAll(block).count() != 1
         }
