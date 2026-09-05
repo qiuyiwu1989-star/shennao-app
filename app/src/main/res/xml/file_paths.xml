@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 只暴露 cache/diag：诊断包走系统分享要一个 content:// URI。录音目录不在这里，不对外。 -->
+<paths>
+    <cache-path name="diag" path="diag/" />
+</paths>

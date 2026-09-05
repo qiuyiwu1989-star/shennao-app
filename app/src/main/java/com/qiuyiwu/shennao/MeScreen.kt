@@ -36,6 +36,7 @@ fun MeScreen(
     http: Http = UrlHttp(),
 ) {
     val ctx = LocalContext.current
+    val notice = LocalNotice.current
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<UpdateState?>(null) }
     var checking by remember { mutableStateOf(false) }
@@ -128,6 +129,10 @@ fun MeScreen(
                     if (checking) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     else TextButton(onClick = { check() }) { Text("检查更新") }
                 }
+                // 反馈问题：把此刻的状态打成一份文字发出去。不崩的问题（装不上、连不上、传一半停了）
+                // 之前一点痕迹都没有。放在版本旁边：报问题的人第一句就是「我是哪个版本」。
+                TextButton(onClick = { if (!Diagnostics.share(ctx)) notice("打包失败，再试一次") },
+                           contentPadding = PaddingValues()) { Text("反馈问题 · 发一份诊断") }
 
                 when (val s = state) {
                     is UpdateState.Available -> {
