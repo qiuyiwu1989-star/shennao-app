@@ -28,8 +28,11 @@ fun PersonScreen(
 ) {
     var person by remember { mutableStateOf<Person?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    // 「再试一次」必须真的再取一次。之前只把 error 清空，LaunchedEffect 只认 personId，
+    // 于是落进骨架屏永远转——一个点了没反应的重试比没有重试更糟。
+    var attempt by remember { mutableStateOf(0) }
 
-    LaunchedEffect(personId) {
+    LaunchedEffect(personId, attempt) {
         when (val r = withContext(Dispatchers.IO) { client.person(personId) }) {
             is ApiResult.Ok -> person = r.value
             is ApiResult.Failed -> error = r.message
@@ -40,7 +43,7 @@ fun PersonScreen(
     val p = person
     DetailPage(onBack = onBack, title = p?.name) {
         when {
-            error != null -> item { Broken(error!!) { error = null } }
+            error != null -> item { Broken(error!!) { error = null; attempt++ } }
             p == null -> item { SkeletonList(2) }
             else -> {
                 p.role?.let { r -> item {

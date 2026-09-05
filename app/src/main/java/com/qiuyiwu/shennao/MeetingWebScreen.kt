@@ -34,8 +34,9 @@ fun MeetingWebScreen(client: DeepBrainClient, path: String, title: String, onBac
     var url by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
+    var attempt by remember { mutableStateOf(0) }
 
-    LaunchedEffect(path) {
+    LaunchedEffect(path, attempt) {
         when (val r = withContext(Dispatchers.IO) { client.webTicket() }) {
             is ApiResult.Ok ->
                 url = "${BuildConfig.API_BASE}/api/mobile/web-open" +
@@ -53,7 +54,8 @@ fun MeetingWebScreen(client: DeepBrainClient, path: String, title: String, onBac
             Text(title, style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(DS.Rhythm.element))
         }
-        error?.let { e -> item { Broken(e) { } } }
+        // 重试要重新领票据。之前这里是个空回调——点了没反应。
+        error?.let { e -> item { Broken(e) { error = null; loading = true; attempt++ } } }
         if (error == null) item {
             Box(Modifier.fillMaxWidth().heightIn(min = 480.dp)) {
                 url?.let { u ->

@@ -444,4 +444,28 @@ class ScreenTest {
         assert(path == "/zh/settings") { "导出该走网页版的设置页，实际 $path" }
     }
 
+    // ---- 「再试一次」必须真的再试 ----
+
+    private fun noNetClient() =
+        DeepBrainClient(NoNetHttp(), MemStore(Credentials("r", "o", "e@x.com")), "https://api.test", "https://sb.test", "k")
+
+    /**
+     * 之前 PersonScreen 的重试只把 error 清空，取数的 LaunchedEffect 不会再跑，
+     * 于是落进骨架屏永远转。判据：不联网的 client 下点「再试一次」，
+     * 应该**再次**看到「没取到」（说明真的重取了又失败），而不是骨架屏。
+     */
+    @Test fun `人物页的再试一次要真的再取一次`() {
+        compose.setContent { ShennaoTheme { PersonScreen(noNetClient(), "p1", onBack = {}, onOpen = {}, onRecord = {}) } }
+        compose.onNodeWithText("再试一次").assertIsDisplayed().performClick()
+        compose.onNodeWithText("没取到").assertExists()
+        compose.onNodeWithText("再试一次").assertExists()
+    }
+
+    /** MeetingWebScreen 的重试之前是个空回调。 */
+    @Test fun `网页页的再试一次要重新领票据`() {
+        compose.setContent { ShennaoTheme { MeetingWebScreen(noNetClient(), "/zh", "深脑", onBack = {}) } }
+        compose.onNodeWithText("再试一次").assertIsDisplayed().performClick()
+        compose.onNodeWithText("没取到").assertExists()
+    }
+
 }
