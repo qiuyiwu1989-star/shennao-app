@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: 单测与构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # 配置从 local.properties 读，不进仓（里面有 keystore 密码与 anon key）。
+      # CI 上只跑单测与 debug 构建，这些值给空串即可——cfg() 有回退。
+      - name: 造一份最小 local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+      - name: 单测
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+
+      - name: 构建 debug
+        run: ./gradlew --no-daemon :app:assembleDebug
+
+      - name: 失败时留下测试报告
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: app/build/reports/tests/testDebugUnitTest/
+
+  token-drift:
+    name: 色值有没有漂
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 设计 token 的真源在**另一个仓库**（qiuyiwu1989-star/shennao 的
+      # packages/ui/src/tokens.ts）。拆仓之后 ThemeParityTest 在这里读不到它，
+      # 只能拿仓内快照当基准——而快照会烂。这个 job 就是防它烂的。
+      #
+      # 需要一个能读主仓库的 token，放在仓库 Secrets 里，名字 SHENNAO_REPO_TOKEN。
+      # **没配的时候这个 job 不报错，只是把话说清楚**：一个因为缺凭据而红的
+      # 门禁，几天之内就会被人关掉，那比没有它更糟。
+      - name: 取真源比对
+        env:
+          TOKEN: ${{ secrets.SHENNAO_REPO_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::notice::没有配 SHENNAO_REPO_TOKEN，跳过漂移检查。"
+            echo "::notice::这意味着 app/src/test/resources/tokens.snapshot.ts 目前没人盯着，"
+            echo "::notice::网页那边改了色值这里不会知道。配一个能读 qiuyiwu1989-star/shennao 的 token 即可。"
+            exit 0
+          fi
+          curl -sfL -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github.raw" \
+            "https://api.github.com/repos/qiuyiwu1989-star/shennao/contents/packages/ui/src/tokens.ts?ref=main" \
+            -o /tmp/tokens.real.ts
+          # 快照是逐字副本，比对就是一句 diff——不解析，也就不会因为
+          # sed 在 macOS 与 Linux 上行为不同而出岔子（第一版栽过）。
+          if diff -u /tmp/tokens.real.ts app/src/test/resources/tokens.snapshot.ts; then
+            echo "快照与真源一致。"
+          else
+            echo "::error::tokens.ts 变了，但仓内快照没跟。"
+            echo "::error::重新拷一份到 app/src/test/resources/tokens.snapshot.ts，并更新同目录 .meta 里的两行。"
+            exit 1
+          fi

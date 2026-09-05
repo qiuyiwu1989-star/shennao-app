@@ -37,6 +37,7 @@ class ThemeParityTest {
         return d?.let { File(it, "packages/ui/src/tokens.ts") }
     }
 
+    /** 仓内快照。**逐字副本**，没有文件头——来源信息在同目录的 .meta 里。 */
     private fun snapshot(): String =
         javaClass.classLoader!!.getResourceAsStream("tokens.snapshot.ts")
             ?.bufferedReader()?.use { it.readText() }
@@ -53,12 +54,10 @@ class ThemeParityTest {
      */
     @Test fun `快照没有漂`() {
         val real = monorepoTokens() ?: return
-        val head = "// ⚠️ 快照"
-        val mine = snapshot().substringAfter(head).substringAfter("\n\n")
         assertEquals(
             "packages/ui/src/tokens.ts 变了，但 app/src/test/resources/tokens.snapshot.ts 没跟——" +
-                "跟一下并更新文件头的「摘自提交 / 摘录于」两行",
-            real.readText().trim(), mine.trim(),
+                "重新拷一份，并更新同目录 tokens.snapshot.meta 里的「来源提交 / 摘录于」两行",
+            real.readText(), snapshot(),
         )
     }
 

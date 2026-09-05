@@ -1,0 +1,11 @@
+# tokens.snapshot.ts 的来历
+#
+# 它是 qiuyiwu1989-star/shennao 的 packages/ui/src/tokens.ts 的**逐字副本**。
+# 逐字是有意的：比对就是一句 diff，不用解析，也就不会因为 sed 在 macOS
+# 和 Linux 上行为不同而出岔子（第一版就栽在这儿）。
+#
+# 来源提交: 97a4ae426930160a56111a58a59e4f53b79ec18a
+# 摘录于:   2026-09-05
+#
+# 改它的人：真源那边也要改，并且把上面两行更新。
+# CI 的 token-drift job 会盯着，前提是仓库配了 SHENNAO_REPO_TOKEN。
