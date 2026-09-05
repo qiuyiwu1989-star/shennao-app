@@ -40,7 +40,7 @@
 
 | 端点 | 用途 | 客户端 |
 | --- | --- | --- |
-| `GET credits` | `{ balance }` | 我的 · 积分行（404 时不显示） |
+| `GET credits` | `{ balance, month: { deep, quick, credits, since } \| null }`；深判断 = ≥2 个方法；用量从流水按分析净额算 | 我的 · 积分行 + 「这个月：深判断 x 次…」（404 时不显示，没 month 不画第二行） |
 | `POST predictions/[id]` | `{verdict: borne_out/refuted/partial/too_early}` → `{ok,verdict,bridged}` 或 `{ok,deferred,nextDueAt}` | 今天 · 预测卡三按钮 |
 | `GET transcript/[id]/speakers` | 未认的说话人各配样本句 + 候选名单 | 认人页 S14 |
 | `POST transcript/[id]/speakers` | `{speakers:[{id,name}|{id,skip:true}]}` | 认人页 |
