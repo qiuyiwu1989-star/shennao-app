@@ -54,6 +54,44 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val client = Session.client(this)
         setContent { ShennaoTheme { App(client) } }
+        receiveShare(intent)
+    }
+
+    /** singleTask：App 已经在跑时，分享进来走这里而不是 onCreate。 */
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        receiveShare(intent)
+    }
+
+    /*
+     * 分享进来的文件：落盘 → 交给上传管道 → 说一句。
+     *
+     * 只做这三件。不在这里问场合、不在这里改名——那些进来之后随时能改，
+     * **一个分享动作只该按一次按钮**。落完立刻 kick UploadWorker：
+     * 它能活过 App 被划掉，用户分享完就切走是常态。
+     */
+    private fun receiveShare(intent: android.content.Intent?) {
+        val uris = com.qiuyiwu.shennao.record.ShareIn.urisOf(intent)
+        if (uris.isEmpty()) return
+        // 同一个 intent 只处理一次：转屏、从最近任务回来都会再次拿到它
+        intent?.removeExtra(android.content.Intent.EXTRA_STREAM)
+        val ctx = applicationContext
+        Thread {
+            val vault = com.qiuyiwu.shennao.record.FileVault(java.io.File(ctx.filesDir, "recordings"))
+            val results = uris.map { com.qiuyiwu.shennao.record.ShareIn.stage(ctx, vault, it) }
+            val staged = results.filterIsInstance<com.qiuyiwu.shennao.record.ShareIn.Result.Staged>()
+            val skipped = results.filterIsInstance<com.qiuyiwu.shennao.record.ShareIn.Result.Skipped>()
+            if (staged.isNotEmpty()) com.qiuyiwu.shennao.record.UploadWorker.kick(ctx)
+            val msg = buildString {
+                if (staged.size == 1) append("已收进深脑：${staged[0].title}，正在上传")
+                else if (staged.size > 1) append("已收进 ${staged.size} 段，正在上传")
+                // 跳过的要说原因。只说「1 个失败」和「设备没这份」在屏幕上长得一样。
+                skipped.forEach { append(if (isEmpty()) "" else "；").append("${it.title}：${it.why}") }
+                if (staged.isNotEmpty()) append("。到「记录」看进度")
+            }
+            runOnUiThread { android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_LONG).show() }
+        }.start()
     }
 }
 
@@ -302,6 +340,7 @@ private fun App(client: DeepBrainClient) {
                             client = client,
                             onRecord = { go(nav.push(Route.Record)) },
                             onOpen = { tid -> go(nav.push(Route.Meeting(tid))) },
+                            onOpenBle = { go(nav.push(Route.Ble)) },
                         )
 
                         is Route.Me -> MeScreen(

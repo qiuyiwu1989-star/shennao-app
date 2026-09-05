@@ -1,5 +1,7 @@
 package com.qiuyiwu.shennao
 
+import androidx.compose.foundation.background
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,6 +46,8 @@ fun HistoryScreen(
     client: DeepBrainClient,
     onRecord: () -> Unit,
     onOpen: (String) -> Unit,
+    /** 点灵魂卡状态条：进扫描/连接/同步那一屏 */
+    onOpenBle: () -> Unit = {},
 ) {
     val ctx = LocalContext.current
     val cache = remember { Cache(File(ctx.cacheDir, "mobile")) }
@@ -52,6 +56,9 @@ fun HistoryScreen(
     var rows by remember { mutableStateOf<List<LocalSession>>(emptyList()) }
     var served by remember { mutableStateOf<List<SessionCard>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
+    // 灵魂卡那一头的状态。它是 Service 上的 @Volatile 字段，和本地/服务端两份一起轮询：
+    // 三份合起来才是完整的一条链——卡里还没导出来的、手机上还没传出去的、服务端后几站。
+    var card by remember { mutableStateOf(CardStatus.read()) }
 
     val onDelete: (String) -> Unit = { id ->
         scope.launch {
@@ -64,6 +71,7 @@ fun HistoryScreen(
     LaunchedEffect(Unit) {
         while (true) {
             rows = withContext(Dispatchers.IO) { scan(File(ctx.filesDir, "recordings")) }
+            card = CardStatus.read()
             // 服务端那份查得慢一些，但它才知道转写和分析走到哪了。
             // 两份合起来才是完整的一条链：本地管「传没传出去」，服务端管「后面几站」。
             val r = withContext(Dispatchers.IO) { client.sessions() }
@@ -102,12 +110,15 @@ fun HistoryScreen(
         verticalArrangement = Arrangement.spacedBy(DS.Rhythm.element),
     ) {
         item {
-            Text("我录过的会", style = MaterialTheme.typography.headlineSmall)
+            Text("记录", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(DS.Rhythm.tight))
             Text("每一场走到哪一站，都在这里。",
                  style = MaterialTheme.typography.bodyMedium,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(DS.Rhythm.element))
+            // 灵魂卡那一头。「有什么」和「进来了没有」是同一个问题的两面，
+            // 卡的状态不放在这里，用户就得去另一栏对账。
+            CardBar(card, onOpenBle)
         }
 
         // 还在这台手机上的排最前：它们是唯一可能丢的
@@ -133,6 +144,19 @@ fun HistoryScreen(
         if (!loaded) item { SkeletonList(3) }
         else if (rows.isEmpty() && served.isEmpty()) item {
             Empty("还没有录过", "录一场会，它会自己走完转写和分析。", "录一场", onRecord)
+        }
+
+        // 这本账的边界必须写出来。9-03 那次事故：换了账号，旧账本说「导过了」，
+        // 用户把「台账里没有」读成「没导过」。不写这一句，同一个坑再来一次。
+        if (loaded) item {
+            Spacer(Modifier.height(DS.Rhythm.inner))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(Modifier.height(DS.Rhythm.element))
+            Text(
+                "这里看不到：换账号之前导的、装这个版本之前导的。没落这本账，不代表没导过。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
     }
@@ -322,3 +346,64 @@ private fun scan(root: File): List<LocalSession> {
 
 private fun stamp(ms: Long): String =
     java.text.SimpleDateFormat("M月d日 HH:mm", java.util.Locale.CHINA).format(java.util.Date(ms))
+
+/**
+ * 灵魂卡此刻的一句话。纯逻辑，JVM 可测——这一行会被反复改措辞。
+ *
+ * 只说一件事：连没连上、在不在同步。不给百分比（人要的是「我能不能走开」），
+ * 不显示成故障（卡不在身边是常态，标成红的会天天吓人）。
+ */
+data class CardStatus(val line: String, val busy: Boolean, val attention: Boolean) {
+    companion object {
+        fun read(): CardStatus = of(
+            com.qiuyiwu.shennao.ble.BleImportService.conn,
+            com.qiuyiwu.shennao.ble.BleImportService.state,
+            com.qiuyiwu.shennao.ble.BleImportService.syncDone,
+            com.qiuyiwu.shennao.ble.BleImportService.syncTotal,
+            com.qiuyiwu.shennao.ble.BleImportService.lastError,
+        )
+
+        fun of(
+            conn: com.qiuyiwu.shennao.ble.BleState,
+            state: com.qiuyiwu.shennao.ble.ImportState,
+            syncDone: Int,
+            syncTotal: Int,
+            lastError: String?,
+        ): CardStatus = when {
+            conn == com.qiuyiwu.shennao.ble.BleState.FAILED ->
+                CardStatus("灵魂卡 · " + (lastError ?: "连不上"), busy = false, attention = true)
+            conn == com.qiuyiwu.shennao.ble.BleState.SCANNING ||
+                conn == com.qiuyiwu.shennao.ble.BleState.CONNECTING ->
+                CardStatus("正在找灵魂卡…", busy = true, attention = false)
+            conn == com.qiuyiwu.shennao.ble.BleState.READY && syncTotal > 0 && syncDone < syncTotal ->
+                CardStatus("灵魂卡 · 正在同步 ${syncDone + 1}/$syncTotal，可以直接切走", busy = true, attention = false)
+            conn == com.qiuyiwu.shennao.ble.BleState.READY &&
+                state is com.qiuyiwu.shennao.ble.ImportState.Downloading ->
+                CardStatus("灵魂卡 · 正在导入", busy = true, attention = false)
+            conn == com.qiuyiwu.shennao.ble.BleState.READY ->
+                CardStatus("灵魂卡 · 已连接，没有待同步的", busy = false, attention = false)
+            else -> CardStatus("灵魂卡 · 未连接", busy = false, attention = false)
+        }
+    }
+}
+
+@Composable
+private fun CardBar(c: CardStatus, onOpen: () -> Unit) {
+    DsCard(Modifier.fillMaxWidth(), onClick = onOpen) {
+        // 间距一律走 DS 档：RhythmGuardTest 钉着裸 dp 的基线，只准降不准涨。
+        Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
+            if (c.busy) CircularProgressIndicator(Modifier.size(DS.Rhythm.element))
+            else Box(
+                Modifier.size(DS.Rhythm.tight).background(
+                    if (c.attention) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline,
+                    androidx.compose.foundation.shape.CircleShape,
+                )
+            )
+            Spacer(Modifier.width(DS.Rhythm.tight))
+            Text(c.line, style = MaterialTheme.typography.bodySmall,
+                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            Text("›", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+        }
+    }
+    Spacer(Modifier.height(DS.Rhythm.element))
+}

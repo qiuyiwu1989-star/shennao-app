@@ -43,8 +43,14 @@ data class Segment(
     /** 这一段该报什么 mimeType。判据只有一条：**它实际是什么容器**。
      *  报错了服务端会按别的格式去解，解出垃圾而且不报错。 */
     val mimeType: String get() = when (ext) {
-        "m4a" -> "audio/mp4"          // v0.5 之前封的段
-        "opus" -> "audio/ogg"         // 从录音笔导进来的，设备已经压好，不重编码
+        "m4a", "mp4" -> "audio/mp4"   // v0.5 之前封的段；分享进来的 m4a/mp4
+        "opus", "ogg" -> "audio/ogg"  // 从录音笔导进来的，设备已经压好，不重编码
+        // 下面这些只会从「分享进来」这条路出现（ShareIn.kt）
+        "mp3" -> "audio/mpeg"
+        "wav" -> "audio/wav"
+        "flac" -> "audio/flac"
+        "webm" -> "audio/webm"
+        "amr" -> "audio/amr"
         else -> "audio/aac"
     }
 

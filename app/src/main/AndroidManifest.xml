@@ -48,6 +48,21 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 从别的 App「分享」一段音频进来。这是采集面的第三个入口（上游 A3，P0）：
+                 已经在用飞书妙记 / 通义听悟 / 讯飞 / 钉钉 / Plaud 的人不愿换设备，
+                 那就让他们的导出文件直接丢进来，走和灵魂卡、手机录音同一条上传管道。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
         </activity>
         <!-- 录音必须挂在前台服务上。放在 Activity 里，用户一切走后台就被冻结，
              而开会时人一定会切走去看别的东西。 -->

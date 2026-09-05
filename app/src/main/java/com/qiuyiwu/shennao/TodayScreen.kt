@@ -89,12 +89,12 @@ fun TodayScreen(
         // 人停在「新判断」那一栏时，完全不知道有承诺已经过期了。
         urgentLede(today)?.let { lede ->
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                Modifier.fillMaxWidth().padding(DS.Pad.screen)
                     .padding(bottom = DS.Rhythm.element),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    Modifier.size(6.dp).background(
+                    Modifier.size(DS.Rhythm.tight).background(
                         MaterialTheme.colorScheme.error,
                         androidx.compose.foundation.shape.CircleShape,
                     )
