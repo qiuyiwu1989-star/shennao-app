@@ -30,6 +30,10 @@ jobs:
       - name: 构建 debug
         run: ./gradlew --no-daemon :app:assembleDebug
 
+      # lint 的 Error 级别会让这一步失败（abortOnError 默认开）。本地一直是 0 错，CI 上也该守住。
+      - name: lint
+        run: ./gradlew --no-daemon :app:lintDebug
+
       - name: 失败时留下测试报告
         if: failure()
         uses: actions/upload-artifact@v4

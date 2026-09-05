@@ -34,6 +34,11 @@ object AutoConnect {
     fun granted(ctx: Context): Boolean =
         BlePermissions.required().all { ContextCompat.checkSelfPermission(ctx, it) == PackageManager.PERMISSION_GRANTED }
 
+    /** 蓝牙没开就别起扫描：扫描会失败进 FAILED，前台通知却挂在那。 */
+    fun bluetoothOn(ctx: Context): Boolean = runCatching {
+        (ctx.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager)?.adapter?.isEnabled == true
+    }.getOrDefault(false)
+
     /**
      * 试一次。在主线程的协程里调；自己会轮询服务状态，不阻塞界面。
      * 返回连上了哪张卡的地址，没找到返回 null。
@@ -41,7 +46,7 @@ object AutoConnect {
     suspend fun tryOnce(ctx: Context, now: () -> Long = System::currentTimeMillis): String? {
         val prefs = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE)
         val known = CardNames(ctx).known().map { it.first }.toSet()
-        if (!shouldTry(known.isEmpty(), granted(ctx), BleImportService.running, prefs.getLong(KEY_LAST, 0L), now())) return null
+        if (!shouldTry(known.isEmpty(), granted(ctx) && bluetoothOn(ctx), BleImportService.running, prefs.getLong(KEY_LAST, 0L), now())) return null
         prefs.edit().putLong(KEY_LAST, now()).apply()
 
         BleImportService.scan(ctx)
@@ -52,11 +57,18 @@ object AutoConnect {
                 BleImportService.connect(ctx, addr)
                 return addr
             }
+            // 扫描起不来（蓝牙中途关了、没权限）：收掉服务，别让通知挂着
+            if (BleImportService.conn == BleState.FAILED) { stopIfIdle(ctx); return null }
             // 用户自己进了灵魂卡页在操作，或者服务已经不在扫了：让开
             if (BleImportService.conn != BleState.SCANNING) return null
         }
         // 找不到就收掉，别让「正在从灵魂卡导入」的通知一直挂着
-        if (BleImportService.conn == BleState.SCANNING && BleImportService.state is ImportState.Idle) BleImportService.stop(ctx)
+        if (BleImportService.conn == BleState.SCANNING) stopIfIdle(ctx)
         return null
+    }
+
+    /** 只在服务闲着（没在导入）时收掉它。正在传的东西不能被自动扫描误杀。 */
+    private fun stopIfIdle(ctx: Context) {
+        if (BleImportService.state is ImportState.Idle) BleImportService.stop(ctx)
     }
 }
