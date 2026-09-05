@@ -17,14 +17,50 @@ import java.io.File
  */
 class ThemeParityTest {
 
-    private fun repoRoot(): File {
+    /**
+     * 真源在**另一个仓库**（`qiuyiwu1989-star/shennao` 的
+     * `packages/ui/src/tokens.ts`）。2026-09-05 App 独立成库之后，
+     * 这条向上找的路在大多数检出里都会走空——**而它一走空，
+     * 这三条色值防线就全废了，且是静默地废**。
+     *
+     * 所以改成两段：
+     *   · 找得到真源 → 用真源，并且额外跑 `快照没有漂` 那条测试；
+     *   · 找不到     → 退回仓内快照 `app/src/test/resources/tokens.snapshot.ts`。
+     *
+     * 退回快照不是降级到「不检查」，是降级到「按摘录那天的值检查」。
+     * 快照会过期，但**过期的快照仍然挡得住 Theme.kt 被随手改一笔**，
+     * 而漂移由上面那条测试在有主仓库的机器上抓。
+     */
+    private fun monorepoTokens(): File? {
         var d: File? = File("").absoluteFile
         while (d != null && !File(d, "packages/ui/src/tokens.ts").isFile) d = d.parentFile
-        assertNotNull("找不到 packages/ui/src/tokens.ts（真源）", d)
-        return d!!
+        return d?.let { File(it, "packages/ui/src/tokens.ts") }
     }
 
-    private fun tokensTs(): String = File(repoRoot(), "packages/ui/src/tokens.ts").readText()
+    private fun snapshot(): String =
+        javaClass.classLoader!!.getResourceAsStream("tokens.snapshot.ts")
+            ?.bufferedReader()?.use { it.readText() }
+            ?: throw AssertionError("仓内快照 tokens.snapshot.ts 不见了——色值防线没了")
+
+    private fun tokensTs(): String = monorepoTokens()?.readText() ?: snapshot()
+
+    /**
+     * 快照与真源必须逐字相同。**只在本机能同时看到两个仓库时才跑**——
+     * 跑不了的时候它不报错，因为「这台机器上没有主仓库」不是缺陷。
+     *
+     * 这条是拆仓之后唯一能发现「网页改了色、安卓还不知道」的机制。
+     * 它在 CI 上要能跑起来，否则快照迟早烂掉（见 README「同步义务」）。
+     */
+    @Test fun `快照没有漂`() {
+        val real = monorepoTokens() ?: return
+        val head = "// ⚠️ 快照"
+        val mine = snapshot().substringAfter(head).substringAfter("\n\n")
+        assertEquals(
+            "packages/ui/src/tokens.ts 变了，但 app/src/test/resources/tokens.snapshot.ts 没跟——" +
+                "跟一下并更新文件头的「摘自提交 / 摘录于」两行",
+            real.readText().trim(), mine.trim(),
+        )
+    }
 
     private fun hexOf(src: String, key: String): String {
         val m = Regex("""\b${Regex.escape(key)}:\s*'(#[0-9a-fA-F]{6})'""").find(src)
