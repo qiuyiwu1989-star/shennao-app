@@ -456,16 +456,27 @@ class ScreenTest {
      */
     @Test fun `人物页的再试一次要真的再取一次`() {
         compose.setContent { ShennaoTheme { PersonScreen(noNetClient(), "p1", onBack = {}, onOpen = {}, onRecord = {}) } }
-        compose.onNodeWithText("再试一次").assertIsDisplayed().performClick()
-        compose.onNodeWithText("没取到").assertExists()
+        awaitText("再试一次")
+        compose.onNodeWithText("再试一次").performClick()
+        awaitText("没取到")
         compose.onNodeWithText("再试一次").assertExists()
     }
 
     /** MeetingWebScreen 的重试之前是个空回调。 */
     @Test fun `网页页的再试一次要重新领票据`() {
         compose.setContent { ShennaoTheme { MeetingWebScreen(noNetClient(), "/zh", "深脑", onBack = {}) } }
-        compose.onNodeWithText("再试一次").assertIsDisplayed().performClick()
-        compose.onNodeWithText("没取到").assertExists()
+        awaitText("再试一次")
+        compose.onNodeWithText("再试一次").performClick()
+        awaitText("没取到")
+    }
+
+    /**
+     * 这两屏的取数跑在 Dispatchers.IO 上，compose 的 idle 等待不认 IO 线程——
+     * 本机快，看不出来；CI 慢，两次都是在这里挂的（09-05 #33955169560、#33956244645）。
+     * 所以显式等到那行字出现，而不是假定点完就有。
+     */
+    private fun awaitText(text: String) = compose.waitUntil(5_000) {
+        compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
     }
 
 }
