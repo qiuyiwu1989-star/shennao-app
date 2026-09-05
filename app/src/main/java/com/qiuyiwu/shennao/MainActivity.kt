@@ -34,44 +34,6 @@ import kotlinx.coroutines.withContext
  * 不用另外设计「看完该干嘛」。
  */
 
-private sealed class Screen {
-    object Loading : Screen()
-    data class Login(val error: String? = null, val busy: Boolean = false) : Screen()
-    data class Feed(val today: Today) : Screen()
-    object Record : Screen()
-    /** 从蓝牙录音笔导入。和「录」是同一件事的两个来源，所以进同一栏。 */
-    object Ble : Screen()
-    /** 一个人的页。从任何一条卡片走过来 */
-    data class Person(val personId: String) : Screen()
-    data class Broken(val message: String) : Screen()
-    /** 一场会的详情。从历史点进来 */
-    data class Meeting(val transcriptId: String) : Screen()
-    /**
-     * 在 App 内打开网页版的某一页，带登录态。逐句转写、播放、认人都在那边。
-     *
-     * **back 由调用方给，不猜。** 曾经在这里从 path 反推「返回哪去」
-     * （取最后一段当会议 id），从「会议详情」进来时凑巧猜对；从「我的」
-     * 打开首页（path=/zh）就会拿 "zh" 当会议 id 去查，查不到，
-     * 用户点返回看到的是一个错误页而不是他刚才在的地方。
-     */
-    data class Web(val path: String, val title: String, val back: Screen) : Screen()
-}
-
-/**
- * 底部四栏。
- *
- * 刻意只有四个，而且是网页版的**子集 + 手机独有的「录」**：
- * 网页是铺开的（驾驶舱、记忆库、方法广场…），手机是一扫而过的场景，
- * 原样搬过来只会让它变难用。所以每一栏都要能回答一个当下的问题——
- *   今天：现在该看什么      录音：把这场会录下来
- *   在路上：录的东西到了吗   我的：账号和版本
- */
-private enum class Tab(val label: String) {
-    // 「搜索」改成「问」：人在路上想起来的是问题，不是关键词。
-    // 关键词检索没删，它挪到了真正有用的那一刻——深脑说「依据不够」的时候。
-    TODAY("今天"), RECORD("录音"), SEARCH("问"), HISTORY("会议"), ME("我的")
-}
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // 必须在 super.onCreate 之前调用——这一行本身不「显示」闪屏，
@@ -97,15 +59,29 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun App(client: DeepBrainClient) {
-    var screen by remember { mutableStateOf<Screen>(Screen.Loading) }
-    val scope = rememberCoroutineScope()
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-
-    val cache = remember { Cache(java.io.File(ctx.cacheDir, "mobile")) }
+    /*
+     * **位置只有一个真源。**
+     *
+     * 之前是 `screen` 和 `tab` 两个 remember，跳转要同时改对两个——13 处改 tab、
+     * 21 处改 screen、4 处必须写在同一行。漏一处就是一个 bug，而编译器不会说话。
+     * 漏出来的样子是真的：RecordScreen 渲染在两个分支里，两处的 onOpenHistory
+     * 一个会重新取数一个不会。
+     *
+     * 现在位置装在 AppState.Ready(nav) 里，每一栏各自一个回退栈。见 Nav.kt。
+     */
+    var st by remember { mutableStateOf<AppState>(AppState.Loading) }
+    /** 取到的「今天」。它是数据不是位置，所以不进 NavState。 */
+    var today by remember { mutableStateOf<Today?>(null) }
     var stale by remember { mutableStateOf<String?>(null) }
 
-    suspend fun load() {
+    val scope = rememberCoroutineScope()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val cache = remember { Cache(java.io.File(ctx.cacheDir, "mobile")) }
+
+    /** 保住当前位置地取数：登录态还在的话，不要把人踢回「今天」。 */
+    suspend fun load(keepNav: Boolean = true) {
         val r = withContext(Dispatchers.IO) { client.today() }
+        val nav = (st as? AppState.Ready)?.nav?.takeIf { keepNav } ?: NavState.initial()
         if (r is ApiResult.Ok) {
             stale = null
             // 存原始 json 而不是解析后的对象：解析规则会随版本变，
@@ -113,25 +89,25 @@ private fun App(client: DeepBrainClient) {
             withContext(Dispatchers.IO) {
                 client.rawTodayOrNull()?.let { cache.save(Cache.TODAY, it) }
             }
-            screen = Screen.Feed(r.value)
+            today = r.value
+            st = AppState.Ready(nav)
             return
         }
-        if (r is ApiResult.Unauthorized) { screen = Screen.Login(); return }
+        if (r is ApiResult.Unauthorized) { today = null; st = AppState.Login(); return }
         // 取不到就拿上次的显示。地铁里、信号差的会议室——这时候一个转圈
         // 等于这个东西在最需要它的场合不能用。
         val c = withContext(Dispatchers.IO) { cache.load(Cache.TODAY) }
-        if (c != null) {
-            val parsed = runCatching { TodayParser.parse(c.body) }.getOrNull()
-            if (parsed != null) {
-                stale = Cache.staleLabel(c.savedAt, System.currentTimeMillis()) ?: "离线 · 刚才的"
-                screen = Screen.Feed(parsed)
-                return
-            }
+        val parsed = c?.let { runCatching { TodayParser.parse(it.body) }.getOrNull() }
+        if (parsed != null) {
+            stale = Cache.staleLabel(c.savedAt, System.currentTimeMillis()) ?: "离线 · 刚才的"
+            today = parsed
+            st = AppState.Ready(nav)
+            return
         }
-        screen = Screen.Broken((r as? ApiResult.Failed)?.message ?: "取数失败")
+        st = AppState.Broken((r as? ApiResult.Failed)?.message ?: "取数失败")
     }
 
-    LaunchedEffect(Unit) { load() }
+    LaunchedEffect(Unit) { load(keepNav = false) }
 
     // 上次是不是崩溃退出的，有就传一次。放在这里而不是 Application：
     // 那时进程还没跑稳，起网络请求容易跟别的初始化抢资源；这里已经是
@@ -151,8 +127,8 @@ private fun App(client: DeepBrainClient) {
     val askNotify = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { }
-    LaunchedEffect(screen) {
-        if (screen is Screen.Feed && android.os.Build.VERSION.SDK_INT >= 33) {
+    LaunchedEffect(st) {
+        if (st is AppState.Ready && android.os.Build.VERSION.SDK_INT >= 33) {
             val granted = androidx.core.content.ContextCompat.checkSelfPermission(
                 ctx, android.Manifest.permission.POST_NOTIFICATIONS
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -171,32 +147,20 @@ private fun App(client: DeepBrainClient) {
         Remind.schedule(ctx)
     }
 
-    var tab by remember { mutableStateOf(Tab.TODAY) }
-
     /*
      * 系统返回键。
      *
      * 之前没接：在会议详情里按返回会**直接退出 App**——这是安卓上最刺眼的
      * 「不成熟」信号，用户会以为自己把东西弄丢了。
-     * 三层退法：详情 → 历史 → 今天 → 交还给系统（此时退出才是对的）。
+     *
+     * 现在不用再手工枚举组合：pop() 返回 null 就表示该交还给系统。
+     * 三层退法（详情 → 栈底 → 首栏 → 系统）全在 NavState.pop() 里，
+     * 加新屏幕不用回来补分支。
      */
-    androidx.activity.compose.BackHandler(
-        enabled = screen is Screen.Meeting || screen is Screen.Person || screen is Screen.Ble ||
-                  (screen is Screen.Feed && tab != Tab.TODAY)
-    ) {
-        when {
-            screen is Screen.Meeting -> { tab = Tab.HISTORY; scope.launch { load() } }
-            screen is Screen.Person -> scope.launch { load() }
-            screen is Screen.Ble -> { tab = Tab.RECORD; screen = Screen.Record }
-            else -> tab = Tab.TODAY
-        }
+    val ready = st as? AppState.Ready
+    androidx.activity.compose.BackHandler(enabled = ready?.nav?.pop() != null) {
+        ready?.nav?.pop()?.let { st = AppState.Ready(it) }
     }
-
-    // 登录、加载、出错这三种状态不该有底栏——底栏在那时点了也没用，
-    // 只会让人以为「是不是我点错地方了」。
-    val s0 = screen
-    val chrome = s0 is Screen.Feed || s0 is Screen.Record ||
-                 s0 is Screen.Meeting || s0 is Screen.Person || s0 is Screen.Ble
 
     val notices = remember { androidx.compose.material3.SnackbarHostState() }
     val notice: (String) -> Unit = { msg ->
@@ -207,6 +171,9 @@ private fun App(client: DeepBrainClient) {
         }
     }
 
+    /** 换一个位置。所有跳转都走它，不存在「改一半」的中间态。 */
+    fun go(next: NavState) { st = AppState.Ready(next) }
+
     Scaffold(
         snackbarHost = { androidx.compose.material3.SnackbarHost(notices) },
         // 内容区自己让开状态栏；底栏由 NavigationBar 让开手势条（它自带 inset）。
@@ -214,17 +181,18 @@ private fun App(client: DeepBrainClient) {
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets.safeDrawing
             .only(androidx.compose.foundation.layout.WindowInsetsSides.Top),
         bottomBar = {
-            if (chrome) NavigationBar {
+            // 登录、加载、出错这三种状态不该有底栏——底栏在那时点了也没用，
+            // 只会让人以为「是不是我点错了地方」。
+            val nav = ready?.nav ?: return@Scaffold
+            NavigationBar {
                 Tab.entries.forEach { t ->
                     NavigationBarItem(
-                        selected = tab == t,
+                        selected = nav.tab == t,
                         onClick = {
-                            tab = t
+                            go(nav.select(t))
                             // 「今天」要重新取数：底栏的意义是「回到那一屏」，
                             // 而不是「回到十分钟前那一屏」。
                             if (t == Tab.TODAY) scope.launch { load() }
-                            if (t == Tab.RECORD) screen = Screen.Record
-                            else if (screen is Screen.Record && t != Tab.RECORD) scope.launch { load() }
                         },
                         icon = { TabIcon(t) },
                         label = { Text(t.label) },
@@ -235,98 +203,115 @@ private fun App(client: DeepBrainClient) {
     ) { pad ->
         androidx.compose.runtime.CompositionLocalProvider(LocalNotice provides notice) {
         Surface(Modifier.fillMaxSize().padding(pad)) {
-            when (val s = screen) {
-                is Screen.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+            when (val s = st) {
+                is AppState.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
 
-                is Screen.Login -> LoginScreen(s) { email, pw ->
+                is AppState.Login -> LoginScreen(s) { email, pw ->
                     scope.launch {
-                        screen = Screen.Login(busy = true)
+                        st = AppState.Login(busy = true)
                         when (val r = withContext(Dispatchers.IO) { client.signIn(email, pw) }) {
-                            is ApiResult.Ok -> load()
-                            is ApiResult.Failed -> screen = Screen.Login(error = r.message)
-                            else -> screen = Screen.Login(error = "登录失败")
+                            is ApiResult.Ok -> load(keepNav = false)
+                            is ApiResult.Failed -> st = AppState.Login(error = r.message)
+                            else -> st = AppState.Login(error = "登录失败")
                         }
                     }
                 }
 
-                is Screen.Record -> RecordScreen(
-                    onBack = { tab = Tab.TODAY; scope.launch { load() } },
-                    onImport = { screen = Screen.Ble },
-                    onOpenHistory = { tab = Tab.HISTORY; scope.launch { load() } },
-                )
-
-                is Screen.Ble -> BleScreen(onDone = { tab = Tab.HISTORY; scope.launch { load() } })
-
-                is Screen.Web -> MeetingWebScreen(client, s.path, s.title,
-                    onBack = { screen = s.back })
-
-                is Screen.Meeting -> MeetingScreen(client, s.transcriptId,
-                    onBack = { tab = Tab.HISTORY; scope.launch { load() } },
-                    onOpenWeb = { path, title -> screen = Screen.Web(path, title, back = s) })
-
-                is Screen.Person -> PersonScreen(client, s.personId,
-                    onBack = { scope.launch { load() } },
-                    onOpen = { tid -> screen = Screen.Meeting(tid) },
-                    onRecord = { tab = Tab.RECORD; screen = Screen.Record })
-
-                is Screen.Feed -> when (tab) {
-                    Tab.RECORD -> RecordScreen(
-                        onBack = { tab = Tab.TODAY; scope.launch { load() } },
-                        onImport = { screen = Screen.Ble },
-                        onOpenHistory = { tab = Tab.HISTORY },
-                    )
-                    Tab.SEARCH -> AskScreen(client) { tid -> screen = Screen.Meeting(tid) }
-                    Tab.HISTORY -> HistoryScreen(
-                        client = client,
-                        onRecord = { tab = Tab.RECORD; screen = Screen.Record },
-                        onOpen = { tid -> screen = Screen.Meeting(tid) },
-                    )
-                    Tab.ME -> MeScreen(
-                        client = client,
-                        onOpenWeb = { path, title -> screen = Screen.Web(path, title, back = s) },
-                        onSignOut = {
-                            client.signOut()
-                            tab = Tab.TODAY
-                            screen = Screen.Login()
-                        },
-                    )
-                    Tab.TODAY -> TodayScreen(
-                        today = s.today,
-                        // 跟「会议」栏一致：先进 App 内的会议详情（判断、承诺、
-                        // 谁在场），要看逐句转写再从那一页点进网页版。
-                        //
-                        // 这里原来是甩给系统浏览器一个裸链接——跟很早以前
-                        // 「在网页里看完整转写」那个按钮是同一个错：用户在
-                        // Chrome 里多半没登录，点开「今天」的一条判断，
-                        // 看到的是深脑的登录页，而他刚刚明明就在 App 里登着。
-                        onOpenTranscript = { tid -> screen = Screen.Meeting(tid) },
-                        onRecord = { tab = Tab.RECORD; screen = Screen.Record },
-                        onRefresh = { scope.launch { load() } },
-                        staleLabel = stale,
-                        onPullRefresh = { load() },
-                        onSettle = { id, action ->
-                            scope.launch {
-                                val r = withContext(Dispatchers.IO) { client.settleCommitment(id, action) }
-                                // 落账失败要说出来。界面已经先显示「已记」了——
-                                // 乐观更新用起来顺手，但失败时必须收回来，
-                                // 否则账本上没有这一笔，而用户以为记过了。
-                                if (r !is ApiResult.Ok) {
-                                    load()
-                                    notice(when (r) {
-                                        is ApiResult.Failed -> "没记上：${r.message}"
-                                        is ApiResult.Unauthorized -> "没记上：登录失效了，重新登录后再点一次"
-                                        else -> "没记上，请再点一次"
-                                    })
-                                }
-                            }
-                        },
-                    )
-                }
-
                 // 「取不到」和「没有内容」在屏幕上长得一样，但对用户是两件事。
                 // 统一走 Broken，绝不画成空屏。
-                is Screen.Broken -> Box(Modifier.fillMaxSize(), Alignment.Center) {
-                    Broken(s.message) { scope.launch { load() } }
+                is AppState.Broken -> Box(Modifier.fillMaxSize(), Alignment.Center) {
+                    Broken(s.message) { scope.launch { load(keepNav = false) } }
+                }
+
+                is AppState.Ready -> {
+                    val nav = s.nav
+                    /*
+                     * 渲染分派。**每个 Route 在这里只准出现一次**——
+                     * NavRenderTest 钉着这条。老实现里 RecordScreen 出现两次、
+                     * 参数还不一样，就是从这里漏出去的。
+                     */
+                    when (val r = nav.current) {
+                        is Route.Today -> {
+                            val t = today
+                            if (t == null) Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+                            else TodayScreen(
+                                today = t,
+                                // 跟「会议」栏一致：先进 App 内的会议详情（判断、承诺、
+                                // 谁在场），要看逐句转写再从那一页点进网页版。
+                                //
+                                // 这里原来是甩给系统浏览器一个裸链接——跟很早以前
+                                // 「在网页里看完整转写」那个按钮是同一个错：用户在
+                                // Chrome 里多半没登录，点开「今天」的一条判断，
+                                // 看到的是深脑的登录页，而他刚刚明明就在 App 里登着。
+                                onOpenTranscript = { tid -> go(nav.push(Route.Meeting(tid))) },
+                                onRecord = { go(nav.select(Tab.RECORD)) },
+                                onRefresh = { scope.launch { load() } },
+                                staleLabel = stale,
+                                onPullRefresh = { load() },
+                                onSettle = { id, action ->
+                                    scope.launch {
+                                        val res = withContext(Dispatchers.IO) { client.settleCommitment(id, action) }
+                                        // 落账失败要说出来。界面已经先显示「已记」了——
+                                        // 乐观更新用起来顺手，但失败时必须收回来，
+                                        // 否则账本上没有这一笔，而用户以为记过了。
+                                        if (res !is ApiResult.Ok) {
+                                            load()
+                                            notice(when (res) {
+                                                is ApiResult.Failed -> "没记上：${res.message}"
+                                                is ApiResult.Unauthorized -> "没记上：登录失效了，重新登录后再点一次"
+                                                else -> "没记上，请再点一次"
+                                            })
+                                        }
+                                    }
+                                },
+                            )
+                        }
+
+                        is Route.Record -> RecordScreen(
+                            onBack = { go(nav.select(Tab.TODAY)); scope.launch { load() } },
+                            onImport = { go(nav.push(Route.Ble)) },
+                            onOpenHistory = { go(nav.select(Tab.HISTORY)) },
+                        )
+
+                        is Route.Ble -> BleScreen(onDone = { go(nav.select(Tab.HISTORY)) })
+
+                        is Route.Ask -> AskScreen(client) { tid -> go(nav.push(Route.Meeting(tid))) }
+
+                        is Route.History -> HistoryScreen(
+                            client = client,
+                            onRecord = { go(nav.select(Tab.RECORD)) },
+                            onOpen = { tid -> go(nav.push(Route.Meeting(tid))) },
+                        )
+
+                        is Route.Me -> MeScreen(
+                            client = client,
+                            onOpenWeb = { path, title -> go(nav.push(Route.Web(path, title))) },
+                            onSignOut = {
+                                client.signOut()
+                                today = null
+                                st = AppState.Login()
+                            },
+                        )
+
+                        is Route.Meeting -> MeetingScreen(
+                            client, r.transcriptId,
+                            onBack = { nav.pop()?.let { go(it) } },
+                            onOpenWeb = { path, title -> go(nav.push(Route.Web(path, title))) },
+                        )
+
+                        is Route.Person -> PersonScreen(
+                            client, r.personId,
+                            onBack = { nav.pop()?.let { go(it) } },
+                            onOpen = { tid -> go(nav.push(Route.Meeting(tid))) },
+                            onRecord = { go(nav.select(Tab.RECORD)) },
+                        )
+
+                        is Route.Web -> MeetingWebScreen(
+                            client, r.path, r.title,
+                            // 返回去哪不再由调用方现算——弹栈弹出来的自然就是他刚才在的地方。
+                            onBack = { nav.pop()?.let { go(it) } },
+                        )
+                    }
                 }
             }
         }
@@ -354,7 +339,7 @@ private fun TabIcon(t: Tab) {
 }
 
 @Composable
-private fun LoginScreen(state: Screen.Login, onSubmit: (String, String) -> Unit) {
+private fun LoginScreen(state: AppState.Login, onSubmit: (String, String) -> Unit) {
     var email by remember { mutableStateOf("") }
     var pw by remember { mutableStateOf("") }
     Column(
