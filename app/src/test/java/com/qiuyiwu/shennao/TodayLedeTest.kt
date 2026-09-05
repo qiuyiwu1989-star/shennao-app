@@ -140,8 +140,10 @@ class CardEntitlementTest {
         assertTrue(CardEntitlement.line(null, null).startsWith("随卡权益：转写不限"))
         assertTrue(CardEntitlement.line(null, "没网").contains("没网"))
     }
-    @Test fun `绑上了说真数；早发过的说明一卡一次`() {
-        assertTrue(CardEntitlement.line(BoundCard("A", "t", 300), null).contains("300"))
-        assertTrue(CardEntitlement.line(BoundCard("A", "t", 0), null).contains("只发一次"))
+    @Test fun `绑上了说每月的数；刚到账和早到账两种话；服务端没给数就说固定句`() {
+        assertTrue(CardEntitlement.line(BoundCard("A", "t", 30, 30), null).contains("刚到账"))
+        val l = CardEntitlement.line(BoundCard("A", "t", 0, 30), null)
+        assertTrue(l.contains("每月 30 积分") && l.contains("永久"))
+        assertTrue(CardEntitlement.line(BoundCard("A", "t", 0, 0), null).startsWith("随卡权益：转写不限"))
     }
 }

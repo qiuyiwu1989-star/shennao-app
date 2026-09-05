@@ -482,10 +482,11 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
 /** 权益那一行的措辞。纯逻辑，JVM 可测。 */
 internal object CardEntitlement {
     private const val FIXED = "随卡权益：转写不限，你录多久都行。权益随卡永久，不会往回调。"
+    /** 规格 010：深判断每月 10 次、永久、多卡叠加。数字来自服务端，客户端不自己算。 */
     fun line(bound: BoundCard?, error: String?): String = when {
         bound == null && error != null -> "$FIXED（这次没绑上：$error）"
-        bound == null -> FIXED
-        bound.granted > 0 -> "随卡权益：这张卡发过 ${bound.granted} 积分，一次性、随卡不随人。转写不限。"
-        else -> "随卡权益：转写不限。这张卡的积分早已发过（一张卡只发一次，转手不再发）。"
+        bound == null || bound.monthly <= 0 -> FIXED
+        bound.granted > 0 -> "随卡权益：这个月的 ${bound.monthly} 积分刚到账（约 10 次深判断）。每月都有、永久、随卡不随人；转写不限。"
+        else -> "随卡权益：每月 ${bound.monthly} 积分（约 10 次深判断），永久、随卡不随人；转写不限。这个月的已经到账。"
     }
 }

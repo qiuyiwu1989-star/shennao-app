@@ -52,8 +52,8 @@ class NewEndpointsParseTest {
     }
 
     @Test fun `灵魂卡列表与绑定回包`() {
-        val p = CardsParser.parse("""{"cards":[{"deviceNo":"AABBCCDDEEFF","boundAt":"2026-09-05","granted":300}],"grant":300}""")
-        assertEquals(1, p.cards.size); assertEquals(300, p.cards[0].granted); assertEquals(300, p.grant)
+        val p = CardsParser.parse("""{"cards":[{"deviceNo":"AABBCCDDEEFF","boundAt":"2026-09-05","granted":30,"monthly":30}],"monthly":30}""")
+        assertEquals(1, p.cards.size); assertEquals(30, p.cards[0].granted); assertEquals(30, p.cards[0].monthly); assertEquals(30, p.monthly)
         assertEquals(0, CardsParser.parse("{}").cards.size)
         assertEquals(0, CardsParser.card(org.json.JSONObject("""{"deviceNo":"X"}""")).granted)
     }
