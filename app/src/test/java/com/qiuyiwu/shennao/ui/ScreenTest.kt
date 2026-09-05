@@ -36,8 +36,9 @@ class ScreenTest {
         predictions: List<Prediction> = emptyList(),
         notReady: Boolean = false,
         failed: Boolean = false,
+        awaiting: Int = 0,
     ) = Today(
-        counts = TodayCounts(overdue = commitments.size, total = commitments.size, awaitingSpeaker = 0),
+        counts = TodayCounts(overdue = commitments.size, total = commitments.size, awaitingSpeaker = awaiting),
         commitments = commitments, insights = insights, predictions = predictions,
         notReady = notReady, failed = failed,
     )
@@ -275,4 +276,105 @@ class ScreenTest {
         }
         compose.onNodeWithText("分析完").assertExists()
     }
+    // ---- 认知三档：猜想不能和亲证长得一样 ----
+
+    private fun insight(epistemic: String, quote: String = "", id: String = "i1") = Insight(
+        id = id, statement = "预算这条线可能不在他的权限里", atomType = "judgment",
+        quote = quote, epistemic = epistemic, subject = "王建国", transcriptId = "t1",
+    )
+
+    /**
+     * Api.kt 的字段注释：「手机是一扫而过的场景，**一条猜想会被当成事实**」。
+     * 折叠的不是「猜想」两个字，也不是它在说什么——折叠的是原话、来源、
+     * 「去那场会」那一串**看起来像证据的上下文**。
+     */
+    @Test fun `猜想默认折叠，亲证照常展开`() {
+        compose.setContent {
+            ShennaoTheme { TodayScreen(today(insights = listOf(insight("conjecture"))), {}, {}, {}) }
+        }
+        compose.onNodeWithText("新判断 1").performClick()
+        // 「猜想」两个字和它在说什么，折叠态也要看得见
+        compose.onNodeWithText("猜想").assertExists()
+        compose.onNodeWithText("预算这条线可能不在他的权限里").assertExists()
+        // 但支撑它的那一串不给
+        compose.onNodeWithText("看它凭什么这么说").assertExists()
+        compose.onNodeWithText("去那场会").assertDoesNotExist()
+    }
+
+    @Test fun `亲证不折叠——它有原话托底，展开是帮人核对`() {
+        compose.setContent {
+            ShennaoTheme {
+                TodayScreen(today(insights = listOf(insight("attested", quote = "这个我得回去问"))), {}, {}, {})
+            }
+        }
+        compose.onNodeWithText("新判断 1").performClick()
+        compose.onNodeWithText("「这个我得回去问」").assertExists()
+        compose.onNodeWithText("去那场会").assertExists()
+        compose.onNodeWithText("看它凭什么这么说").assertDoesNotExist()
+    }
+
+    /** 猜想没有原话是常态——但要说出来，别让人以为是加载失败。 */
+    @Test fun `猜想展开后没有原话要明说，不能留一片空白`() {
+        compose.setContent {
+            ShennaoTheme { TodayScreen(today(insights = listOf(insight("conjecture"))), {}, {}, {}) }
+        }
+        compose.onNodeWithText("新判断 1").performClick()
+        compose.onNodeWithText("看它凭什么这么说").assertIsDisplayed().performClick()
+        compose.onNodeWithText("没有直接原话支撑。它来自跨录音联想。").assertExists()
+        compose.onNodeWithText("去那场会").assertExists()
+    }
+
+    // ---- 最急的一件不能藏在别的频道后面 ----
+
+    /**
+     * 频道标签只给数量（「下文 1」），不给「其中 1 条逾期」。
+     * 人停在「新判断」那一栏时完全不知道有承诺过期了——
+     * 而逾期是这一屏唯一有时间压力的东西。
+     */
+    @Test fun `有逾期就要在频道条上方说出来`() {
+        compose.setContent {
+            ShennaoTheme {
+                TodayScreen(today(commitments = listOf(commitment()), insights = listOf(insight("attested"))), {}, {}, {})
+            }
+        }
+        compose.onNodeWithText("有 1 条承诺过期了").assertIsDisplayed()
+    }
+
+    /** 一个永远在的横幅等于没有横幅。 */
+    @Test fun `没有急事就不出那条横幅`() {
+        compose.setContent {
+            ShennaoTheme { TodayScreen(today(insights = listOf(insight("attested"))), {}, {}, {}) }
+        }
+        compose.onNodeWithText("有 1 条承诺过期了").assertDoesNotExist()
+        compose.onAllNodesWithText("过期", substring = true).assertCountEquals(0)
+    }
+
+    // ---- 认人：数据里一直有，屏上一直没有 ----
+
+    /**
+     * `counts.awaitingSpeaker` 之前只在空态文案里提了一句「到网页里认一下」，
+     * 那句话没人会看见。说话人不落到具体的人，前三段里关于人的判断全立不起来。
+     */
+    @Test fun `有句子没认人时才出现那一栏`() {
+        compose.setContent {
+            ShennaoTheme { TodayScreen(today(awaiting = 3), {}, {}, {}) }
+        }
+        compose.onNodeWithText("认人 3").assertExists()
+    }
+
+    @Test fun `都认完了就不该占一栏`() {
+        compose.setContent { ShennaoTheme { TodayScreen(today(), {}, {}, {}) } }
+        compose.onAllNodesWithText("认人", substring = true).assertCountEquals(0)
+    }
+
+    /** 手机上还没有认人界面，那就老实说去哪认，别画一个点了没反应的按钮。 */
+    @Test fun `认人那一栏要说清楚现在得去哪认`() {
+        compose.setContent {
+            ShennaoTheme { TodayScreen(today(awaiting = 3), {}, {}, {}) }
+        }
+        compose.onNodeWithText("认人 3").performClick()
+        compose.onNodeWithText("有 3 句不知道是谁说的").assertExists()
+        compose.onNodeWithText("现在还得在网页版认，手机上的认人界面在做了。", substring = true).assertExists()
+    }
+
 }
