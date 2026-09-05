@@ -44,26 +44,24 @@
 | `POST predictions/[id]` | `{verdict: borne_out/refuted/partial/too_early}` → `{ok,verdict,bridged}` 或 `{ok,deferred,nextDueAt}` | 今天 · 预测卡三按钮 |
 | `GET transcript/[id]/speakers` | 未认的说话人各配样本句 + 候选名单 | 认人页 S14 |
 | `POST transcript/[id]/speakers` | `{speakers:[{id,name}|{id,skip:true}]}` | 认人页 |
-| `sessions[].captureClient` | web/macos/android/iot/upload | —（分不出灵魂卡/手机/分享，待 `source`） |
+| `sessions[].captureClient` · `sessions[].source` | `source` = card / share / phone / other，从幂等键前缀派生（ble- / share-） | 记录 · 来源分段（没有 `source` 时分段行不显示） |
+| `sessions[].scene` · `POST /api/recordings {scene}` | 白名单 meeting / one_on_one / interview / negotiation / lecture / memo；400 会把合法值列出来 | 录音 · 录前一行场合 |
 | `transcript/[id].segments[]` | `{startMs,endMs,speaker,text}`，毫秒，封顶 2000 | 详情 · 原话 tab 逐句 + 依据跳转 |
+| `POST insights/[id]/feedback` | `{verdict: up/down/hide}`，每人每条留最新一份；今天页过滤本人 hide 的 | 判断卡展开态「对 / 不对 / 别再看」 |
+| `GET card` · `POST card {address}` | 我名下的灵魂卡 `{cards:[{deviceNo,boundAt,granted}],grant}`；绑定幂等，别人的卡 409 | 灵魂卡页 · 连上即绑、权益行 |
+
+迁移两份：`20260905T0940_session_scene`、`20260905T0941_insight_feedback`。部署顺序见《phase2-部署手册》。
 
 客户端对这些端点一律**404 即隐藏**：服务端没部署时不报错、不重试、不画点了没反应的按钮。
 
-## 原型需要、但 mobile 面还没开的
+## 原型需要的，现在都有了
 
-能力在 web API 里**都已经有了**，缺的是适配层，不是新功能：
+2026-09-05 之前这一节列着六项缺口。现在只剩一句话要记：
 
-| 要什么 | web 侧已有 | 用在哪 |
-| --- | --- | --- |
-| 预测落账 | `predictions/[id]/verify` | S15 |
-| 认人 | `speaker-candidates` · `infer-speakers` | S14 |
-| 判断反馈（👍👎 / 删除） | 待确认 | S8 S20（埋点②） |
-| 额度与权益 | `credits` | S16 S17 S29 |
-| 更多采集入口 | `upload` · `source-file` | S22 |
-| 设备与权益归属 | **不存在** | S2 S23 S31 |
-
-**最后一行是唯一的真缺口。** 现在 `credits` 绑的是 org，而「899 买断 + 权益随卡走」
-要求有一层「设备 → 权益」的归属关系。S23/S31 两屏全压在它上面。
+**「设备 → 权益」没有建表。** 台账复用 `iot_devices`（provider=soulcard，蓝牙地址做 device_no，
+(provider, device_no) 全局唯一 = 一张卡一个主人），权益复用 `credit_ledger`
+（reason=soulcard:<设备号>，发前按 reason 全局查：一张卡终生一次，转手不再发）。
+再建一张表就是「归属」有了第二个答案。`SOULCARD_GRANT = 300`，一处常量。
 
 ## 一条硬规矩
 

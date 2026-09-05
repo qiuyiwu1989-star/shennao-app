@@ -166,6 +166,24 @@ class UploaderTest {
         )
     }
 
+    /** 场合选了才发；没选连字段都不带——老服务端（没跑 scene 迁移）照常 201。 */
+    @Test fun `场合：选了才发，没选不带字段`() {
+        val v = MemVault().apply {
+            metas["s"] = SessionMeta("req-abc", "手机录音", 1_700_000_000_000, true, null, scene = "interview")
+            put("s", seg(0, Segment.State.SEALED))
+        }
+        val h = happyPath()
+        uploader(v, h).drain("s")
+        val create = h.bodies[h.log.indexOf("POST /api/recordings")]!!
+        assertEquals("interview", org.json.JSONObject(create).getString("scene"))
+
+        val v2 = MemVault().apply { metas["s"] = meta(finished = true); put("s", seg(0, Segment.State.SEALED)) }
+        val h2 = happyPath()
+        uploader(v2, h2).drain("s")
+        val create2 = h2.bodies[h2.log.indexOf("POST /api/recordings")]!!
+        assertFalse("没选场合就别带 scene 字段", org.json.JSONObject(create2).has("scene"))
+    }
+
     @Test fun `冻结时报的片数和时长要跟实际落盘的对得上`() {
         val v = MemVault().apply {
             metas["s"] = meta(finished = true)
