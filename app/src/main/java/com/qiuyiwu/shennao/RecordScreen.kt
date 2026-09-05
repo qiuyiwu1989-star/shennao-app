@@ -1,5 +1,8 @@
 package com.qiuyiwu.shennao
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import com.qiuyiwu.shennao.record.Scenes
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -70,11 +73,13 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
      */
     var showCaptions by remember { mutableStateOf(false) }
     var noticeIndex by remember { mutableStateOf(0) }
+    /** 录前选的场合。开录后不再显示、不再改——那是这一场的属性，不是开关。 */
+    var scene by remember { mutableStateOf<String?>(null) }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     var wasRecording by remember { mutableStateOf(RecordingService.recording) }
 
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) RecordingService.start(ctx, "手机录音") else denied = true
+        if (ok) RecordingService.start(ctx, "手机录音", scene) else denied = true
     }
 
     // 服务是真相，界面只是照着念。不在界面里另存一份「我以为在录」——
@@ -170,6 +175,10 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
         // 主按钮：录音时是「停止」，否则是「开始」。
         // 用实心圆而不是矩形按钮——这一屏只有一个动作，它该长得像一个动作。
         val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+        if (!recording) {
+            SceneChips(scene) { scene = it }
+            Spacer(Modifier.height(DS.Rhythm.element))
+        }
         Surface(
             onClick = {
                 /*
@@ -186,7 +195,7 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
                     justFinished = null
                     val need = Manifest.permission.RECORD_AUDIO
                     if (ContextCompat.checkSelfPermission(ctx, need) == PackageManager.PERMISSION_GRANTED)
-                        RecordingService.start(ctx, "手机录音")
+                        RecordingService.start(ctx, "手机录音", scene)
                     else ask.launch(need)
                 }
             },
@@ -511,4 +520,31 @@ internal object RecordNotice {
         "这通电话我录音了，回头对细节用。",
     )
     fun next(i: Int): Int = (i + 1) % lines.size
+}
+
+/**
+ * 录前选场合 = 选方法。一行六个短词，不选也行——这是开录前一眼扫过的东西，不是表单。
+ * 再点一下已选的就取消。开录后整行消失。
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+internal fun SceneChips(selected: String?, onSelect: (String?) -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.tight, Alignment.CenterHorizontally),
+        ) {
+            Scenes.all.forEach { (key, label) ->
+                androidx.compose.material3.FilterChip(
+                    selected = selected == key,
+                    onClick = { onSelect(if (selected == key) null else key) },
+                    label = { Text(label) },
+                )
+            }
+        }
+        Text(
+            if (selected == null) "这是什么场合？不选也行。" else "按「${Scenes.label(selected)}」的方法来分析。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }

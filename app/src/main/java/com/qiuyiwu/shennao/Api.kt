@@ -428,6 +428,19 @@ data class SpeakerRow(
 data class Candidate(val name: String, val role: String?, val source: String)
 data class SpeakersPage(val speakers: List<SpeakerRow>, val candidates: List<Candidate>)
 
+/** 我名下的一张灵魂卡（服务端 iot_devices 里 provider=soulcard 的那行）。granted 是这张卡发过的权益，不是余额。 */
+data class BoundCard(val deviceNo: String, val boundAt: String, val granted: Int)
+data class CardsPage(val cards: List<BoundCard>, val grant: Int)
+
+object CardsParser {
+    fun parse(json: String): CardsPage {
+        val o = JSONObject(json)
+        val arr = o.optJSONArray("cards") ?: org.json.JSONArray()
+        return CardsPage(List(arr.length()) { card(arr.getJSONObject(it)) }, o.optInt("grant", 0))
+    }
+    fun card(c: JSONObject) = BoundCard(c.optString("deviceNo"), c.optString("boundAt"), c.optInt("granted", 0))
+}
+
 object SpeakersParser {
     fun parse(body: String): SpeakersPage = runCatching {
         val o = JSONObject(body)

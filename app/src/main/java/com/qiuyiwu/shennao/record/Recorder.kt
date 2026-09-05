@@ -44,11 +44,11 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
     val isRecording: Boolean get() = running.get()
 
     /** 返回本地会话 id；返回 null 表示麦克风打不开（权限被拒、或被别的应用占着）。 */
-    fun start(title: String, now: Long): String? {
+    fun start(title: String, now: Long, scene: String? = null): String? {
         if (running.get()) return session
         val rec = Capture.open() ?: return null
         state = RecordState.RECORDING
-        val meta = SessionMeta(UUID.randomUUID().toString(), title, now)
+        val meta = SessionMeta(UUID.randomUUID().toString(), title, now, scene = scene)
         val s = vault.newSession(meta)
         session = s
         elapsedMs = 0

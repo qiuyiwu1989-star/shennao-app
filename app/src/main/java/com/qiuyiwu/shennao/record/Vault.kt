@@ -104,6 +104,8 @@ data class SessionMeta(
     val finished: Boolean = false,
     /** 服务端会话 id。建会话之后落盘，省掉每轮重建；也是「去那场会」要用的。 */
     val serverSessionId: String? = null,
+    /** 录前选的场合（Scenes 的键）。没选就 null，建会话时不发这个字段。 */
+    val scene: String? = null,
 ) {
     fun toJson(): String = org.json.JSONObject()
         .put("clientRequestId", clientRequestId)
@@ -111,6 +113,7 @@ data class SessionMeta(
         .put("startedAtEpochMs", startedAtEpochMs)
         .put("finished", finished)
         .put("serverSessionId", serverSessionId ?: org.json.JSONObject.NULL)
+        .put("scene", scene ?: org.json.JSONObject.NULL)
         .toString()
 
     companion object {
@@ -123,6 +126,7 @@ data class SessionMeta(
                 o.optLong("startedAtEpochMs"),
                 o.optBoolean("finished"),
                 o.optString("serverSessionId").takeIf { it.isNotBlank() && it != "null" },
+                o.optString("scene").takeIf { it.isNotBlank() && it != "null" },
             )
         }.getOrNull()
     }

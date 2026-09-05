@@ -50,3 +50,19 @@ class ShareInTest {
         assertTrue("长度要稳定，服务端幂等键上限 200", a.length < 40)
     }
 }
+
+/** 场合：词表与服务端一致；SessionMeta 落盘往返不丢。 */
+class ScenesTest {
+    @Test fun `六个场合，键和服务端白名单一致`() {
+        assertEquals(listOf("meeting", "one_on_one", "interview", "negotiation", "lecture", "memo"), Scenes.all.map { it.first })
+        assertEquals("会议", Scenes.label("meeting"))
+        assertNull(Scenes.label("party"))
+        assertFalse(Scenes.isKnown(null))
+    }
+
+    @Test fun `SessionMeta 的 scene 落盘往返；没选就是 null`() {
+        val m = SessionMeta("k", "t", 1L, scene = "interview")
+        assertEquals("interview", SessionMeta.fromJson(m.toJson())!!.scene)
+        assertNull(SessionMeta.fromJson(SessionMeta("k", "t", 1L).toJson())!!.scene)
+    }
+}

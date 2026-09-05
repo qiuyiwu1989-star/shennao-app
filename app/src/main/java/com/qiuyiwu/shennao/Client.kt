@@ -359,6 +359,25 @@ class DeepBrainClient(
         return if (r is ApiResult.Ok) ApiResult.Ok(Unit) else r as ApiResult<Unit>
     }
 
+    /** 对一条判断说「对」「不对」「别再给我看」。每人每条只留最新一份，重复点就是覆盖。 */
+    fun feedback(atomId: String, verdict: String): ApiResult<Unit> {
+        val r = postJson("/api/mobile/insights/$atomId/feedback", JSONObject().put("verdict", verdict).toString())
+        return if (r is ApiResult.Ok) ApiResult.Ok(Unit) else r as ApiResult<Unit>
+    }
+
+    /** 我名下的灵魂卡。老服务端 404 → Failed，界面按「没这功能」处理。 */
+    fun myCards(): ApiResult<CardsPage> = get("/api/mobile/card") { CardsParser.parse(it) }
+
+    /** 把连上的这张卡绑到我名下。幂等：自己重复绑不重复发权益；别人的卡 409。 */
+    fun bindCard(address: String): ApiResult<BoundCard> {
+        val r = postJson("/api/mobile/card", JSONObject().put("address", address).toString())
+        return when (r) {
+            is ApiResult.Ok -> runCatching { ApiResult.Ok(CardsParser.card(JSONObject(r.value).getJSONObject("card"))) }
+                .getOrElse { ApiResult.Failed("回包读不懂") }
+            else -> r as ApiResult<BoundCard>
+        }
+    }
+
     /** POST JSON，401 刷新重试一次，>=400 把服务端 error.message 或 error 原样带回。 */
     private fun postJson(path: String, body: String): ApiResult<String> {
         val c = store.load() ?: return ApiResult.Unauthorized

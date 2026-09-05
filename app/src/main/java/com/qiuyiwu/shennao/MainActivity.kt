@@ -330,6 +330,7 @@ private fun App(client: DeepBrainClient) {
                                 onRefresh = { scope.launch { load() } },
                                 staleLabel = stale,
                                 onPullRefresh = { load() },
+                                onFeedback = { id, v -> scope.launch { feedback(client, id, v) { notice(it) } } },
                                 onSettlePrediction = { id, verdict ->
                                     scope.launch {
                                         val res = withContext(Dispatchers.IO) { client.settlePrediction(id, verdict) }
@@ -365,7 +366,7 @@ private fun App(client: DeepBrainClient) {
                             onOpenHistory = { go(nav.select(Tab.RECORDS)) },
                         )
 
-                        is Route.Ble -> BleScreen(onDone = { go(nav.select(Tab.RECORDS)) })
+                        is Route.Ble -> BleScreen(onDone = { go(nav.select(Tab.RECORDS)) }, client = client)
 
                         is Route.Ask -> AskScreen(client) { tid -> go(nav.push(Route.Meeting(tid))) }
 
@@ -484,5 +485,14 @@ private fun LoginScreen(state: AppState.Login, onSubmit: (String, String) -> Uni
         // 外发 APK 没有自动更新，用户要知道自己停在哪一版。
         Text("v${BuildConfig.VERSION_NAME} · 直接下载安装的版本",
              style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** 判断反馈：失败要说，成功不打扰（卡片上已经换成回执了）。 */
+private suspend fun feedback(client: DeepBrainClient, atomId: String, verdict: String, notice: (String) -> Unit) {
+    when (val r = withContext(Dispatchers.IO) { client.feedback(atomId, verdict) }) {
+        is ApiResult.Ok -> Unit
+        is ApiResult.Failed -> notice("没记上：${r.message}")
+        else -> notice("没记上：登录失效了")
     }
 }

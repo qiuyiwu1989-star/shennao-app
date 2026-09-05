@@ -446,6 +446,30 @@ class ScreenTest {
 
     // ---- 「再试一次」必须真的再试 ----
 
+    /** 录前那一行场合：六个都在、默认没选、点一下选上、开录前才有。 */
+    @Test fun `录音页能选场合，不选也行`() {
+        compose.setContent { ShennaoTheme { RecordScreen(onBack = {}) } }
+        compose.onNodeWithText("这是什么场合？不选也行。").assertIsDisplayed()
+        listOf("会议", "一对一", "访谈", "谈判", "课程", "随手记").forEach { compose.onNodeWithText(it).assertExists() }
+        compose.onNodeWithText("访谈").performClick()
+        compose.onNodeWithText("按「访谈」的方法来分析。").assertExists()
+    }
+
+    /** 判断卡展开态底下有反馈行；点「别再看」这张卡就收掉。 */
+    @Test fun `判断反馈：对不对三个字，别再看即收起`() {
+        var got: Pair<String, String>? = null
+        val today = Today(
+            counts = TodayCounts(0, 0, 0), commitments = emptyList(), predictions = emptyList(),
+            insights = listOf(Insight("i1", "他会拖到月底", "signal", "「月底再说」", "attested", null, "t1")),
+            notReady = false, failed = false,
+        )
+        compose.setContent { ShennaoTheme { TodayScreen(today, onOpenTranscript = {}, onRecord = {}, onRefresh = {}, onFeedback = { id, v -> got = id to v }) } }
+        compose.onNodeWithText("新判断 1").performClick()
+        compose.onNodeWithText("不对").assertExists().performClick()
+        assertEquals("i1" to "down", got)
+        compose.onNodeWithText("记下了：不对").assertExists()
+    }
+
     private fun noNetClient() =
         DeepBrainClient(NoNetHttp(), MemStore(Credentials("r", "o", "e@x.com")), "https://api.test", "https://sb.test", "k")
 

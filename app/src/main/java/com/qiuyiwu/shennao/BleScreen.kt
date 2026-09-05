@@ -1,5 +1,9 @@
 package com.qiuyiwu.shennao
 
+import com.qiuyiwu.shennao.DeepBrainClient
+import com.qiuyiwu.shennao.BoundCard
+import com.qiuyiwu.shennao.ApiResult
+import androidx.compose.runtime.LaunchedEffect
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -42,8 +46,14 @@ private fun merge(old: List<BleDevice>, d: BleDevice): List<BleDevice> =
  * 断了明说「断了，可以接着传」而不是回到起点。
  */
 @Composable
-fun BleScreen(onDone: () -> Unit) {
+fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
     val ctx = LocalContext.current
+    /*
+     * 连上就绑到我名下（幂等）。绑定成功回一张卡：granted 是这张卡发过的权益。
+     * 服务端没这个端点（老版本）或没网：bound 留 null，权益那行说固定的那句——不编数字。
+     */
+    var bound by remember { mutableStateOf<BoundCard?>(null) }
+    var bindError by remember { mutableStateOf<String?>(null) }
     val notice = LocalNotice.current
     val scope = rememberCoroutineScope()
     /*
@@ -199,6 +209,14 @@ fun BleScreen(onDone: () -> Unit) {
         // 没连时列出见过的卡——卡不在身边是常态，标成故障会天天吓人。
         if (conn == BleState.READY && addr != null) item {
             val a = addr!!
+            LaunchedEffect(a, client) {
+                if (client == null) return@LaunchedEffect
+                when (val r = withContext(Dispatchers.IO) { client.bindCard(a) }) {
+                    is ApiResult.Ok -> { bound = r.value; bindError = null }
+                    is ApiResult.Failed -> bindError = r.message
+                    else -> bindError = null
+                }
+            }
             DsCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(DS.Pad.default)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -221,9 +239,8 @@ fun BleScreen(onDone: () -> Unit) {
                     Spacer(Modifier.height(DS.Rhythm.element))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Spacer(Modifier.height(DS.Rhythm.element))
-                    // 随卡权益。数字要等「设备 → 权益」那张表（Phase 2），先说不会变的那句。
-                    Text("随卡权益：转写不限，你录多久都行。权益随卡永久，不会往回调。",
-                         style = MaterialTheme.typography.bodyMedium)
+                    // 随卡权益：绑上了就说真数（一张卡终生发一次，转手不再发）；没绑上就说不会变的那句。
+                    Text(CardEntitlement.line(bound, bindError), style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
@@ -459,5 +476,16 @@ fun BleScreen(onDone: () -> Unit) {
             }
         }
         item { Spacer(Modifier.height(DS.Rhythm.inner)) }
+    }
+}
+
+/** 权益那一行的措辞。纯逻辑，JVM 可测。 */
+internal object CardEntitlement {
+    private const val FIXED = "随卡权益：转写不限，你录多久都行。权益随卡永久，不会往回调。"
+    fun line(bound: BoundCard?, error: String?): String = when {
+        bound == null && error != null -> "$FIXED（这次没绑上：$error）"
+        bound == null -> FIXED
+        bound.granted > 0 -> "随卡权益：这张卡发过 ${bound.granted} 积分，一次性、随卡不随人。转写不限。"
+        else -> "随卡权益：转写不限。这张卡的积分早已发过（一张卡只发一次，转手不再发）。"
     }
 }

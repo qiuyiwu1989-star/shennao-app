@@ -50,4 +50,11 @@ class NewEndpointsParseTest {
         val p = SpeakersParser.parse("not json")
         assertTrue(p.speakers.isEmpty() && p.candidates.isEmpty())
     }
+
+    @Test fun `灵魂卡列表与绑定回包`() {
+        val p = CardsParser.parse("""{"cards":[{"deviceNo":"AABBCCDDEEFF","boundAt":"2026-09-05","granted":300}],"grant":300}""")
+        assertEquals(1, p.cards.size); assertEquals(300, p.cards[0].granted); assertEquals(300, p.grant)
+        assertEquals(0, CardsParser.parse("{}").cards.size)
+        assertEquals(0, CardsParser.card(org.json.JSONObject("""{"deviceNo":"X"}""")).granted)
+    }
 }

@@ -133,3 +133,15 @@ class SourceFilterTest {
         assertEquals(listOf("全部", "灵魂卡", "手机", "分享来的"), SourceFilter.options.map { it.second })
     }
 }
+
+/** 灵魂卡页权益那一行：没绑上不编数字。 */
+class CardEntitlementTest {
+    @Test fun `没绑上就说固定的那句，带原因`() {
+        assertTrue(CardEntitlement.line(null, null).startsWith("随卡权益：转写不限"))
+        assertTrue(CardEntitlement.line(null, "没网").contains("没网"))
+    }
+    @Test fun `绑上了说真数；早发过的说明一卡一次`() {
+        assertTrue(CardEntitlement.line(BoundCard("A", "t", 300), null).contains("300"))
+        assertTrue(CardEntitlement.line(BoundCard("A", "t", 0), null).contains("只发一次"))
+    }
+}

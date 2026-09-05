@@ -34,6 +34,8 @@ fun MeetingScreen(
     onOpenWeb: ((path: String, title: String) -> Unit)? = null,
     /** 进认人页。null = 手机上还没有认人（服务端没升级） */
     onClaimSpeakers: (() -> Unit)? = null,
+    /** 判断反馈：atomId × up / down / hide */
+    onFeedback: (String, String) -> Unit = { _, _ -> },
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -269,7 +271,7 @@ fun MeetingScreen(
                 if (tab == MeetingTab.JUDGMENTS) {
                     if (m.atoms.isNotEmpty()) {
                         item { SectionHead("读出来的判断", "决定、信号、矛盾") }
-                        items(m.atoms, key = { "a" + it.id }) { a -> AtomCard(a) { jumpToQuote(a.quote) } }
+                        items(m.atoms, key = { "a" + it.id }) { a -> AtomCard(a, onJump = { jumpToQuote(a.quote) }, onFeedback = { v -> onFeedback(a.id, v) }) }
                     } else if (m.analysis != null) item {
                         Empty("这场没读出判断", "有时候一场会就是没有决定、没有分歧。那也是一个结论。")
                     }
@@ -394,9 +396,11 @@ private fun SectionHead(title: String, hint: String) {
 }
 
 @Composable
-private fun AtomCard(a: MeetingAtom, onJump: () -> Unit = {}) {
+private fun AtomCard(a: MeetingAtom, onJump: () -> Unit = {}, onFeedback: (String) -> Unit = {}) {
     // 猜想默认折叠——折叠的是原话那一串看起来像证据的上下文。判据见 TodayScreen.foldByDefault。
     var open by remember(a.id) { mutableStateOf(!foldByDefault(a.epistemic)) }
+    var said by remember(a.id) { mutableStateOf<String?>(null) }
+    if (said == "hide") return
     DsCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -418,6 +422,7 @@ private fun AtomCard(a: MeetingAtom, onJump: () -> Unit = {}) {
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
                 // 依据 →：跳到原话那一句。这是证据链在界面上的兑现。
                 TextButton(onClick = onJump, contentPadding = PaddingValues(0.dp)) { Text("回到原话 →") }
+                FeedbackRow(said) { v -> said = v; onFeedback(v) }
             } else if (foldByDefault(a.epistemic)) {
                 Spacer(Modifier.height(DS.Rhythm.tight))
                 Text("没有直接原话支撑。它来自跨录音联想。",

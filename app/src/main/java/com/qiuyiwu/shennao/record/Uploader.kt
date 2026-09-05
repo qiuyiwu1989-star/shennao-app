@@ -229,7 +229,7 @@ class Uploader(
                 "captureClient" to "android",
                 "capabilities" to org.json.JSONArray(listOf("mic")),
                 "startedAt" to iso(meta.startedAtEpochMs),
-            )).toString(),
+            )).apply { meta.scene?.let { put("scene", it) } }.toString(),
         )
         if (r.status == 401) return SessionRef.Err("登录过期", true, authExpired = true)
         if (r.status >= 400) return SessionRef.Err("建会话失败（${r.status}）", r.status >= 500)

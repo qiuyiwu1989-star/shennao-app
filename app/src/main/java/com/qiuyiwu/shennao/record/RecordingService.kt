@@ -84,9 +84,9 @@ class RecordingService : Service() {
         @Volatile var captions: List<String> = emptyList(); private set
         @Volatile var captionState: String? = null; private set
 
-        fun start(ctx: Context, title: String) {
+        fun start(ctx: Context, title: String, scene: String? = null) {
             val i = Intent(ctx, RecordingService::class.java)
-                .setAction(ACTION_START).putExtra("title", title)
+                .setAction(ACTION_START).putExtra("title", title).putExtra("scene", scene)
             ctx.startForegroundService(i)
         }
 
@@ -140,7 +140,9 @@ class RecordingService : Service() {
                 // 不然它们会一直躺在磁盘上，用户以为录到了，其实一直没传。
                 scope.launch { recorder.recoverOrphans(); kick() }
                 val title = intent.getStringExtra("title") ?: "手机录音"
-                if (recorder.start(title, System.currentTimeMillis()) == null) {
+                // 场合只认词表里的：intent 是公开面，别把任意字符串带到服务端去吃 400
+                val scene = intent.getStringExtra("scene")?.takeIf { Scenes.isKnown(it) }
+                if (recorder.start(title, System.currentTimeMillis(), scene) == null) {
                     micError = "麦克风打不开——检查权限，或者有别的应用正占着它"
                     stopSelf()
                     return START_NOT_STICKY

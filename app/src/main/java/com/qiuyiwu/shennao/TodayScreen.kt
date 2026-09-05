@@ -45,6 +45,8 @@ fun TodayScreen(
     onSettle: (String, String) -> Unit = { _, _ -> },
     /** 给预测一个说法：borne_out / refuted / too_early。返回 true = 顺延了 */
     onSettlePrediction: (String, String) -> Unit = { _, _ -> },
+    /** 判断反馈：atomId × up / down / hide。服务端没这个端点时按钮照常显示，点了只记本地。 */
+    onFeedback: (String, String) -> Unit = { _, _ -> },
     /** 非空表示现在显示的是离线缓存，并说明是什么时候的 */
     staleLabel: String? = null,
     /** 下拉刷新用。挂起函数返回了才停转圈 */
@@ -155,7 +157,7 @@ fun TodayScreen(
                         2 -> if (today.insights.isEmpty()) item {
                             Empty("还没有新判断", "录一场会，深脑会从里面读出判断。", "录一场", onRecord)
                         } else items(today.insights, key = { it.id }) { i ->
-                            InsightCard(i) { i.transcriptId?.let(onOpenTranscript) }
+                            InsightCard(i, onOpen = { i.transcriptId?.let(onOpenTranscript) }, onFeedback = { v -> onFeedback(i.id, v) })
                         }
                         else -> item {
                             // 手机上还没有认人的界面（mobile 侧没有这个端点），
@@ -352,7 +354,10 @@ private fun PredictionCard(p: Prediction, onSettle: (String, String) -> Unit) {
 }
 
 @Composable
-private fun InsightCard(i: Insight, onOpen: () -> Unit) {
+private fun InsightCard(i: Insight, onOpen: () -> Unit, onFeedback: (String) -> Unit = {}) {
+    // 说过一次就换成一句回执；「别再看」直接把这张卡收掉——不等下次刷新。
+    var said by remember(i.id) { mutableStateOf<String?>(null) }
+    if (said == "hide") return
     // 猜想默认折叠。折叠的不是「猜想」两个字，也不是它在说什么——
     // 折叠的是原话、来源、去那场会那一串**看起来像证据的上下文**，
     // 而那正是让人把猜想读成事实的东西。见 foldByDefault 的注释。
@@ -390,7 +395,28 @@ private fun InsightCard(i: Insight, onOpen: () -> Unit) {
                 }
                 Spacer(Modifier.height(DS.Rhythm.element))
                 Footer(meta = atomTypeLabel(i.atomType), canOpen = i.transcriptId != null, onOpen = onOpen)
+                FeedbackRow(said) { v -> said = v; onFeedback(v) }
             }
+        }
+    }
+}
+
+/**
+ * 判断反馈那一行：对 / 不对 / 别再看。三个字以内，放在展开态的最底下——
+ * 折叠着的猜想不给反馈：没看依据就评判，评的是标题党。
+ */
+@Composable
+internal fun FeedbackRow(said: String?, onSay: (String) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (said != null) {
+            Text(if (said == "up") "记下了：对" else "记下了：不对", style = MaterialTheme.typography.labelMedium,
+                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            TextButton(onClick = { onSay("up") }, contentPadding = PaddingValues()) { Text("对") }
+            Spacer(Modifier.width(DS.Rhythm.element))
+            TextButton(onClick = { onSay("down") }, contentPadding = PaddingValues()) { Text("不对") }
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = { onSay("hide") }, contentPadding = PaddingValues()) { Text("别再看") }
         }
     }
 }

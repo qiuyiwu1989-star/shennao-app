@@ -81,9 +81,9 @@
 | `GET mobile/credits` | ✅ 09-05 |
 | `POST mobile/predictions/[id]`（裁定逻辑抽成 `lib/predictions/settle.ts`，web 路由共用） | ✅ 09-05 |
 | `GET/POST mobile/transcript/[id]/speakers`（候选与认领抽成 `lib/speakers/*`，三条认领路径共用） | ✅ 09-05 |
-| 判断反馈 `POST mobile/insights/[id]/feedback`（up / down / hide；今天页过滤本人 hide 的） | ✅ 09-05 · 迁移 `20260905T0941_insight_feedback` |
-| 建会话接受 `scene`（白名单 meeting / one_on_one / interview / negotiation / lecture / memo） | ✅ 09-05 · 迁移 `20260905T0940_session_scene` |
-| 灵魂卡绑定与随卡权益 `GET/POST mobile/card` | ✅ 09-05 · **不建新表**：台账复用 `iot_devices`（provider=soulcard），权益复用 `credit_ledger` |
+| 判断反馈 `POST mobile/insights/[id]/feedback`（up / down / hide；今天页过滤本人 hide 的） | ✅ 09-05 · 迁移 `20260905T0941_insight_feedback` · 安卓 3.4.0：判断卡展开态底下「对 / 不对 / 别再看」，猜想折叠着不给评 |
+| 建会话接受 `scene`（白名单 meeting / one_on_one / interview / negotiation / lecture / memo） | ✅ 09-05 · 迁移 `20260905T0940_session_scene` · 安卓 3.4.0：录前一行六个短词，不选也行，开录后消失 |
+| 灵魂卡绑定与随卡权益 `GET/POST mobile/card` | ✅ 09-05 · **不建新表**：台账复用 `iot_devices`（provider=soulcard），权益复用 `credit_ledger` · 安卓 3.4.0：连上即绑（幂等），权益行说真数；老服务端/没网说固定那句 |
 
 **迁移批 = 两份文件，已写好、未跑。** 部署顺序：先跑两份迁移，再发分支。代码对「列还没加」是安全的（scene 不传就不写列）。
 
@@ -119,6 +119,7 @@
 | 日期 | 事 |
 | --- | --- |
 | 09-04 | 独立成库，59 提交带历史 |
+| 09-05 深夜 | **安卓 3.4.0 (38)**：场合、判断反馈、灵魂卡绑定三项接上，282 单测全绿。Phase 2 两端都写完，只差你部署。 |
 | 09-05 深夜 | 服务端迁移批写完（场合、判断反馈、灵魂卡绑定/权益，不建新表）；安卓 3.3.0 发出；CI 假失败根因修掉（IO 线程等待）。 |
 | 09-05 晚 | 安卓端接上 Phase 2 新端点（404 即隐藏）：预测三按钮、认人页 S14、原话逐句 + 依据跳转定位、积分行；服务端分支写好五项。272 单测。 |
 | 09-05 | 色值防线接回；导航单一真源；CI；今天页补三缺口；四栏 IA + 录音 FAB；记录页台账；系统分享入口；录音告知文案与字幕折叠；详情三 tab；灵魂卡页（TYPE=0 首次实现）；我的升级；四类通知；三态与密度审计；登录屏主张。**Phase 1 全部完成，267 单测全绿，lint 0 错，模拟器（Android 14）冒烟无崩溃。** |
