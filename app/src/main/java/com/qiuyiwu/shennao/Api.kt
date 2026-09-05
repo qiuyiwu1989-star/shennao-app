@@ -435,6 +435,25 @@ data class SpeakersPage(val speakers: List<SpeakerRow>, val candidates: List<Can
 data class BoundCard(val deviceNo: String, val boundAt: String, val granted: Int, val monthly: Int)
 data class CardsPage(val cards: List<BoundCard>, val monthly: Int)
 
+/** 积分：余额 + 这个月用了多少。规格 010：显示「已用」不显示「剩余」，month 是差异化所在；老服务端没有就 null。 */
+data class MonthUsage(val deep: Int, val quick: Int, val credits: Int)
+data class Credits(val balance: Int, val month: MonthUsage?)
+
+object CreditsParser {
+    fun parse(json: String): Credits {
+        val o = JSONObject(json)
+        val m = o.optJSONObject("month")
+        return Credits(o.optInt("balance", -1), m?.let { MonthUsage(it.optInt("deep"), it.optInt("quick"), it.optInt("credits")) })
+    }
+    /** 「我的」页那一行。纯逻辑，可测。 */
+    fun usageLine(m: MonthUsage?): String? = m?.let {
+        when {
+            it.deep == 0 && it.quick == 0 -> "这个月还没做过判断"
+            else -> "这个月：深判断 ${it.deep} 次 · 快判断 ${it.quick} 次 · 用了 ${it.credits} 积分"
+        }
+    }
+}
+
 object CardsParser {
     fun parse(json: String): CardsPage {
         val o = JSONObject(json)

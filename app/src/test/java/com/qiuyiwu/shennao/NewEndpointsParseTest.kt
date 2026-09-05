@@ -57,4 +57,13 @@ class NewEndpointsParseTest {
         assertEquals(0, CardsParser.parse("{}").cards.size)
         assertEquals(0, CardsParser.card(org.json.JSONObject("""{"deviceNo":"X"}""")).granted)
     }
+
+    @Test fun `积分回包：余额 + 本月用量；老服务端没有 month 就 null`() {
+        val c = CreditsParser.parse("""{"balance":42,"month":{"deep":3,"quick":12,"credits":19,"since":"2026-09-01T00:00:00.000Z"}}""")
+        assertEquals(42, c.balance); assertEquals(3, c.month!!.deep)
+        assertEquals("这个月：深判断 3 次 · 快判断 12 次 · 用了 19 积分", CreditsParser.usageLine(c.month))
+        assertNull(CreditsParser.parse("""{"balance":7}""").month)
+        assertNull("没有 month 就不画这一行", CreditsParser.usageLine(null))
+        assertEquals("这个月还没做过判断", CreditsParser.usageLine(MonthUsage(0, 0, 0)))
+    }
 }

@@ -51,10 +51,10 @@ fun MeScreen(
     // 进来就自动查一次。用户不会主动来点，而停在旧版是看不出来的。
     LaunchedEffect(Unit) { check() }
     // 用量。服务端没这个端点（还没部署 Phase 2）时是 Failed，这一行就不显示——不画点了没反应的东西。
-    var balance by remember { mutableStateOf<Int?>(null) }
+    var credits by remember { mutableStateOf<Credits?>(null) }
     LaunchedEffect(Unit) {
         (withContext(Dispatchers.IO) { runCatching { client.credits() }.getOrNull() } as? ApiResult.Ok)?.value
-            ?.takeIf { it >= 0 }?.let { balance = it }
+            ?.takeIf { it.balance >= 0 }?.let { credits = it }
     }
 
     Column(
@@ -118,9 +118,14 @@ fun MeScreen(
                              style = MaterialTheme.typography.bodyMedium,
                              color = MaterialTheme.colorScheme.onSurfaceVariant)
                         // 显示「已有」不显示「剩余」：剩余是倒计时，已有是陈述。全行业在另一边，故意反着做。
-                        balance?.let {
-                            Text("积分 $it", style = MaterialTheme.typography.bodyMedium,
+                        credits?.let { c ->
+                            Text("积分 ${c.balance}", style = MaterialTheme.typography.bodyMedium,
                                  color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            // 规格 010：显示「已用」不显示「剩余」。倒计时式的焦虑条是这个品类差评的第一来源。
+                            CreditsParser.usageLine(c.month)?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall,
+                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                         Text("版本 v${BuildConfig.VERSION_NAME} · 直接下载安装的版本",
                              style = MaterialTheme.typography.bodySmall,

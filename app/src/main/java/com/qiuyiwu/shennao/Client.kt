@@ -334,7 +334,7 @@ class DeepBrainClient(
      */
 
     /** 用量：余额。服务端没这个端点时返回 Failed，「我的」页就不显示用量那一行。 */
-    fun credits(): ApiResult<Int> = get("/api/mobile/credits") { JSONObject(it).optInt("balance", -1) }
+    fun credits(): ApiResult<Credits> = get("/api/mobile/credits") { CreditsParser.parse(it) }
 
     /**
      * 给预测一个说法。verdict = borne_out / refuted / partial / too_early。
