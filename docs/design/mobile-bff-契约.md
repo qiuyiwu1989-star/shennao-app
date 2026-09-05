@@ -47,7 +47,7 @@
 | `sessions[].captureClient` · `sessions[].source` | `source` = card / share / phone / other，从幂等键前缀派生（ble- / share-） | 记录 · 来源分段（没有 `source` 时分段行不显示） |
 | `sessions[].scene` · `POST /api/recordings {scene}` | 白名单 meeting / one_on_one / interview / negotiation / lecture / memo；400 会把合法值列出来 | 录音 · 录前一行场合 |
 | `transcript/[id].segments[]` | `{startMs,endMs,speaker,text}`，毫秒，封顶 2000 | 详情 · 原话 tab 逐句 + 依据跳转 |
-| `POST insights/[id]/feedback` | `{verdict: up/down/hide}`，每人每条留最新一份；今天页过滤本人 hide 的 | 判断卡展开态「对 / 不对 / 别再看」 |
+| `POST insights/[id]/feedback` | `{verdict: up/down/hide}`，每人每条留最新一份；今天页过滤本人 hide 的。网页端 `POST /api/insights/[id]/feedback` 共用同一函数 | 判断卡展开态「对 / 不对 / 别再看」 |
 | `GET card` · `POST card {address}` | 我名下的灵魂卡 `{cards:[{deviceNo,boundAt,granted,monthly}],monthly}`；两者都顺手补发欠的月份；绑定幂等，别人的卡 409 | 灵魂卡页 · 连上即绑、权益行 |
 
 迁移两份：`20260905T0940_session_scene`、`20260905T0941_insight_feedback`。部署顺序见《phase2-部署手册》。
