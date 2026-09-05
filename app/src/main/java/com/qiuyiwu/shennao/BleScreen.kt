@@ -247,6 +247,8 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
         if (conn != BleState.READY && known.isNotEmpty()) {
             item {
                 Text("我的卡", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text("打开 App 时会自动找它，找到就同步，不用进这一页。",
+                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             items(known, key = { "k" + it.first }) { (kAddr, kName) ->
                 val nearby = devices.any { it.id == kAddr }
@@ -359,13 +361,7 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
             }
             when (val s = st) {
                 is ImportState.Idle -> item {
-                    // 连上了就自动同步——不用用户先看列表、再一个个点。
-                    // 之前是自动 list()，用户还要自己挑文件一个个导；
-                    // 2026-09-03 用户反馈这不是"同步"，是"手动搬"，
-                    // 改成连上直接同步全部还没导过的。
-                    LaunchedEffect(conn) {
-                        if (conn == BleState.READY) BleImportService.syncAll(ctx)
-                    }
+                    // 连上就自动同步——这句现在在 BleImportService 里（READY 时），这里只等。
                     Loading()
                 }
                 is ImportState.Listing -> item { Loading() }

@@ -150,6 +150,13 @@ class BleImportService : Service() {
                 gatt.write(Proto.buildFrame(Proto.T.CTRL, Proto.CtrlCmd.BAT_REQ))
                 gatt.write(Proto.buildFrame(Proto.T.CTRL, Proto.CtrlCmd.CAP_REQ))
                 gatt.write(Proto.buildFrame(Proto.T.CTRL, Proto.CtrlCmd.FW_REQ))
+                // 连上就同步全部还没导过的（2026-09-03 用户反馈「手动搬」不算同步）。
+                // 以前这句在 BleScreen 的 LaunchedEffect 里；靠近即同步时没有界面在，所以挪到服务里——
+                // 服务是真相，界面只是看。
+                if (imp.state is ImportState.Idle) {
+                    autoSyncOnListed = true
+                    imp.startListing(); onImporterMoved(imp)
+                }
             } else if (it == BleState.DISCONNECTED || it == BleState.IDLE) {
                 info = DeviceInfo()
             }

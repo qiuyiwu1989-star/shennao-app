@@ -160,6 +160,10 @@ private fun App(client: DeepBrainClient) {
 
     LaunchedEffect(Unit) { load(keepNav = false) }
 
+    // 靠近即同步：登录且取到数之后，悄悄找记住的灵魂卡。每 10 分钟最多一次，12 秒找不到就收。
+    val signedInAndLoaded = st is AppState.Ready
+    LaunchedEffect(signedInAndLoaded) { if (signedInAndLoaded) com.qiuyiwu.shennao.ble.AutoConnect.tryOnce(ctx) }
+
     // 上次是不是崩溃退出的，有就传一次。放在这里而不是 Application：
     // 那时进程还没跑稳，起网络请求容易跟别的初始化抢资源；这里已经是
     // 「正常启动」的健康时机。不需要登录态——见 Crash.kt 的说明。
