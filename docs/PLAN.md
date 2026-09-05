@@ -67,7 +67,25 @@
 
 ### Phase 2 · 服务端 6 个 mobile 端点 ——**需要你部署**
 
-能力 web 侧都有，缺的是 Bearer 鉴权的 mobile 面：预测落账、认人、判断反馈、额度、更多入口、设备权益。
+> ⚠️ **09-05 发现：主仓库的 `agent/ble-and-mac-client` 分支领先 main 562 个提交，且从未推到远端。**
+> 整套 `api/mobile/*` 只存在于这条本地分支——一块硬盘坏掉，安卓端的服务端就没了。
+> 这是必须你处理的事：把它推上去（`git push -u origin agent/ble-and-mac-client`）。
+> Phase 2 分支 `agent/mobile-bff-phase2` 从它开出，工作树 `/tmp/deepbrain-mobile-bff`。
+
+能力 web 侧都有，缺的是 Bearer 鉴权的 mobile 面。分支 `agent/mobile-bff-phase2`（已推远端），**未部署**：
+
+| 项 | 状态 |
+| --- | --- |
+| `sessions` 返回 `captureClient` | ✅ 09-05 |
+| `transcript/[id]` 返回 `segments`（毫秒统一，封顶 2000） | ✅ 09-05 |
+| `GET mobile/credits` | ✅ 09-05 |
+| `POST mobile/predictions/[id]`（裁定逻辑抽成 `lib/predictions/settle.ts`，web 路由共用） | ✅ 09-05 |
+| `GET/POST mobile/transcript/[id]/speakers`（候选与认领抽成 `lib/speakers/*`，三条认领路径共用） | ✅ 09-05 |
+| 判断反馈（👍👎/删除） | **要新列或新表**，`insight_atoms` 没有反馈列 → 并入迁移批 |
+| 建会话接受 `scene` | **要新列**，`recording_sessions` 无元数据列 → 并入迁移批 |
+| 设备 → 权益 | **要新表** → 并入迁移批 |
+
+**迁移批**（三张表/列一起，一次部署）等你确认再写。
 另加三处字段：`sessions` 返回 `capture_client`（记录页按来源分段）；建会话或 analyze 接受 `scene`（录前选场合 = 选方法）；`transcript/[id]` 返回 `segments`（原话 tab 逐句 + 依据定位到秒）。
 我在主仓库开分支写好 + 测试绿 → **你确认后部署**（红线：未经确认不部署、不跑迁移）。
 「设备 → 权益」是唯一要新建表的。
