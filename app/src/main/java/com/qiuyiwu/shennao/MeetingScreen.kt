@@ -36,6 +36,18 @@ fun MeetingScreen(
     var sharing by remember { mutableStateOf(false) }
     var shareNote by remember { mutableStateOf<String?>(null) }
     var analyzing by remember { mutableStateOf(false) }
+    /*
+     * 三个 tab：判断 / 承诺 / 原话。
+     *
+     * Plaud 用「来源 / 笔记」，得到用六个横向 tab——原件与生成物分开是这个品类的通行结构。
+     * 对深脑它不只是省空间：**它是证据链的骨架**，判断在这边、原话在那边，
+     * 一条判断凭什么，跳过去就能看。
+     *
+     * 第一版「原话」tab 放的是这场会里**被引用的片段**（每条判断/承诺自带的 quote）。
+     * 逐句转写和「定位到秒」要等 mobile/transcript 返回 segments（Phase 2）——
+     * 数据没到就不画，一个滚不动的假逐句比没有更糟。
+     */
+    var tab by remember { mutableStateOf(MeetingTab.JUDGMENTS) }
     val notice = LocalNotice.current
 
     // 重新取数：手动排上分析之后要能看到状态从「没有分析」变成「在跑」。
@@ -117,6 +129,19 @@ fun MeetingScreen(
                 }
 
                 item {
+                    val t = MeetingTabs.of(m)
+                    TabRow(selectedTabIndex = tab.ordinal, containerColor = MaterialTheme.colorScheme.background) {
+                        MeetingTab.entries.forEach { mt ->
+                            Tab(
+                                selected = tab == mt,
+                                onClick = { tab = mt },
+                                text = { Text(mt.label(t), style = MaterialTheme.typography.titleSmall) },
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(DS.Rhythm.element))
+                }
+                if (tab == MeetingTab.JUDGMENTS) item {
                     DsCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(DS.Pad.tight)) {
                             Text("这场会", style = MaterialTheme.typography.titleSmall,
@@ -138,7 +163,7 @@ fun MeetingScreen(
 
                 // 分析正文。这才是「深脑读出了什么」的主体——
                 // 之前只给了一段摘要，等于把大半藏起来了。
-                m.analysis?.let { a ->
+                if (tab == MeetingTab.JUDGMENTS) m.analysis?.let { a ->
                     if (a.methods.isNotEmpty()) item {
                         Spacer(Modifier.height(DS.Rhythm.tight))
                         // 一场分析常常是好几个方法合出来的。只显示一个，
@@ -188,7 +213,7 @@ fun MeetingScreen(
                 // 屏幕上一个字都没有——一条 60 秒的录音传上来、转写好了、
                 // 详情页却什么都不显示，用户唯一能得出的结论是「这东西坏了」。
                 // 实际上是按「不到 5 分钟不自动分析」跳过的。
-                if (m.analysis == null) item {
+                if (tab == MeetingTab.JUDGMENTS && m.analysis == null) item {
                     SectionHead("分析", "这条为什么没有")
                     DsCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(DS.Pad.default)) {
@@ -219,37 +244,67 @@ fun MeetingScreen(
                     }
                 }
 
-                if (m.speakers.isNotEmpty()) item {
-                    Spacer(Modifier.height(DS.Rhythm.tight))
-                    Text("在场：" + m.speakers.joinToString("、"),
-                         style = MaterialTheme.typography.bodySmall,
-                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // ── 判断 tab ──
+                if (tab == MeetingTab.JUDGMENTS) {
+                    if (m.atoms.isNotEmpty()) {
+                        item { SectionHead("读出来的判断", "决定、信号、矛盾") }
+                        items(m.atoms, key = { "a" + it.id }) { a -> AtomCard(a) }
+                    } else if (m.analysis != null) item {
+                        Empty("这场没读出判断", "有时候一场会就是没有决定、没有分歧。那也是一个结论。")
+                    }
                 }
 
-                if (m.commitments.isNotEmpty()) {
-                    item { SectionHead("这场会里的承诺", "别人说出口、还没有下文的") }
-                    items(m.commitments, key = { "c" + it.id }) { c ->
-                        DsCard(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(DS.Pad.tight)) {
-                                Row {
-                                    Text(c.speakerName, style = MaterialTheme.typography.titleMedium,
-                                         fontWeight = FontWeight.SemiBold)
-                                    Spacer(Modifier.weight(1f))
-                                    c.dueDate?.let {
-                                        Text(it, style = MaterialTheme.typography.labelMedium,
-                                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // ── 承诺 tab ──
+                if (tab == MeetingTab.COMMITMENTS) {
+                    if (m.commitments.isEmpty()) item {
+                        Empty("这场会里没人答应什么", "有人说出口「下周给你」这类话时，会出现在这里。")
+                    } else {
+                        item { SectionHead("这场会里的承诺", "别人说出口、还没有下文的。在这里也能落账。") }
+                        items(m.commitments, key = { "c" + it.id }) { c ->
+                            MeetingCommitmentCard(c) { action ->
+                                scope.launch {
+                                    val r = withContext(Dispatchers.IO) { client.settleCommitment(c.id, action) }
+                                    // 失败要说出来。乐观更新用起来顺手，但失败必须收回，否则账上没这一笔而用户以为记过了。
+                                    if (r !is ApiResult.Ok) {
+                                        notice(when (r) {
+                                            is ApiResult.Failed -> "没记上：${r.message}"
+                                            is ApiResult.Unauthorized -> "没记上：登录失效了"
+                                            else -> "没记上，请再点一次"
+                                        })
+                                        reload()
                                     }
                                 }
-                                Spacer(Modifier.height(DS.Rhythm.tight))
-                                Text("「${c.quote}」", style = MaterialTheme.typography.bodyLarge)
                             }
                         }
                     }
                 }
 
-                if (m.atoms.isNotEmpty()) {
-                    item { SectionHead("读出来的判断", "决定、信号、矛盾") }
-                    items(m.atoms, key = { "a" + it.id }) { a -> AtomCard(a) }
+                // ── 原话 tab ──
+                if (tab == MeetingTab.QUOTES) {
+                    if (m.speakers.isNotEmpty()) item {
+                        Text("在场：" + m.speakers.joinToString("、"),
+                             style = MaterialTheme.typography.bodySmall,
+                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    val quotes = MeetingTabs.quotesOf(m)
+                    if (quotes.isEmpty()) item {
+                        Empty("这场会还没有被引用的原话", "分析跑完之后，每条判断和承诺依据的那句话会列在这里。")
+                    } else {
+                        item { SectionHead("被引用的原话 · ${quotes.size} 处", "每条判断和承诺凭的就是这些。逐句转写在网页版。") }
+                        items(quotes, key = { "q" + it.key }) { q ->
+                            DsCard(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(DS.Pad.tight)) {
+                                    Text(q.who, style = MaterialTheme.typography.labelMedium,
+                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Spacer(Modifier.height(DS.Rhythm.tight))
+                                    Text("「${q.text}」", style = MaterialTheme.typography.bodyLarge)
+                                    Spacer(Modifier.height(DS.Rhythm.tight))
+                                    Text(q.supports, style = MaterialTheme.typography.bodySmall,
+                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 item {
@@ -266,7 +321,7 @@ fun MeetingScreen(
                                 android.net.Uri.parse("${BuildConfig.API_BASE}$path")))
                         },
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("在网页里看完整转写") }
+                    ) { Text("在网页版看逐句转写 ↗") }
                 }
             }
         }
@@ -284,6 +339,8 @@ private fun SectionHead(title: String, hint: String) {
 
 @Composable
 private fun AtomCard(a: MeetingAtom) {
+    // 猜想默认折叠——折叠的是原话那一串看起来像证据的上下文。判据见 TodayScreen.foldByDefault。
+    var open by remember(a.id) { mutableStateOf(!foldByDefault(a.epistemic)) }
     DsCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -297,11 +354,93 @@ private fun AtomCard(a: MeetingAtom) {
             }
             Spacer(Modifier.height(DS.Rhythm.tight))
             Text(a.statement, style = MaterialTheme.typography.bodyLarge)
-            if (a.quote.isNotBlank()) {
+            if (!open) {
+                TextButton(onClick = { open = true }, contentPadding = PaddingValues(0.dp)) { Text("看它凭什么这么说") }
+            } else if (a.quote.isNotBlank()) {
                 Spacer(Modifier.height(DS.Rhythm.tight))
                 Text("「${a.quote}」", style = MaterialTheme.typography.bodyLarge,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else if (foldByDefault(a.epistemic)) {
+                Spacer(Modifier.height(DS.Rhythm.tight))
+                Text("没有直接原话支撑。它来自跨录音联想。",
+                     style = MaterialTheme.typography.bodySmall,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+        }
+    }
+}
+
+/** 承诺卡：这一场里也能落账，不用回首屏找。 */
+@Composable
+private fun MeetingCommitmentCard(c: Commitment, onSettle: (String) -> Unit) {
+    var done by remember(c.id) { mutableStateOf<String?>(if (c.status == "open") null else c.status) }
+    DsCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(DS.Pad.tight)) {
+            Row {
+                Text(c.speakerName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                c.dueDate?.let {
+                    Text(it, style = MaterialTheme.typography.labelMedium,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Spacer(Modifier.height(DS.Rhythm.tight))
+            Text(c.statement, style = MaterialTheme.typography.bodyLarge)
+            if (c.quote.isNotBlank() && c.quote != c.statement) {
+                Spacer(Modifier.height(DS.Rhythm.tight))
+                Text("「${c.quote}」", style = MaterialTheme.typography.bodyLarge,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.height(DS.Rhythm.tight))
+            if (done == null) Row {
+                TextButton(onClick = { done = "kept"; onSettle("kept") }) { Text("兑现了") }
+                TextButton(onClick = { done = "cancelled"; onSettle("cancelled") }) { Text("取消了") }
+            } else Text(
+                "已记：" + when (done) { "kept" -> "兑现了"; "cancelled" -> "取消了"; else -> done },
+                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+// ── 纯逻辑，JVM 可测 ────────────────────────────────────────────
+
+enum class MeetingTab { JUDGMENTS, COMMITMENTS, QUOTES;
+    fun label(t: MeetingTabs) = when (this) {
+        JUDGMENTS -> if (t.judgments > 0) "判断 ${t.judgments}" else "判断"
+        COMMITMENTS -> if (t.commitments > 0) "承诺 ${t.commitments}" else "承诺"
+        QUOTES -> if (t.quotes > 0) "原话 ${t.quotes}" else "原话"
+    }
+}
+
+/** 一条被引用的原话：谁说的、说了什么、它支撑哪一条。 */
+data class Quote(val key: String, val who: String, val text: String, val supports: String)
+
+/** 三个 tab 各有几条。数字直接标在标签上——不点进去就知道哪一栏有东西。 */
+data class MeetingTabs(val judgments: Int, val commitments: Int, val quotes: Int) {
+    companion object {
+        fun of(m: Meeting) = MeetingTabs(m.atoms.size, m.commitments.size, quotesOf(m).size)
+
+        /**
+         * 原话 tab 的内容：这场会里**被引用的**片段。
+         *
+         * 来源两处：判断自带的 quote、承诺自带的 quote。空的不收——
+         * 猜想常常没有原话，那是它的属性，不该在原话 tab 里占一行空白。
+         * 同一句被多条引用只列一次，注明支撑几条。
+         */
+        fun quotesOf(m: Meeting): List<Quote> {
+            val byText = LinkedHashMap<String, Quote>()
+            m.commitments.filter { it.quote.isNotBlank() }.forEach { c ->
+                byText.putIfAbsent("c" + c.quote, Quote("c" + c.id, c.speakerName, c.quote, "支撑：${c.speakerName}的承诺"))
+            }
+            m.atoms.filter { it.quote.isNotBlank() }.forEach { a ->
+                val who = a.subject?.takeIf { it.isNotBlank() } ?: "会上"
+                val label = "支撑：" + a.statement.take(24) + if (a.statement.length > 24) "…" else ""
+                val k = "a" + a.quote
+                val old = byText[k]
+                byText[k] = if (old == null) Quote("a" + a.id, who, a.quote, label) else old.copy(supports = old.supports + "；另一条")
+            }
+            return byText.values.toList()
         }
     }
 }
