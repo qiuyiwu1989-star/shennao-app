@@ -5,3 +5,4 @@ local.properties
 *.apk
 *.aab
 .idea/
+dist/
