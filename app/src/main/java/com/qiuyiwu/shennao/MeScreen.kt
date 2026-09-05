@@ -78,23 +78,18 @@ fun MeScreen(
             }
         }
 
-        DsCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(DS.Pad.tight)) {
-                Text("账号", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(DS.Rhythm.tight))
-                Text(client.signedInEmail() ?: "未登录",
-                     style = MaterialTheme.typography.bodyMedium,
-                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-
+        // 账号与版本合成一张卡。密度规则：首屏 ≤ 5 块。这两样都是「看一眼确认一下」的信息，
+        // 分两张卡各占一块，是把版面让给了最不需要注意的东西。
         DsCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(DS.Pad.tight)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("版本", style = MaterialTheme.typography.titleSmall)
-                        Text("v${BuildConfig.VERSION_NAME}",
+                        Text("账号", style = MaterialTheme.typography.titleSmall)
+                        Text(client.signedInEmail() ?: "未登录",
                              style = MaterialTheme.typography.bodyMedium,
+                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("版本 v${BuildConfig.VERSION_NAME} · 直接下载安装的版本",
+                             style = MaterialTheme.typography.bodySmall,
                              color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     if (checking) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -149,6 +144,12 @@ fun MeScreen(
                 // 走 App 内 WebView（带登录态）。之前是甩给系统浏览器，
                 // 用户点进去看到的是深脑的登录页——他刚才明明就在 App 里登着。
                 OutlinedButton(onClick = { onOpenWeb("/zh", "深脑") }) { Text("打开深脑网页版") }
+                // 隐私与条款。成熟产品该有的出口，用户想找的时候要找得到——
+                // 不用等到真出了纠纷才发现 App 里压根没有这条路。并在这张卡里，不单占一块。
+                Row(horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.inner)) {
+                    TextButton(onClick = { onOpenWeb("/zh/privacy", "隐私政策") }) { Text("隐私政策") }
+                    TextButton(onClick = { onOpenWeb("/zh/terms", "服务条款") }) { Text("服务条款") }
+                }
             }
         }
 
@@ -171,13 +172,6 @@ fun MeScreen(
                 Spacer(Modifier.height(DS.Rhythm.element))
                 OutlinedButton(onClick = { onOpenWeb("/zh/settings", "导出全部") }) { Text("导出全部 · 网页版") }
             }
-        }
-
-        // 隐私与条款。成熟产品该有的出口，用户想找的时候要找得到——
-        // 不用等到真出了纠纷才发现 App 里压根没有这条路。
-        Row(horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.inner)) {
-            TextButton(onClick = { onOpenWeb("/zh/privacy", "隐私政策") }) { Text("隐私政策") }
-            TextButton(onClick = { onOpenWeb("/zh/terms", "服务条款") }) { Text("服务条款") }
         }
 
         var signOut by remember { mutableStateOf(false) }
