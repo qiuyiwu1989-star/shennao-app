@@ -1,5 +1,6 @@
 package com.qiuyiwu.shennao
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
@@ -61,6 +62,13 @@ fun TodayScreen(
             add(Channel("下文", "别人说出口、还没有下文的事", today.commitments.size))
             add(Channel("该给个说法", "到期的预测，应验了还是落空了", today.predictions.size))
             add(Channel("新判断", "最近沉进大脑的", today.insights.size))
+            // 第四段：认人。数据里一直有（counts.awaitingSpeaker），屏上一直没有——
+            // 之前只在空态文案里提了一句「到网页里认一下」，那句话没人会看见。
+            //
+            // 它和前三段不一样：前三段是「读」，这一段是「干活」。但它值得占一栏，
+            // 因为**说话人不落到具体的人，前三段里关于人的判断全都立不起来**。
+            if (today.counts.awaitingSpeaker > 0)
+                add(Channel("认人", "有几句还不知道是谁说的", today.counts.awaitingSpeaker))
         }
     }
     val pager = androidx.compose.foundation.pager.rememberPagerState { channels.size }
@@ -74,6 +82,30 @@ fun TodayScreen(
             Header(today)
             RecordBar(onRecord)
             Spacer(Modifier.height(DS.Rhythm.element))
+        }
+
+        // 最急的一件，只说一件，没有急事就不显示。
+        // 频道标签只给数量（「下文 3」），不给「其中 1 条逾期」——
+        // 人停在「新判断」那一栏时，完全不知道有承诺已经过期了。
+        urgentLede(today)?.let { lede ->
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                    .padding(bottom = DS.Rhythm.element),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    Modifier.size(6.dp).background(
+                        MaterialTheme.colorScheme.error,
+                        androidx.compose.foundation.shape.CircleShape,
+                    )
+                )
+                Spacer(Modifier.width(DS.Rhythm.tight))
+                Text(
+                    lede,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         }
 
         // 频道条。数字直接标在标签上——不点进去就知道哪一栏有事。
@@ -118,10 +150,20 @@ fun TodayScreen(
                         1 -> if (today.predictions.isEmpty()) item {
                             Empty("没有到期的预测", "写下的预测到期时会来这里要一个说法。")
                         } else items(today.predictions, key = { it.id }) { PredictionCard(it) }
-                        else -> if (today.insights.isEmpty()) item {
+                        2 -> if (today.insights.isEmpty()) item {
                             Empty("还没有新判断", "录一场会，深脑会从里面读出判断。", "录一场", onRecord)
                         } else items(today.insights, key = { it.id }) { i ->
                             InsightCard(i) { i.transcriptId?.let(onOpenTranscript) }
+                        }
+                        else -> item {
+                            // 手机上还没有认人的界面（mobile 侧没有这个端点），
+                            // 所以这里老实说清楚去哪认，而不是画一个点了没反应的按钮。
+                            Empty(
+                                "有 ${today.counts.awaitingSpeaker} 句不知道是谁说的",
+                                "认出来之后，这个人在所有录音里的话会一起归位——" +
+                                    "关于他的判断、他答应过什么，都得先有这一步。\n" +
+                                    "现在还得在网页版认，手机上的认人界面在做了。",
+                            )
                         }
                     }
                     item { Spacer(Modifier.height(DS.Rhythm.inner)) }
@@ -297,6 +339,10 @@ private fun PredictionCard(p: Prediction) {
 
 @Composable
 private fun InsightCard(i: Insight, onOpen: () -> Unit) {
+    // 猜想默认折叠。折叠的不是「猜想」两个字，也不是它在说什么——
+    // 折叠的是原话、来源、去那场会那一串**看起来像证据的上下文**，
+    // 而那正是让人把猜想读成事实的东西。见 foldByDefault 的注释。
+    var open by remember(i.id) { mutableStateOf(!foldByDefault(i.epistemic)) }
     DsCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -311,13 +357,26 @@ private fun InsightCard(i: Insight, onOpen: () -> Unit) {
             }
             Spacer(Modifier.height(DS.Rhythm.tight))
             Text(i.statement, style = MaterialTheme.typography.bodyLarge)
-            if (i.quote.isNotBlank()) {
+            if (!open) {
                 Spacer(Modifier.height(DS.Rhythm.tight))
-                Text("「${i.quote}」", style = MaterialTheme.typography.bodyLarge,
-                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = { open = true }, contentPadding = PaddingValues(0.dp)) {
+                    Text("看它凭什么这么说")
+                }
+            } else {
+                if (i.quote.isNotBlank()) {
+                    Spacer(Modifier.height(DS.Rhythm.tight))
+                    Text("「${i.quote}」", style = MaterialTheme.typography.bodyLarge,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else if (foldByDefault(i.epistemic)) {
+                    // 猜想没有原话是常态——但要说出来，别让人以为是加载失败。
+                    Spacer(Modifier.height(DS.Rhythm.tight))
+                    Text("没有直接原话支撑。它来自跨录音联想。",
+                         style = MaterialTheme.typography.bodySmall,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.height(DS.Rhythm.element))
+                Footer(meta = atomTypeLabel(i.atomType), canOpen = i.transcriptId != null, onOpen = onOpen)
             }
-            Spacer(Modifier.height(DS.Rhythm.element))
-            Footer(meta = atomTypeLabel(i.atomType), canOpen = i.transcriptId != null, onOpen = onOpen)
         }
     }
 }
@@ -351,3 +410,39 @@ private fun atomTypeLabel(t: String) = when (t) {
     "open_question" -> "待解"
     else -> t
 }
+
+/*
+ * ── 下面两个是纯逻辑，JVM 可测 ────────────────────────────────
+ *
+ * 界面判断散在 composable 里就只能装到手机上才知道对不对。
+ * 这两条都是会被反复改的判据，所以拎出来。
+ */
+
+/**
+ * 频道条上方那一句「最急的一件」。没有急事就返回 null，那时候不显示——
+ * **一个永远在的横幅等于没有横幅**。
+ *
+ * 为什么需要它：频道标签只给数量（「下文 3」），不给「其中 1 条逾期」。
+ * 人停在「新判断」那一栏时，完全不知道有承诺已经过期了——
+ * 而逾期恰恰是这一屏唯一有时间压力的东西。
+ *
+ * 只说一件。两件并列就又变回了要读的一段话。
+ */
+internal fun urgentLede(t: Today): String? = when {
+    t.counts.overdue > 0 -> "有 ${t.counts.overdue} 条承诺过期了"
+    t.predictions.isNotEmpty() -> "有 ${t.predictions.size} 条预测到期，等你给个说法"
+    t.counts.awaitingSpeaker > 0 -> "有 ${t.counts.awaitingSpeaker} 句还不知道是谁说的"
+    else -> null
+}
+
+/**
+ * 这一条要不要默认折叠。
+ *
+ * **只折叠猜想。** `Api.kt` 的字段注释写着：认知等级必须显示，
+ * 「手机是一扫而过的场景，一条猜想会被当成事实」。折叠不是把它藏起来——
+ * 折叠态仍然显示「猜想」两个字和它在说什么的第一行，
+ * 藏起来的是**支撑它的那一串上下文**，而那串东西正是让人误以为它是事实的部分。
+ *
+ * 亲证与推断照常展开：它们有原话托底，展开是帮人核对。
+ */
+internal fun foldByDefault(epistemic: String): Boolean = epistemic == "conjecture"
