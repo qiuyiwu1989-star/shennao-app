@@ -111,7 +111,7 @@
 | `SHENNAO_REPO_TOKEN` | CI 的色值漂移检查要读主仓库 | 随时 |
 | 灵魂卡固件支持 OTA 吗 | 协议文档没提，S23「固件更新」画不画取决于它 | 1.6 已按「不画」处理，有 OTA 再加 |
 | **真机核对 TYPE=0 三个数** | 电量/容量/固件是按协议 §4 新写的，全项目从没发过这几条命令 | Phase 3 第一件事 |
-| 出正式 APK 的 keystore | 在你的 `local.properties` 里，我这台机器没有 | Phase 3 |
+| 出正式 APK 的口令 | keystore 在 `~/Developer/android-toolchain/shennao-release.jks`（指纹脚本会在构建时核对，和线上不一致就拒发），但 `local.properties` 缺 `shennao.ksPath` / `shennao.ksPass` 两行；填上后 `bash scripts/publish-android.sh` 一条到首页 | **现在** |
 
 其余一律我自己定。
 
