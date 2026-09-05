@@ -410,4 +410,38 @@ class ScreenTest {
         compose.onNodeWithText("不在附近").assertExists()
     }
 
+    // ---- 我的：硬件成为商业模式之后，这一栏是硬件的控制台 ----
+
+    private fun meScreen(onOpenCard: () -> Unit = {}, onOpenWeb: (String, String) -> Unit = { _, _ -> }) {
+        val client = DeepBrainClient(NoNetHttp(), MemStore(Credentials("r", "o", "e@x.com")), "https://api.test", "https://sb.test", "k")
+        val http = object : Http {
+            override fun request(method: String, url: String, headers: Map<String, String>, body: String?): HttpResponse =
+                throw java.io.IOException("测试里不联网")
+            override fun requestBytes(method: String, url: String, headers: Map<String, String>, body: ByteArray): HttpResponse =
+                throw java.io.IOException("测试里不联网")
+        }
+        compose.setContent {
+            ShennaoTheme { MeScreen(client, onOpenWeb = onOpenWeb, onSignOut = {}, onOpenCard = onOpenCard, http = http) }
+        }
+    }
+
+    @Test fun `灵魂卡排第一，点进去是整页不是二级设置`() {
+        var opened = false
+        meScreen(onOpenCard = { opened = true })
+        compose.onNodeWithText("灵魂卡").assertExists()
+        compose.onNodeWithText("还没连过。连上它，录的每一段会自动过来。").assertIsDisplayed().performClick()
+        assert(opened) { "灵魂卡那张卡点了没反应" }
+    }
+
+    /** 对冲「买的是一张服务年票」：导出要在，存储期限要说实话，不承诺「无限」。 */
+    @Test fun `你的数据：能整包带走，存储期限说实话`() {
+        var path: String? = null
+        meScreen(onOpenWeb = { p, _ -> path = p })
+        compose.onNodeWithText("你的数据").assertExists()
+        compose.onNodeWithText("原始音频保留 12 个月，转写与判断永久保留。").assertExists()
+        compose.onAllNodesWithText("无限", substring = true).assertCountEquals(0)
+        compose.onNodeWithText("导出全部 · 网页版").performClick()
+        assert(path == "/zh/settings") { "导出该走网页版的设置页，实际 $path" }
+    }
+
 }

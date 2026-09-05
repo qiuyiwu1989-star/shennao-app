@@ -28,6 +28,8 @@ fun MeScreen(
     client: DeepBrainClient,
     onOpenWeb: (path: String, title: String) -> Unit,
     onSignOut: () -> Unit,
+    /** 进灵魂卡那一页（扫描 / 连接 / 同步 / 改名） */
+    onOpenCard: () -> Unit = {},
     // 可注入，默认才是真的联网。不然这一屏没法在测试里脱网跑——
     // 之前一直是 Update.check(UrlHttp(), ...) 写死在里面，
     // 是这一版顺手改的，不是重点，但既然要给这一屏加测试就该改掉。
@@ -53,6 +55,28 @@ fun MeScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text("我的", style = MaterialTheme.typography.headlineSmall)
+
+        // 硬件成为商业模式之后，这一栏从「账号页」升级成硬件的控制台——灵魂卡排第一。
+        // 点进去是 BleScreen 整页，不是一个二级设置。
+        val cardLine = remember { com.qiuyiwu.shennao.ble.CardNames(ctx).known() }
+        DsCard(Modifier.fillMaxWidth(), onClick = onOpenCard) {
+            Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("灵魂卡", style = MaterialTheme.typography.titleSmall)
+                    Spacer(Modifier.height(DS.Rhythm.tight))
+                    Text(
+                        when (cardLine.size) {
+                            0 -> "还没连过。连上它，录的每一段会自动过来。"
+                            1 -> cardLine[0].second
+                            else -> cardLine.joinToString(" · ") { it.second }
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.outline)
+            }
+        }
 
         DsCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(DS.Pad.tight)) {
@@ -125,6 +149,27 @@ fun MeScreen(
                 // 走 App 内 WebView（带登录态）。之前是甩给系统浏览器，
                 // 用户点进去看到的是深脑的登录页——他刚才明明就在 App 里登着。
                 OutlinedButton(onClick = { onOpenWeb("/zh", "深脑") }) { Text("打开深脑网页版") }
+            }
+        }
+
+        /*
+         * 你的数据。对冲「买的是一张服务年票」的停服恐惧——搜狗录音笔停服让
+         * 「终身免费」破产，Limitless 卖身后数据限期导出。深脑本来就有「不训模型、
+         * 可私有部署」的底子，这里是它的用户面。导出走网页版（带登录态），
+         * 手机上不另做一套导出器。存储期限说实话，不承诺「无限」——那是会被砍的权益。
+         */
+        DsCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(DS.Pad.tight)) {
+                Text("你的数据", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(DS.Rhythm.tight))
+                Text("音频、转写、判断都可以整包带走。我们不训模型，也不做「服务年票」。",
+                     style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(DS.Rhythm.tight))
+                Text("原始音频保留 12 个月，转写与判断永久保留。",
+                     style = MaterialTheme.typography.bodySmall,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(DS.Rhythm.element))
+                OutlinedButton(onClick = { onOpenWeb("/zh/settings", "导出全部") }) { Text("导出全部 · 网页版") }
             }
         }
 

@@ -346,6 +346,7 @@ private fun App(client: DeepBrainClient) {
                         is Route.Me -> MeScreen(
                             client = client,
                             onOpenWeb = { path, title -> go(nav.push(Route.Web(path, title))) },
+                            onOpenCard = { go(nav.push(Route.Ble)) },
                             onSignOut = {
                                 client.signOut()
                                 today = null
