@@ -79,6 +79,8 @@ sealed interface Route {
     /** 灵魂卡：扫描、连接、同步。从「记录」和「我的」都能进。 */
     data object Ble : Route { override val tab: Tab? = null }
     data class Meeting(val transcriptId: String) : Route { override val tab: Tab? = null }
+    /** 认人：这场会里还不知道是谁说的那几句。从详情的「原话」进。 */
+    data class Speakers(val transcriptId: String) : Route { override val tab: Tab? = null }
     data class Person(val personId: String) : Route { override val tab: Tab? = null }
 
     /**

@@ -36,7 +36,20 @@
 | `POST web-ticket` → `web-open` | 带登录态开网页版 | S30 |
 | `POST crash` | 崩溃回传 | — |
 
-## 原型需要、但 mobile 面还没开的 6 个
+## 2026-09-05 新开的（分支 agent/mobile-bff-phase2，未部署）
+
+| 端点 | 用途 | 客户端 |
+| --- | --- | --- |
+| `GET credits` | `{ balance }` | 我的 · 积分行（404 时不显示） |
+| `POST predictions/[id]` | `{verdict: borne_out/refuted/partial/too_early}` → `{ok,verdict,bridged}` 或 `{ok,deferred,nextDueAt}` | 今天 · 预测卡三按钮 |
+| `GET transcript/[id]/speakers` | 未认的说话人各配样本句 + 候选名单 | 认人页 S14 |
+| `POST transcript/[id]/speakers` | `{speakers:[{id,name}|{id,skip:true}]}` | 认人页 |
+| `sessions[].captureClient` | web/macos/android/iot/upload | —（分不出灵魂卡/手机/分享，待 `source`） |
+| `transcript/[id].segments[]` | `{startMs,endMs,speaker,text}`，毫秒，封顶 2000 | 详情 · 原话 tab 逐句 + 依据跳转 |
+
+客户端对这些端点一律**404 即隐藏**：服务端没部署时不报错、不重试、不画点了没反应的按钮。
+
+## 原型需要、但 mobile 面还没开的
 
 能力在 web API 里**都已经有了**，缺的是适配层，不是新功能：
 

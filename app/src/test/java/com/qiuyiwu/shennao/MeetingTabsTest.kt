@@ -69,4 +69,17 @@ class MeetingTabsTest {
         val m = meeting(atoms = listOf(atom("a1", "某句", subject = null)))
         assertEquals("会上", MeetingTabs.quotesOf(m)[0].who)
     }
+
+    /** 「依据 →」跳错比不跳更伤信任：找不到就 null。 */
+    @Test fun `依据跳转：整句优先，其次前 12 字，都没有就不跳`() {
+        val lines = listOf(
+            Line(1000, 2000, "张", "那就先把底座做完，插件的事下个迭代再说"),
+            Line(3000, 4000, "李", "我理解是先出插件？上周不是说插件那边有个 deadline 吗"),
+        )
+        assertEquals(0, MeetingTabs.lineIndexFor(lines, "「那就先把底座做完」"))
+        assertEquals(1, MeetingTabs.lineIndexFor(lines, "我理解是先出插件？上周不是说别的什么"))
+        assertNull(MeetingTabs.lineIndexFor(lines, "完全无关的一句话在这里"))
+        assertNull("太短的片段不猜", MeetingTabs.lineIndexFor(lines, "插件"))
+        assertNull(MeetingTabs.lineIndexFor(emptyList(), "那就先把底座做完"))
+    }
 }

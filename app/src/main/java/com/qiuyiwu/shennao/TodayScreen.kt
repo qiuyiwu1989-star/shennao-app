@@ -43,6 +43,8 @@ fun TodayScreen(
     onRefresh: () -> Unit,
     /** 落账：兑现了 / 取消了。系统不裁定任何人，只由人落 */
     onSettle: (String, String) -> Unit = { _, _ -> },
+    /** 给预测一个说法：borne_out / refuted / too_early。返回 true = 顺延了 */
+    onSettlePrediction: (String, String) -> Unit = { _, _ -> },
     /** 非空表示现在显示的是离线缓存，并说明是什么时候的 */
     staleLabel: String? = null,
     /** 下拉刷新用。挂起函数返回了才停转圈 */
@@ -149,7 +151,7 @@ fun TodayScreen(
                         }
                         1 -> if (today.predictions.isEmpty()) item {
                             Empty("没有到期的预测", "写下的预测到期时会来这里要一个说法。")
-                        } else items(today.predictions, key = { it.id }) { PredictionCard(it) }
+                        } else items(today.predictions, key = { it.id }) { PredictionCard(it, onSettlePrediction) }
                         2 -> if (today.insights.isEmpty()) item {
                             Empty("还没有新判断", "录一场会，深脑会从里面读出判断。", "录一场", onRecord)
                         } else items(today.insights, key = { it.id }) { i ->
@@ -310,7 +312,10 @@ private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, on
 }
 
 @Composable
-private fun PredictionCard(p: Prediction) {
+private fun PredictionCard(p: Prediction, onSettle: (String, String) -> Unit) {
+    // 三选：应验 / 落空 / 说不清。「说不清」必须是平等的第三个——逼人二选一会污染命中率，
+    // 而命中率是这套东西的全部价值。说不清 = 顺延，预测没死，到期还回来。
+    var done by remember(p.id) { mutableStateOf<String?>(null) }
     DsCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -332,6 +337,15 @@ private fun PredictionCard(p: Prediction) {
                 style = MaterialTheme.typography.bodySmall,
                 color = if (p.observableSignal == null) MaterialTheme.colorScheme.error
                         else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(DS.Rhythm.tight))
+            if (done == null) Row {
+                TextButton(onClick = { done = "应验"; onSettle(p.id, "borne_out") }) { Text("应验了") }
+                TextButton(onClick = { done = "落空"; onSettle(p.id, "refuted") }) { Text("落空了") }
+                TextButton(onClick = { done = "顺延"; onSettle(p.id, "too_early") }) { Text("说不清") }
+            } else Text(
+                if (done == "顺延") "已顺延——还看不出来，到期再问" else "已记：$done",
+                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

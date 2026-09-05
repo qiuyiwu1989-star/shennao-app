@@ -330,6 +330,16 @@ private fun App(client: DeepBrainClient) {
                                 onRefresh = { scope.launch { load() } },
                                 staleLabel = stale,
                                 onPullRefresh = { load() },
+                                onSettlePrediction = { id, verdict ->
+                                    scope.launch {
+                                        val res = withContext(Dispatchers.IO) { client.settlePrediction(id, verdict) }
+                                        when (res) {
+                                            is ApiResult.Ok -> if (res.value) notice("已顺延，到期再问")
+                                            is ApiResult.Failed -> { notice("没记上：${res.message}"); load() }
+                                            else -> { notice("没记上：登录失效了"); load() }
+                                        }
+                                    }
+                                },
                                 onSettle = { id, action ->
                                     scope.launch {
                                         val res = withContext(Dispatchers.IO) { client.settleCommitment(id, action) }
@@ -381,6 +391,12 @@ private fun App(client: DeepBrainClient) {
                             client, r.transcriptId,
                             onBack = { nav.pop()?.let { go(it) } },
                             onOpenWeb = { path, title -> go(nav.push(Route.Web(path, title))) },
+                            onClaimSpeakers = { go(nav.push(Route.Speakers(r.transcriptId))) },
+                        )
+
+                        is Route.Speakers -> SpeakerClaimScreen(
+                            client, r.transcriptId,
+                            onBack = { nav.pop()?.let { go(it) } },
                         )
 
                         is Route.Person -> PersonScreen(

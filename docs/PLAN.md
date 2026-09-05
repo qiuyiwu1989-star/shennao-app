@@ -76,7 +76,7 @@
 
 | 项 | 状态 |
 | --- | --- |
-| `sessions` 返回 `captureClient` | ✅ 09-05 |
+| `sessions` 返回 `captureClient` | ✅ 09-05 —— **但它分不出灵魂卡 / 手机 / 分享**：三者都走 Uploader，capture_client 全是 android。真正的来源在 client_request_id 的前缀（ble- / share- / 其它）。要再加一个派生字段 `source`，客户端才能分段 |
 | `transcript/[id]` 返回 `segments`（毫秒统一，封顶 2000） | ✅ 09-05 |
 | `GET mobile/credits` | ✅ 09-05 |
 | `POST mobile/predictions/[id]`（裁定逻辑抽成 `lib/predictions/settle.ts`，web 路由共用） | ✅ 09-05 |
@@ -115,4 +115,5 @@
 | 日期 | 事 |
 | --- | --- |
 | 09-04 | 独立成库，59 提交带历史 |
+| 09-05 晚 | 安卓端接上 Phase 2 新端点（404 即隐藏）：预测三按钮、认人页 S14、原话逐句 + 依据跳转定位、积分行；服务端分支写好五项。272 单测。 |
 | 09-05 | 色值防线接回；导航单一真源；CI；今天页补三缺口；四栏 IA + 录音 FAB；记录页台账；系统分享入口；录音告知文案与字幕折叠；详情三 tab；灵魂卡页（TYPE=0 首次实现）；我的升级；四类通知；三态与密度审计；登录屏主张。**Phase 1 全部完成，267 单测全绿，lint 0 错，模拟器（Android 14）冒烟无崩溃。** |

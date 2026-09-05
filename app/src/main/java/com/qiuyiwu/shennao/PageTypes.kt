@@ -73,6 +73,8 @@ fun DetailPage(
     title: String? = null,
     actions: (@Composable RowScope.() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    /** 调用方要程序化滚动（如「依据 → 回到原话」定位）时传自己的 state；默认各自一份 */
+    state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
     content: LazyListScope.() -> Unit,
 ) {
     Column(modifier.fillMaxSize()) {
@@ -91,6 +93,7 @@ fun DetailPage(
         }
         LazyColumn(
             Modifier.fillMaxSize(),
+            state = state,
             contentPadding = PaddingValues(
                 start = 16.dp, end = 16.dp, top = DS.Rhythm.element, bottom = DS.Rhythm.page),
             verticalArrangement = Arrangement.spacedBy(DS.Rhythm.element),

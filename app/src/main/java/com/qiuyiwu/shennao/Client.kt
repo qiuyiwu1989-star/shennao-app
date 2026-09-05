@@ -328,6 +328,58 @@ class DeepBrainClient(
      * 服务端用 409 表示「现在还不能排」（积分不够 / 已经在跑 / 是实时草稿），
      * 那不是「请求写错了」，理由直接端给用户看，别翻成一句「出错了」。
      */
+    /*
+     * ── 2026-09-05 接的四个新端点（服务端分支 agent/mobile-bff-phase2）──
+     * 服务端没部署时是 404：界面按「没有这个功能」处理，不报错，不重试。
+     */
+
+    /** 用量：余额。服务端没这个端点时返回 Failed，「我的」页就不显示用量那一行。 */
+    fun credits(): ApiResult<Int> = get("/api/mobile/credits") { JSONObject(it).optInt("balance", -1) }
+
+    /**
+     * 给预测一个说法。verdict = borne_out / refuted / partial / too_early。
+     * 返回 true 表示这次是顺延（too_early），预测没死、到期还回来——
+     * 界面要把它和「已裁定」分开说，否则用户以为记完了，那条预测就再也不知道在不在了。
+     */
+    fun settlePrediction(id: String, verdict: String): ApiResult<Boolean> {
+        val r = postJson("/api/mobile/predictions/$id", JSONObject().put("verdict", verdict).toString())
+        if (r !is ApiResult.Ok) return r as ApiResult<Boolean>
+        return ApiResult.Ok(runCatching { JSONObject(r.value).optBoolean("deferred", false) }.getOrDefault(false))
+    }
+
+    fun speakers(transcriptId: String): ApiResult<SpeakersPage> =
+        get("/api/mobile/transcript/$transcriptId/speakers") { SpeakersParser.parse(it) }
+
+    /** 认领。name 为 null 表示「听不出来，跳过」——记为未确认、不命名，不是不发。 */
+    fun claimSpeaker(transcriptId: String, speakerId: String, name: String?): ApiResult<Unit> {
+        val one = JSONObject().put("id", speakerId)
+        if (name == null) one.put("skip", true) else one.put("name", name)
+        val body = JSONObject().put("speakers", org.json.JSONArray().put(one)).toString()
+        val r = postJson("/api/mobile/transcript/$transcriptId/speakers", body)
+        return if (r is ApiResult.Ok) ApiResult.Ok(Unit) else r as ApiResult<Unit>
+    }
+
+    /** POST JSON，401 刷新重试一次，>=400 把服务端 error.message 或 error 原样带回。 */
+    private fun postJson(path: String, body: String): ApiResult<String> {
+        val c = store.load() ?: return ApiResult.Unauthorized
+        if (accessToken == null && !refresh()) return ApiResult.Unauthorized
+        fun once() = http.request(
+            "POST", "$apiBase$path",
+            mapOf("Authorization" to "Bearer ${accessToken ?: ""}", "x-deepbrain-org-id" to c.orgId,
+                  "Content-Type" to "application/json"), body,
+        )
+        var r = once()
+        if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
+        if (r.status >= 400) {
+            val why = runCatching {
+                val e = JSONObject(r.body).opt("error")
+                if (e is JSONObject) e.optString("message") else e?.toString()
+            }.getOrNull()
+            return ApiResult.Failed(why?.takeIf { it.isNotBlank() && it != "null" } ?: "没记上（${r.status}）")
+        }
+        return ApiResult.Ok(r.body)
+    }
+
     fun analyze(transcriptId: String): ApiResult<Unit> {
         val c = store.load() ?: return ApiResult.Unauthorized
         if (accessToken == null && !refresh()) return ApiResult.Unauthorized

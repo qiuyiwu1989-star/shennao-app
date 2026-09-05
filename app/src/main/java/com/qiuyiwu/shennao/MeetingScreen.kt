@@ -1,5 +1,9 @@
 package com.qiuyiwu.shennao
 
+import androidx.compose.foundation.lazy.rememberLazyListState
+
+import androidx.compose.foundation.lazy.itemsIndexed
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,6 +32,8 @@ fun MeetingScreen(
     transcriptId: String,
     onBack: () -> Unit,
     onOpenWeb: ((path: String, title: String) -> Unit)? = null,
+    /** 进认人页。null = 手机上还没有认人（服务端没升级） */
+    onClaimSpeakers: (() -> Unit)? = null,
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -49,6 +55,20 @@ fun MeetingScreen(
      */
     var tab by remember { mutableStateOf(MeetingTab.JUDGMENTS) }
     val notice = LocalNotice.current
+    val listState = rememberLazyListState()
+    /** 原话 tab 里高亮哪一句（从判断的「依据」跳过来的那句） */
+    var highlight by remember { mutableStateOf<Int?>(null) }
+    /**
+     * 「依据 →」：切到原话 tab，滚到那一句并高亮。
+     * 证据链的落地动作——一秒回原文是这类产品最难被抄的信任动作。
+     * 逐句是服务端 2026-09-05 才给的；没有逐句时退回被引用的片段列表，不跳。
+     */
+    fun jumpToQuote(quote: String) {
+        val m = meeting ?: return
+        val idx = MeetingTabs.lineIndexFor(m.segments, quote) ?: run { tab = MeetingTab.QUOTES; return }
+        tab = MeetingTab.QUOTES; highlight = idx
+        scope.launch { listState.animateScrollToItem(HEADER_ITEMS + idx) }
+    }
 
     // 重新取数：手动排上分析之后要能看到状态从「没有分析」变成「在跑」。
     // 不刷新的话用户点完按钮屏幕一动不动，只能反复点，而每一次都会
@@ -70,6 +90,7 @@ fun MeetingScreen(
 
     DetailPage(
         onBack = onBack,
+        state = listState,
         actions = {
             // 分享。走系统的分享面板，不自己做选择器——
             // 用户已经知道怎么用它，而且我们做的那个永远比系统的少几个入口。
@@ -248,7 +269,7 @@ fun MeetingScreen(
                 if (tab == MeetingTab.JUDGMENTS) {
                     if (m.atoms.isNotEmpty()) {
                         item { SectionHead("读出来的判断", "决定、信号、矛盾") }
-                        items(m.atoms, key = { "a" + it.id }) { a -> AtomCard(a) }
+                        items(m.atoms, key = { "a" + it.id }) { a -> AtomCard(a) { jumpToQuote(a.quote) } }
                     } else if (m.analysis != null) item {
                         Empty("这场没读出判断", "有时候一场会就是没有决定、没有分歧。那也是一个结论。")
                     }
@@ -281,13 +302,48 @@ fun MeetingScreen(
 
                 // ── 原话 tab ──
                 if (tab == MeetingTab.QUOTES) {
+                    // 还有「说话人N」这种没认的标签就给认人入口。判据只看标签形状，不另发请求。
+                    val unnamed = m.speakers.count { it.matches(Regex("""说话人\s*\d+""")) }
+                    if (unnamed > 0 && onClaimSpeakers != null) item {
+                        DsCard(Modifier.fillMaxWidth(), onClick = onClaimSpeakers) {
+                            Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("有 $unnamed 个说话人还不知道是谁", style = MaterialTheme.typography.titleSmall)
+                                    Text("认了之后，关于他的判断和承诺才能归到人头上",
+                                         style = MaterialTheme.typography.bodySmall,
+                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Text("认人 ›", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                        Spacer(Modifier.height(DS.Rhythm.tight))
+                    }
                     if (m.speakers.isNotEmpty()) item {
                         Text("在场：" + m.speakers.joinToString("、"),
                              style = MaterialTheme.typography.bodySmall,
                              color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     val quotes = MeetingTabs.quotesOf(m)
-                    if (quotes.isEmpty()) item {
+                    if (m.segments.isNotEmpty()) {
+                        item { SectionHead("逐句 · ${m.segments.size} 句", "从判断的「依据」跳过来的那句会亮着。逐句校对在网页版。") }
+                        itemsIndexed(m.segments, key = { i, _ -> "l$i" }) { i, l ->
+                            val hot = highlight == i
+                            Surface(
+                                color = if (hot) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                shape = DS.Radius.control, modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Column(Modifier.padding(DS.Pad.tight)) {
+                                    Text(listOfNotNull(l.startMs?.let { fmtClock(it) }, l.speaker).joinToString(" · "),
+                                         style = MaterialTheme.typography.labelMedium,
+                                         color = if (hot) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Spacer(Modifier.height(DS.Rhythm.tight))
+                                    Text(l.text, style = MaterialTheme.typography.bodyLarge,
+                                         color = if (hot) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                            Spacer(Modifier.height(DS.Rhythm.tight))
+                        }
+                    } else if (quotes.isEmpty()) item {
                         Empty("这场会还没有被引用的原话", "分析跑完之后，每条判断和承诺依据的那句话会列在这里。")
                     } else {
                         item { SectionHead("被引用的原话 · ${quotes.size} 处", "每条判断和承诺凭的就是这些。逐句转写在网页版。") }
@@ -338,7 +394,7 @@ private fun SectionHead(title: String, hint: String) {
 }
 
 @Composable
-private fun AtomCard(a: MeetingAtom) {
+private fun AtomCard(a: MeetingAtom, onJump: () -> Unit = {}) {
     // 猜想默认折叠——折叠的是原话那一串看起来像证据的上下文。判据见 TodayScreen.foldByDefault。
     var open by remember(a.id) { mutableStateOf(!foldByDefault(a.epistemic)) }
     DsCard(Modifier.fillMaxWidth()) {
@@ -360,6 +416,8 @@ private fun AtomCard(a: MeetingAtom) {
                 Spacer(Modifier.height(DS.Rhythm.tight))
                 Text("「${a.quote}」", style = MaterialTheme.typography.bodyLarge,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // 依据 →：跳到原话那一句。这是证据链在界面上的兑现。
+                TextButton(onClick = onJump, contentPadding = PaddingValues(0.dp)) { Text("回到原话 →") }
             } else if (foldByDefault(a.epistemic)) {
                 Spacer(Modifier.height(DS.Rhythm.tight))
                 Text("没有直接原话支撑。它来自跨录音联想。",
@@ -405,6 +463,9 @@ private fun MeetingCommitmentCard(c: Commitment, onSettle: (String) -> Unit) {
 
 // ── 纯逻辑，JVM 可测 ────────────────────────────────────────────
 
+/** 原话 tab 里逐句列表之前固定有几个 item：标题、tab 行、（在场）、（认人卡）、SectionHead。按最多算，滚过头一格无妨。 */
+private const val HEADER_ITEMS = 5
+
 enum class MeetingTab { JUDGMENTS, COMMITMENTS, QUOTES;
     fun label(t: MeetingTabs) = when (this) {
         JUDGMENTS -> if (t.judgments > 0) "判断 ${t.judgments}" else "判断"
@@ -428,6 +489,21 @@ data class MeetingTabs(val judgments: Int, val commitments: Int, val quotes: Int
          * 猜想常常没有原话，那是它的属性，不该在原话 tab 里占一行空白。
          * 同一句被多条引用只列一次，注明支撑几条。
          */
+        /**
+         * 「依据 →」要跳到哪一句。引用是从原话里抠出来的，可能被 ASR 修饰过、可能跨句，
+         * 所以先找包含整句的，再找包含前 12 个字的；都没有就 null——**不跳到一个错的地方**，
+         * 跳错比不跳更伤信任。
+         */
+        fun lineIndexFor(lines: List<Line>, quote: String): Int? {
+            val q = quote.trim().trim('「', '」', '"', '“', '”')
+            // 两三个字的片段谁都能对上，那是巧合不是证据——不够 6 个字一律不猜
+            if (q.length < 6 || lines.isEmpty()) return null
+            lines.indexOfFirst { it.text.contains(q) }.takeIf { it >= 0 }?.let { return it }
+            val head = q.take(12)
+            if (head.length < 6) return null
+            return lines.indexOfFirst { it.text.contains(head) }.takeIf { it >= 0 }
+        }
+
         fun quotesOf(m: Meeting): List<Quote> {
             val byText = LinkedHashMap<String, Quote>()
             m.commitments.filter { it.quote.isNotBlank() }.forEach { c ->

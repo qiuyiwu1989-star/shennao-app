@@ -100,7 +100,7 @@ class NavTest {
         val roots = listOf(Route.Today, Route.Records, Route.Ask, Route.Me)
         assertEquals("每一栏必须有且只有一个栈底", Tab.entries.size, roots.map { it.tab }.toSet().size)
         roots.forEach { assertFalse("${it} 是栈底，不该是详情", it.isDetail) }
-        listOf(Route.Record, Route.Ble, Route.Meeting("x"), Route.Person("x"), Route.Web("/a", "a"))
+        listOf(Route.Record, Route.Ble, Route.Meeting("x"), Route.Speakers("x"), Route.Person("x"), Route.Web("/a", "a"))
             .forEach { assertTrue("$it 该是详情", it.isDetail) }
     }
 }
@@ -134,7 +134,7 @@ class NavRenderTest {
 
     @Test fun `每个 Route 在渲染里只出现一次`() {
         val block = renderBlock()
-        val names = listOf("Today", "Records", "Ask", "Me", "Record", "Ble", "Meeting", "Person", "Web")
+        val names = listOf("Today", "Records", "Ask", "Me", "Record", "Ble", "Meeting", "Speakers", "Person", "Web")
         val dup = names.filter { n ->
             Regex("""\bis\s+Route\.$n\b|\bRoute\.$n\s*->""").findAll(block).count() != 1
         }
@@ -163,7 +163,7 @@ class NavRenderTest {
         val block = renderBlock()
         val screens = listOf(
             "TodayScreen", "RecordScreen", "BleScreen", "AskScreen", "HistoryScreen",
-            "MeScreen", "MeetingScreen", "PersonScreen", "MeetingWebScreen",
+            "MeScreen", "MeetingScreen", "SpeakerClaimScreen", "PersonScreen", "MeetingWebScreen",
         )
         val bad = screens.mapNotNull { s ->
             val n = Regex("""\b$s\s*\(""").findAll(block).count()

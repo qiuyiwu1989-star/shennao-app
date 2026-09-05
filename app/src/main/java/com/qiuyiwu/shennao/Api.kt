@@ -193,6 +193,8 @@ data class SessionCard(
     /** 卡住的原因。只在 FAILED 时有，且服务端保证是人话 */
     val problem: String?,
     val transcriptId: String?,
+    /** 声音从哪来：web / macos / android / iot / upload。服务端没升级时是 null，界面就不分段 */
+    val captureClient: String? = null,
 )
 
 data class MeetingAtom(
@@ -207,6 +209,9 @@ data class MeetingAnalysis(
     val routingReason: String?,
     val status: String,
 )
+
+/** 逐句原话。服务端没升级时列表为空，「原话」tab 退回只列被引用的片段。 */
+data class Line(val startMs: Long?, val endMs: Long?, val speaker: String?, val text: String)
 
 data class Meeting(
     val transcriptId: String,
@@ -226,6 +231,7 @@ data class Meeting(
      * 不自动分析）只有服务端知道，抄一份到手机上，下次改阈值必然只改一处。
      */
     val analysisAbsentReason: String?,
+    val segments: List<Line> = emptyList(),
 )
 
 object SessionsParser {
@@ -252,6 +258,7 @@ object SessionsParser {
                 stage = stageOf(o.optString("stage")),
                 problem = o.optString("problem").takeIf { it.isNotBlank() && it != "null" },
                 transcriptId = o.optString("transcriptId").takeIf { it.isNotBlank() && it != "null" },
+                captureClient = o.optString("captureClient").takeIf { it.isNotBlank() && it != "null" },
             )
         }
     }.getOrElse { emptyList() }
@@ -262,7 +269,18 @@ object SessionsParser {
         val sp = o.optJSONArray("speakers")
         val at = o.optJSONArray("atoms")
         val cm = o.optJSONArray("commitments")
+        val sg = o.optJSONArray("segments")
         Meeting(
+            segments = (0 until (sg?.length() ?: 0)).mapNotNull { i ->
+                val l = sg!!.optJSONObject(i) ?: return@mapNotNull null
+                val text = l.optString("text"); if (text.isBlank()) return@mapNotNull null
+                Line(
+                    startMs = if (l.isNull("startMs")) null else l.optLong("startMs"),
+                    endMs = if (l.isNull("endMs")) null else l.optLong("endMs"),
+                    speaker = l.optString("speaker").takeIf { it.isNotBlank() && it != "null" },
+                    text = text,
+                )
+            },
             transcriptId = tid,
             title = o.optString("title").ifBlank { "未命名" },
             summary = o.optString("summary").takeIf { it.isNotBlank() && it != "null" },
@@ -393,4 +411,42 @@ object SearchParser {
             )
         }
     }.getOrElse { emptyList() }
+}
+
+/** 认人页：还没认的说话人，各配一句样本；加候选名单。 */
+data class SpeakerRow(
+    val id: String,
+    val label: String,
+    val inferredIdentity: String?,
+    val confirmed: Boolean,
+    val sampleText: String?,
+    val sampleStartMs: Long?,
+)
+data class Candidate(val name: String, val role: String?, val source: String)
+data class SpeakersPage(val speakers: List<SpeakerRow>, val candidates: List<Candidate>)
+
+object SpeakersParser {
+    fun parse(body: String): SpeakersPage = runCatching {
+        val o = JSONObject(body)
+        val sp = o.optJSONArray("speakers"); val cd = o.optJSONArray("candidates")
+        SpeakersPage(
+            speakers = (0 until (sp?.length() ?: 0)).mapNotNull { i ->
+                val r = sp!!.optJSONObject(i) ?: return@mapNotNull null
+                val id = r.optString("id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val sm = r.optJSONObject("sample")
+                SpeakerRow(
+                    id = id, label = r.optString("label"),
+                    inferredIdentity = r.optString("inferredIdentity").takeIf { it.isNotBlank() && it != "null" },
+                    confirmed = r.optBoolean("confirmed", false),
+                    sampleText = sm?.optString("text")?.takeIf { it.isNotBlank() },
+                    sampleStartMs = sm?.let { if (it.isNull("startMs")) null else it.optLong("startMs") },
+                )
+            },
+            candidates = (0 until (cd?.length() ?: 0)).mapNotNull { i ->
+                val c = cd!!.optJSONObject(i) ?: return@mapNotNull null
+                val name = c.optString("name").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                Candidate(name, c.optString("role").takeIf { it.isNotBlank() && it != "null" }, c.optString("source"))
+            },
+        )
+    }.getOrElse { SpeakersPage(emptyList(), emptyList()) }
 }
