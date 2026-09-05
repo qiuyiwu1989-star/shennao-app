@@ -60,6 +60,17 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
      * 之后不管 pending 怎么变，这张快照都留着，直到用户按下一次「开始」。
      */
     var justFinished by remember { mutableStateOf<Pair<String, Long>?>(null) }
+    /*
+     * 字幕默认收起。
+     *
+     * 红线（specs/010，来自《用户价值洞察》缺口 5「在场权」）：**会中不需要看任何屏幕**。
+     * 这一屏的设计目标是让人按下之后把手机扣过去；实时字幕滚在屏上，人就又变回了书记员。
+     * 字幕本身留着——它是 spec 004 建的现场辅助，且明写「不得进入 transcript」——
+     * 只是不再默认给。想看的人点一下，那是他自己的决定。
+     */
+    var showCaptions by remember { mutableStateOf(false) }
+    var noticeIndex by remember { mutableStateOf(0) }
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     var wasRecording by remember { mutableStateOf(RecordingService.recording) }
 
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
@@ -146,7 +157,7 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
                 com.qiuyiwu.shennao.record.RecordState.GAVE_UP ->
                     "麦克风抢不回来，录音已停止。已录到的部分正在推送。"
                 com.qiuyiwu.shennao.record.RecordState.RECORDING ->
-                    "正在录。可以切走做别的，录音不会断。"
+                    "正在录。可以锁屏，也可以切走——通知栏能看到它还在录。"
                 else -> if (pending > 0) "还有 $pending 段在传" else "点一下开始录这场会"
             },
             style = MaterialTheme.typography.bodyMedium,
@@ -196,9 +207,42 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
 
         if (recording) {
             Spacer(Modifier.height(DS.Rhythm.inner))
-            Captions(captions, captionState, sessionId != null)
+            // 字幕收在一个开关后面，默认关。见 showCaptions 的注释。
+            TextButton(onClick = { showCaptions = !showCaptions }) {
+                Text(if (showCaptions) "收起字幕" else "看字幕")
+            }
+            if (showCaptions) {
+                Spacer(Modifier.height(DS.Rhythm.tight))
+                Captions(captions, captionState, sessionId != null)
+            }
             Spacer(Modifier.height(DS.Rhythm.inner))
             HotwordBox(sessionId)
+        }
+
+        /*
+         * 待命时给一句可以念出来的话。
+         *
+         * 上游 A8：「把卡放桌子中间说一句我录个音，既是合规也是专业」。
+         * 这不是合规成本，是显性录音的卖点——念那句话的时机正好是按下之前，
+         * 所以它就放在按钮旁边，而不是藏在设置里。
+         */
+        if (!recording && justFinished == null) {
+            Spacer(Modifier.height(DS.Rhythm.inner))
+            DsCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(DS.Pad.tight)) {
+                    Text("按下之前，念一句", style = MaterialTheme.typography.labelMedium,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(DS.Rhythm.tight))
+                    Text(RecordNotice.lines[noticeIndex], style = MaterialTheme.typography.bodyLarge)
+                    Spacer(Modifier.height(DS.Rhythm.tight))
+                    Row {
+                        TextButton(onClick = {
+                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(RecordNotice.lines[noticeIndex]))
+                        }) { Text("复制") }
+                        TextButton(onClick = { noticeIndex = RecordNotice.next(noticeIndex) }) { Text("换一句") }
+                    }
+                }
+            }
         }
 
         // **刚结束的那一场，一直留在屏幕上直到用户开始下一场。**
@@ -452,4 +496,19 @@ private fun fmt(ms: Long): String {
     val s = ms / 1000
     return if (s < 3600) "%d:%02d".format(s / 60, s % 60)
     else "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60)
+}
+
+/**
+ * 开录前可以念出来的那句话。纯逻辑，JVM 可测。
+ *
+ * 几句都是给**人念**的，不是给人读的——所以是口语，没有「本应用」「正在」这种字。
+ * 顺序按最常用排：会议 → 访谈 → 通话。
+ */
+internal object RecordNotice {
+    val lines = listOf(
+        "我录个音，回头给大家出纪要。",
+        "我录一下，方便之后整理，可以吧？",
+        "这通电话我录音了，回头对细节用。",
+    )
+    fun next(i: Int): Int = (i + 1) % lines.size
 }

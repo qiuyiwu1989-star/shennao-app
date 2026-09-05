@@ -377,4 +377,16 @@ class ScreenTest {
         compose.onNodeWithText("现在还得在网页版认，手机上的认人界面在做了。", substring = true).assertExists()
     }
 
+    // ---- 录音：待命时给一句能念出来的话 ----
+
+    /** 上游 A8：「把卡放桌子中间说一句我录个音，既是合规也是专业」。念的时机就是按下之前。 */
+    @Test fun `待命时按钮旁边有一句可以念出来的话，且能复制`() {
+        compose.setContent { ShennaoTheme { RecordScreen(onBack = {}) } }
+        compose.onNodeWithText("按下之前，念一句").assertExists()
+        compose.onNodeWithText("我录个音，回头给大家出纪要。").assertExists()
+        compose.onNodeWithText("复制").assertExists()
+        compose.onNodeWithText("换一句").performClick()
+        compose.onNodeWithText("我录一下，方便之后整理，可以吧？").assertExists()
+    }
+
 }

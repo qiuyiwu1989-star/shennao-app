@@ -97,3 +97,18 @@ class CardStatusTest {
         assertTrue(c.line.contains("蓝牙没开"))
     }
 }
+
+/** 开录前念的那句话：是口语，不是公告。 */
+class RecordNoticeTest {
+    @Test fun `每一句都是给人念的，不带公告腔`() {
+        RecordNotice.lines.forEach { l ->
+            assertFalse("「$l」像公告不像人话", l.contains("本应用") || l.contains("正在录音") || l.contains("系统"))
+            assertTrue("要以句号或问号收尾，念出来才完整", l.endsWith("。") || l.endsWith("？"))
+        }
+    }
+    @Test fun `换一句会轮回，不会越界`() {
+        var i = 0
+        repeat(RecordNotice.lines.size * 2) { i = RecordNotice.next(i); assertTrue(i in RecordNotice.lines.indices) }
+        assertEquals(0, i)
+    }
+}
