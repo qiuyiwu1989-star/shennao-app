@@ -8,7 +8,7 @@
 `agent/ble-and-mac-client` 领先 main 562 个提交、从未推过远端。整套 `api/mobile/*` 只在这条本地分支上。
 
 ```bash
-cd /Users/qiu/Documents/shennao && git push -u origin agent/ble-and-mac-client
+cd "/Users/qiu/Documents/冷静/lengjing" && git push -u origin agent/ble-and-mac-client
 ```
 
 成了的标志：GitHub 上能看到这条分支。
