@@ -35,6 +35,12 @@ import kotlinx.coroutines.withContext
  */
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        const val EXTRA_OPEN_TRANSCRIPT = "open_transcript"
+        /** 通知点进来要开的那场会。App 起来、拿到登录态之后由 App() 消费一次。 */
+        @Volatile var pendingOpen: String? = null
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // 必须在 super.onCreate 之前调用——这一行本身不「显示」闪屏，
         // 它是把 Activity 主题从 Theme.App.Starting 切回正常主题的开关，
@@ -55,6 +61,12 @@ class MainActivity : ComponentActivity() {
         val client = Session.client(this)
         setContent { ShennaoTheme { App(client) } }
         receiveShare(intent)
+        receiveOpen(intent)
+    }
+
+    /** 通知带来的「打开这场会」。singleTask 下 onNewIntent 也走这里。 */
+    private fun receiveOpen(intent: android.content.Intent?) {
+        intent?.getStringExtra(EXTRA_OPEN_TRANSCRIPT)?.let { pendingOpen = it; intent.removeExtra(EXTRA_OPEN_TRANSCRIPT) }
     }
 
     /** singleTask：App 已经在跑时，分享进来走这里而不是 onCreate。 */
@@ -62,6 +74,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         receiveShare(intent)
+        receiveOpen(intent)
     }
 
     /*
@@ -183,6 +196,16 @@ private fun App(client: DeepBrainClient) {
         // 每天提醒一次。网页做不到这件事——它没法在你不打开它的时候提醒你，
         // 而这一层内容恰恰是有时效的。
         Remind.schedule(ctx)
+        // 有新判断时推一条（只在真有判断时推，且带最狠那一条）
+        NewJudgments.schedule(ctx)
+    }
+
+    // 通知点进来的那场会：登录态就绪后开一次，开完就清掉——转屏不能再开一遍。
+    LaunchedEffect(st) {
+        val open = MainActivity.pendingOpen ?: return@LaunchedEffect
+        val r = st as? AppState.Ready ?: return@LaunchedEffect
+        MainActivity.pendingOpen = null
+        st = AppState.Ready(r.nav.push(Route.Meeting(open)))
     }
 
     /*

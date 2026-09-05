@@ -333,6 +333,18 @@ class BleImportService : Service() {
         syncQueue.removeAt(0)
         if (success) syncDone++
         if (syncQueue.isNotEmpty()) downloadNextInQueue()
+        else if (syncTotal > 0) {
+            // 一批同步完了：进度通知转成结果，别留一条已经没用的进度条。
+            // 用另一个 id，不覆盖前台那条——前台通知归服务生命周期管。
+            runCatching {
+                getSystemService(NotificationManager::class.java).notify(
+                    NOTIF_ID + 1,
+                    notification("$syncDone 段已从灵魂卡导入", "正在推送到深脑。到「记录」看每一段走到哪一站。"),
+                )
+            }
+            // 上传完了分析就会跟上，两分钟后去看一眼有没有新判断
+            com.qiuyiwu.shennao.NewJudgments.checkSoon(this)
+        }
     }
 
     private fun refresh() {
