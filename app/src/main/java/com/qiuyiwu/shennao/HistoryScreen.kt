@@ -59,6 +59,8 @@ fun HistoryScreen(
     // 灵魂卡那一头的状态。它是 Service 上的 @Volatile 字段，和本地/服务端两份一起轮询：
     // 三份合起来才是完整的一条链——卡里还没导出来的、手机上还没传出去的、服务端后几站。
     var card by remember { mutableStateOf(CardStatus.read()) }
+    /** 来源分段。null = 全部。服务端没给 source 时分段行不显示，列表照常。 */
+    var sourceFilter by remember { mutableStateOf<String?>(null) }
 
     val onDelete: (String) -> Unit = { id ->
         scope.launch {
@@ -138,7 +140,23 @@ fun HistoryScreen(
 
         if (served.isNotEmpty()) {
             item { MiniHead("已经送到深脑") }
-            items(served, key = { "s" + it.sessionId }) { s -> ServedRow(s, onOpen, onDelete) }
+            // 按来源分段：灵魂卡 / 手机 / 分享来的。每个入口各占一格，不做主次视觉差——
+            // 一个只用手机的人，界面上不该处处看见「你还没有灵魂卡」。
+            if (SourceFilter.available(served)) item {
+                Row(Modifier.fillMaxWidth().padding(bottom = DS.Rhythm.tight),
+                    horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.tight)) {
+                    SourceFilter.options.forEach { (key, label) ->
+                        FilterChip(selected = sourceFilter == key, onClick = { sourceFilter = key },
+                                   label = { Text(label) })
+                    }
+                }
+            }
+            val shown = SourceFilter.apply(served, sourceFilter)
+            if (shown.isEmpty()) item {
+                Text("这个来源还没有送到深脑的。", style = MaterialTheme.typography.bodyMedium,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            items(shown, key = { "s" + it.sessionId }) { s -> ServedRow(s, onOpen, onDelete) }
         }
 
         if (!loaded) item { SkeletonList(3) }
@@ -406,4 +424,16 @@ private fun CardBar(c: CardStatus, onOpen: () -> Unit) {
         }
     }
     Spacer(Modifier.height(DS.Rhythm.element))
+}
+
+/** 记录页的来源分段。纯逻辑，JVM 可测。 */
+internal object SourceFilter {
+    /** 键 → 标签。null 键 = 全部。 */
+    val options: List<Pair<String?, String>> = listOf(null to "全部", "card" to "灵魂卡", "phone" to "手机", "share" to "分享来的")
+
+    /** 服务端没派生 source（还没部署）就不显示分段行——不画点了没反应的东西。 */
+    fun available(rows: List<SessionCard>): Boolean = rows.any { it.source != null }
+
+    fun apply(rows: List<SessionCard>, filter: String?): List<SessionCard> =
+        if (filter == null) rows else rows.filter { it.source == filter }
 }

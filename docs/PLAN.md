@@ -76,7 +76,7 @@
 
 | 项 | 状态 |
 | --- | --- |
-| `sessions` 返回 `captureClient` | ✅ 09-05 —— **但它分不出灵魂卡 / 手机 / 分享**：三者都走 Uploader，capture_client 全是 android。真正的来源在 client_request_id 的前缀（ble- / share- / 其它）。要再加一个派生字段 `source`，客户端才能分段 |
+| `sessions` 返回 `captureClient` + 派生 `source`（card / share / phone，从幂等键前缀来） | ✅ 09-05 —— 客户端「记录」页按 source 分段，没有 source 时分段行不显示 |
 | `transcript/[id]` 返回 `segments`（毫秒统一，封顶 2000） | ✅ 09-05 |
 | `GET mobile/credits` | ✅ 09-05 |
 | `POST mobile/predictions/[id]`（裁定逻辑抽成 `lib/predictions/settle.ts`，web 路由共用） | ✅ 09-05 |

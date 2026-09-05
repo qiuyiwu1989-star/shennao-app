@@ -195,6 +195,8 @@ data class SessionCard(
     val transcriptId: String?,
     /** 声音从哪来：web / macos / android / iot / upload。服务端没升级时是 null，界面就不分段 */
     val captureClient: String? = null,
+    /** 入口：card / share / phone / other。由服务端从幂等键前缀派生；没有就 null，界面不分段 */
+    val source: String? = null,
 )
 
 data class MeetingAtom(
@@ -259,6 +261,7 @@ object SessionsParser {
                 problem = o.optString("problem").takeIf { it.isNotBlank() && it != "null" },
                 transcriptId = o.optString("transcriptId").takeIf { it.isNotBlank() && it != "null" },
                 captureClient = o.optString("captureClient").takeIf { it.isNotBlank() && it != "null" },
+                source = o.optString("source").takeIf { it.isNotBlank() && it != "null" },
             )
         }
     }.getOrElse { emptyList() }

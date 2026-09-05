@@ -112,3 +112,24 @@ class RecordNoticeTest {
         assertEquals(0, i)
     }
 }
+
+/** 记录页来源分段：服务端没给 source 就不显示，给了就按入口筛。 */
+class SourceFilterTest {
+    private fun card(id: String, source: String?) = SessionCard(id, "会$id", null, null, Stage.ANALYZED, null, "t$id", "android", source)
+
+    @Test fun `服务端没派生 source 时不显示分段`() {
+        assertFalse(SourceFilter.available(listOf(card("a", null), card("b", null))))
+        assertTrue(SourceFilter.available(listOf(card("a", null), card("b", "card"))))
+    }
+
+    @Test fun `全部不筛，其余按入口筛`() {
+        val rows = listOf(card("a", "card"), card("b", "phone"), card("c", "share"), card("d", null))
+        assertEquals(4, SourceFilter.apply(rows, null).size)
+        assertEquals(listOf("a"), SourceFilter.apply(rows, "card").map { it.sessionId })
+        assertEquals(listOf("c"), SourceFilter.apply(rows, "share").map { it.sessionId })
+    }
+
+    @Test fun `三个入口各占一格，和全部并列，没有主次`() {
+        assertEquals(listOf("全部", "灵魂卡", "手机", "分享来的"), SourceFilter.options.map { it.second })
+    }
+}

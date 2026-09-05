@@ -15,6 +15,9 @@ class NewEndpointsParseTest {
           {"sessionId":"b","title":"y","stage":"recorded"}]}"""
         val rows = SessionsParser.parse(body)
         assertEquals(listOf("android", null), rows.map { it.captureClient })
+        val withSource = SessionsParser.parse("""{"sessions":[{"sessionId":"a","title":"x","stage":"analyzed","source":"card"}]}""")
+        assertEquals("card", withSource[0].source)
+        assertNull("老服务端没有 source", rows[0].source)
     }
 
     @Test fun `meeting 的 segments 逐句解析，空文本丢掉，没有字段就是空列表`() {
