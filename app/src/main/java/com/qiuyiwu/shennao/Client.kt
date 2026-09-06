@@ -346,6 +346,24 @@ class DeepBrainClient(
         return if (r is ApiResult.Ok) ApiResult.Ok(Unit) else r as ApiResult<Unit>
     }
 
+    /** 改一场录音的标题（PATCH /api/recordings/:id）。老服务端没有这条 → Failed，界面说「改名要等服务端更新」。 */
+    fun renameRecording(sessionId: String, title: String): ApiResult<Unit> {
+        val c = store.load() ?: return ApiResult.Unauthorized
+        if (accessToken == null && !refresh()) return ApiResult.Unauthorized
+        fun once() = http.request(
+            "PATCH", "$apiBase/api/recordings/$sessionId",
+            mapOf("Authorization" to "Bearer ${accessToken ?: ""}", "x-deepbrain-org-id" to c.orgId,
+                  "Content-Type" to "application/json"),
+            JSONObject().put("title", title).toString(),
+        )
+        var r = once()
+        if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
+        if (r.status == 0) return ApiResult.Failed("网络不通")
+        if (r.status == 404 || r.status == 405) return ApiResult.Failed("改名要等服务端更新")
+        if (r.status >= 400) return ApiResult.Failed("没改上（${r.status}）")
+        return ApiResult.Ok(Unit)
+    }
+
     /** 我名下的灵魂卡。老服务端 404 → Failed，界面按「没这功能」处理。 */
     fun myCards(): ApiResult<CardsPage> = get("/api/mobile/card") { CardsParser.parse(it) }
 
