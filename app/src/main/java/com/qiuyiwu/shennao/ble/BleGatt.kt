@@ -211,8 +211,19 @@ class BleGatt(private val ctx: Context) : BleTransport {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 attempt = 0
                 lastError = null
+                /*
+                 * 传输实验的三个旋钮（LinkTuning）。默认全关，真机上逐项试。
+                 * 优先级和 PHY 都是「请求」——固件不接受就当没说过，不会失败，所以不进队列。
+                 */
+                val knobs = LinkTuning.load(ctx)
+                if (knobs.fastInterval) runCatching {
+                    g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                }
+                if (knobs.phy2m) runCatching {
+                    g.setPreferredPhy(BluetoothDevice.PHY_LE_2M_MASK, BluetoothDevice.PHY_LE_2M_MASK, BluetoothDevice.PHY_OPTION_NO_PREFERRED)
+                }
                 // MTU 先协商：默认 23 减 3 只剩 20，而下载请求 36 字节必须一次写完
-                queue.enqueue("协商MTU", awaitsCallback = true) { g.requestMtu(185) }
+                queue.enqueue("协商MTU", awaitsCallback = true) { g.requestMtu(knobs.mtu) }
             } else {
                 // **断开就要如实说**。留在 READY 上的话，上层会一直往一个死连接里写，
                 // 而每一次写都「成功」返回，什么都不会发生。

@@ -68,6 +68,8 @@ class BleImportService : Service() {
         @Volatile var lastError: String? = null; private set
         /** 已经收到多少字节。断线续传的按钮上要写明——27 KB/s 的链路上这是最要紧的一句。 */
         @Volatile var received: Long = 0L; private set
+        /** 上一次传完的实测速度（KB/s）。传输实验要拿它比三个旋钮的效果。 */
+        @Volatile var lastKbps: Double? = null; private set
         /**
          * 自动同步的整体进度。**只在真的有一批文件排着队的时候才非零**——
          * 手动点单个文件下载时不动它，界面据此分辨「我在自动同步」还是
@@ -269,6 +271,7 @@ class BleImportService : Service() {
         val was = state
         state = s
         received = imp.received
+        imp.lastKbps?.let { lastKbps = it }
         lastError = gatt.lastError
         refresh()
         if (s is ImportState.Listed && autoSyncOnListed) {

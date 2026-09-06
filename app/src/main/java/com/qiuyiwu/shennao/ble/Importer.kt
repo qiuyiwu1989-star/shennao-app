@@ -48,6 +48,16 @@ class Importer(
         private set
 
     private val listBuf = mutableListOf<FileEntry>()
+
+    /*
+     * 实测速度。从**第一包数据**到传完，只算数据本身——把请求往返、设备找文件的时间
+     * 算进去会让数字偏低，而我们要拿它去比较三个旋钮的效果，得可比。
+     */
+    private var dataStartedAt = 0L
+    private var dataBytes = 0L
+    /** 上一次传完的实测速度（KB/s）。没传完过就是 null。 */
+    var lastKbps: Double? = null
+        private set
     private val data = java.io.ByteArrayOutputStream()
 
     /** 当前下载的候选名队列。第一个失败就试下一个。 */
@@ -126,6 +136,8 @@ class Importer(
                 }
             }
             Proto.FileCmd.IMPORT_DATA -> {
+                if (dataStartedAt == 0L) { dataStartedAt = now(); dataBytes = 0 }
+                dataBytes += f.body.size
                 data.write(f.body)
                 (state as? ImportState.Downloading)?.let {
                     state = it.copy(got = data.size().toLong(), total = total)
@@ -135,12 +147,14 @@ class Importer(
                 val code = f.body.firstOrNull()?.toInt()?.and(0xFF) ?: 3
                 if (code == 0) {
                     val name = candidates.getOrNull(candidateIdx) ?: "unknown"
+                    LinkTuning.kbps(dataBytes, now() - dataStartedAt)?.let { lastKbps = it }
+                    dataStartedAt = 0
                     state = ImportState.Done(name, data.toByteArray())
                 } else if (code == 1 && candidateIdx + 1 < candidates.size) {
                     // 「文件不存在」= 这个候选名不对（列表里的名字是 20B 截断的）。
                     // 换下一个候选**从头开始**：换了文件，之前收的字节就不是它的。
                     candidateIdx++
-                    data.reset(); total = 0
+                    data.reset(); total = 0; dataStartedAt = 0
                     requestCurrentCandidate(0)
                 } else {
                     state = ImportState.Failed(

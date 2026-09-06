@@ -36,6 +36,7 @@ object Diagnostics {
         val keepAliveExempt: Boolean,
         val romHint: String?,
         val ble: String,
+        val knobs: String,
         val pendingSegments: Int,
         val recordingSegments: Int,
         val sessions: Int,
@@ -62,7 +63,9 @@ object Diagnostics {
             device = "${Build.MANUFACTURER} ${Build.MODEL}", android = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
             emailMasked = creds?.email?.let(::mask), orgId = creds?.orgId,
             keepAliveExempt = KeepAlive.isExempt(ctx), romHint = KeepAlive.romHint(),
-            ble = bleLine(), pendingSegments = pending, recordingSegments = recording, sessions = sessions,
+            ble = bleLine(), knobs = com.qiuyiwu.shennao.ble.LinkTuning.load(ctx).let {
+                "fastInterval=${it.fastInterval} mtu=${it.mtu} phy2m=${it.phy2m}"
+            }, pendingSegments = pending, recordingSegments = recording, sessions = sessions,
             lastCrash = crash, logcat = ownLogcat(),
         )
     }
@@ -76,7 +79,8 @@ object Diagnostics {
     private fun bleLine(): String = with(BleImportService) {
         "conn=$conn state=${state::class.simpleName} addr=${connectedAddress ?: "-"} " +
             "sync=$syncDone/$syncTotal received=$received err=${lastError ?: "-"} " +
-            "battery=${info.batteryLabel ?: "-"} storage=${info.storageLabel ?: "-"} fw=${info.firmware ?: "-"}"
+            "battery=${info.batteryLabel ?: "-"} storage=${info.storageLabel ?: "-"} fw=${info.firmware ?: "-"} " +
+            "speed=${lastKbps?.let { "%.1fKB/s".format(it) } ?: "-"}"
     }
 
     private fun ownLogcat(): String = runCatching {
@@ -95,6 +99,7 @@ object Diagnostics {
         appendLine("账号 ${s.emailMasked ?: "未登录"} · org ${s.orgId ?: "-"}")
         appendLine("后台存活 系统豁免=${if (s.keepAliveExempt) "是" else "否"}${s.romHint?.let { " · 厂商开关：$it" } ?: ""}")
         appendLine("灵魂卡 ${s.ble}")
+        appendLine("传输实验 ${s.knobs}")
         appendLine("本地录音 会话 ${s.sessions} · 待传段 ${s.pendingSegments} · 录音中段 ${s.recordingSegments}")
         s.lastCrash?.let { appendLine(); appendLine("最近一次崩溃："); appendLine(it) }
         appendLine(); appendLine("── 本进程日志（最近 400 行）──"); append(s.logcat)

@@ -259,6 +259,30 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
                 }
             }
         }
+        /*
+         * 传输实验。摆在连上之后才出现——三个旋钮只在连接建立那一刻生效，
+         * 改完要断开重连才算数，这句必须写在界面上，否则人会以为拨一下就变快了。
+         */
+        if (conn == BleState.READY) item {
+            var knobs by remember { mutableStateOf(LinkTuning.load(ctx)) }
+            fun set(k: LinkTuning.Knobs) { knobs = k; LinkTuning.save(ctx, k) }
+            DsCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(DS.Pad.default)) {
+                    Text("传输实验", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(DS.Rhythm.tight))
+                    Text(LinkTuning.speedLine(BleImportService.lastKbps),
+                         style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(DS.Rhythm.element))
+                    KnobRow("更快的连接间隔", "最能提速，也最容易掉线", knobs.fastInterval) { set(knobs.copy(fastInterval = it)) }
+                    KnobRow("更大的一包（MTU 517）", "每包多带 330 字节", knobs.bigMtu) { set(knobs.copy(bigMtu = it)) }
+                    KnobRow("2M 物理层", "速率翻倍，要固件支持", knobs.phy2m) { set(knobs.copy(phy2m = it)) }
+                    Spacer(Modifier.height(DS.Rhythm.tight))
+                    Text(LinkTuning.hint(knobs) + " 改完要断开重连才生效。",
+                         style = MaterialTheme.typography.bodySmall,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
         if (conn != BleState.READY && known.isNotEmpty()) {
             item {
                 Text("我的卡", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -499,5 +523,18 @@ internal object CardEntitlement {
         bound == null || bound.monthly <= 0 -> FIXED
         bound.granted > 0 -> "随卡权益：这个月的 ${bound.monthly} 积分刚到账（约 10 次深判断）。每月都有、永久、随卡不随人；转写不限。"
         else -> "随卡权益：每月 ${bound.monthly} 积分（约 10 次深判断），永久、随卡不随人；转写不限。这个月的已经到账。"
+    }
+}
+
+/** 传输实验的一行开关。 */
+@Composable
+private fun KnobRow(title: String, why: String, on: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium)
+            Text(why, style = MaterialTheme.typography.bodySmall,
+                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked = on, onCheckedChange = onChange)
     }
 }

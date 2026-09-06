@@ -8,7 +8,7 @@ class DiagnosticsTest {
     private fun snap(logcat: String = "") = Diagnostics.Snapshot(
         versionName = "3.6.0", versionCode = 41, device = "Xiaomi 14", android = "Android 14 (API 34)",
         emailMasked = Diagnostics.mask("qiuyiwu1989@gmail.com"), orgId = "org-1",
-        keepAliveExempt = false, romHint = "小米：自启动", ble = "conn=IDLE", pendingSegments = 3, recordingSegments = 0,
+        keepAliveExempt = false, romHint = "小米：自启动", ble = "conn=IDLE", knobs = "fastInterval=false mtu=185 phy2m=false", pendingSegments = 3, recordingSegments = 0,
         sessions = 2, lastCrash = null, logcat = logcat, at = "2026-09-06 10:00:00",
     )
 
@@ -25,7 +25,8 @@ class DiagnosticsTest {
 
     @Test fun `渲染出来的东西能定位问题：版本、机型、豁免、待传段都在`() {
         val r = Diagnostics.render(snap("D/Ble: connected"))
-        listOf("3.6.0 (41)", "Xiaomi 14", "豁免=否", "小米：自启动", "待传段 3", "q***@gmail.com", "D/Ble: connected").forEach {
+        listOf("3.6.0 (41)", "Xiaomi 14", "豁免=否", "小米：自启动", "待传段 3", "q***@gmail.com", "D/Ble: connected",
+               "mtu=185").forEach {
             assertTrue("缺 $it", r.contains(it))
         }
         assertFalse("完整邮箱不能出现", r.contains("qiuyiwu1989"))
