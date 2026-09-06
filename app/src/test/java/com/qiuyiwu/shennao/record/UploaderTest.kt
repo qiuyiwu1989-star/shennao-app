@@ -731,3 +731,33 @@ class TimelineContiguityTest {
         assertTrue(f938 < 60000L || f939 > 60000L)
     }
 }
+
+/** 012 P3-3：单段导入撞上服务端已收尾的同一个键 = 重复导入，删本地，不留永久失败行。 */
+class DuplicateImportTest {
+    @org.junit.Test fun `重复的灵魂卡导入：删本地当作完成`() {
+        val v = MemVault().apply {
+            metas["s"] = SessionMeta("ble-note20260905-140000", "灵魂卡 · 9月5日", 1_700_000_000_000, true, null)
+            put("s", seg(0, Segment.State.SEALED))
+        }
+        val h = ScriptHttp { _, url, _ ->
+            if (url.endsWith("/api/recordings")) HttpResponse(200, """{"session":{"id":"sess-1","status":"ready"}}""")
+            else HttpResponse(404, "")
+        }
+        val r = uploader(v, h).drain("s")
+        org.junit.Assert.assertTrue("$r", r is DrainResult.Done)
+        org.junit.Assert.assertEquals(listOf("s"), v.deleted)
+    }
+    @org.junit.Test fun `手机录的多段撞上已收尾：仍然报出来，不删`() {
+        val v = MemVault().apply {
+            metas["s"] = meta(finished = true)
+            put("s", seg(0, Segment.State.UPLOADED)); put("s", seg(1, Segment.State.SEALED))
+        }
+        val h = ScriptHttp { _, url, _ ->
+            if (url.endsWith("/api/recordings")) HttpResponse(200, """{"session":{"id":"sess-1","status":"ready"}}""")
+            else HttpResponse(404, "")
+        }
+        val r = uploader(v, h).drain("s")
+        org.junit.Assert.assertTrue("$r", r is DrainResult.Failed)
+        org.junit.Assert.assertTrue(v.deleted.isEmpty())
+    }
+}

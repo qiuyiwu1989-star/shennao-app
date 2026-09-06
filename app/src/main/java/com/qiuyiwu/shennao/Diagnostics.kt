@@ -46,7 +46,7 @@ object Diagnostics {
     )
 
     fun collect(ctx: Context): Snapshot {
-        val creds = runCatching { PrefsStore(ctx).load() }.getOrNull()
+        val creds = runCatching { Session.client(ctx).credentials() }.getOrNull()
         val vault = FileVault(File(ctx.filesDir, "recordings"))
         var pending = 0; var recording = 0; var sessions = 0
         runCatching {

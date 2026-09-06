@@ -29,10 +29,16 @@ class Realtime(
     private val onSegment: (String, Boolean) -> Unit,
     private val onState: (String) -> Unit,
 ) {
-    private val client = OkHttpClient.Builder()
-        .pingInterval(20, TimeUnit.SECONDS)      // 会议室的 NAT 常在 60 秒后掐掉空闲连接
-        .readTimeout(0, TimeUnit.MILLISECONDS)   // WS 是长连接，读超时必须关掉
-        .build()
+    private val client get() = shared
+    private companion object {
+        /** 进程内共享。每场录音 new 一个 OkHttpClient，它的线程池会挂 60 秒才收（012 P2-4）。 */
+        val shared: OkHttpClient by lazy {
+            OkHttpClient.Builder()
+                .pingInterval(20, TimeUnit.SECONDS)      // 会议室的 NAT 常在 60 秒后掐掉空闲连接
+                .readTimeout(0, TimeUnit.MILLISECONDS)   // WS 是长连接，读超时必须关掉
+                .build()
+        }
+    }
 
     private var ws: WebSocket? = null
     private val running = AtomicBoolean(false)

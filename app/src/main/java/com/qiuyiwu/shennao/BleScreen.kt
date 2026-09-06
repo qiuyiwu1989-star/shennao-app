@@ -55,7 +55,7 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
     var bound by remember { mutableStateOf<BoundCard?>(null) }
     /** 账号不匹配（spec 019）：上次这张卡同步进的账号邮箱。非 null 就弹那句重话。 */
     var decision by remember { mutableStateOf<String?>(null) }
-    val currentEmail = remember { com.qiuyiwu.shennao.PrefsStore(ctx).load()?.email ?: "当前账号" }
+    val currentEmail = remember { Session.client(ctx).signedInEmail() ?: "当前账号" }
     decision?.let { previous ->
         ConfirmDialog(
             title = "这张卡上次同步到的是另一个账号",
@@ -95,7 +95,7 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
     // 手动兜底列表要说清楚"这份是不是已经同步过了"——不然全部已同步之后
     // 回来看这一屏，会让人怀疑"是不是没传"。
     val registry = remember { com.qiuyiwu.shennao.ble.ImportedRegistry(ctx) }
-    val currentOrgId = remember { com.qiuyiwu.shennao.PrefsStore(ctx).load()?.orgId ?: "" }
+    val currentOrgId = remember { Session.client(ctx).orgId() ?: "" }
 
     // 轮询服务的状态。服务活着时它是真相，服务没起来时是默认值。
     // 200 毫秒足够跟上进度条，又不会为了一个 27 KB/s 的传输去空转 CPU。

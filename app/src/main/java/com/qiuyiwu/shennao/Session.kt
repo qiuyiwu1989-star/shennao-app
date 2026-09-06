@@ -28,13 +28,19 @@ import android.content.Context
 class PrefsStore(ctx: Context) : CredentialStore {
     private val app = ctx.applicationContext
     private var encrypted = true
-    private val p = openEncrypted() ?: run {
-        encrypted = false
-        android.util.Log.w("shennao", "加密存储起不来，凭证退回明文")
-        app.getSharedPreferences(PLAIN, Context.MODE_PRIVATE)
+    /*
+     * 懒开：EncryptedSharedPreferences 要碰系统 keystore，冷启动主线程开它要 100–300 ms（012 P2-2）。
+     * 第一次 load() 才开，而第一次 load() 在 IO 上（MainActivity.load）。
+     */
+    private val p: android.content.SharedPreferences by lazy {
+        val e = openEncrypted()
+        if (e != null) { migrateFromPlain(e); e }
+        else {
+            encrypted = false
+            android.util.Log.w("shennao", "加密存储起不来，凭证退回明文")
+            app.getSharedPreferences(PLAIN, Context.MODE_PRIVATE)
+        }
     }
-
-    init { if (encrypted) migrateFromPlain() }
 
     private fun openEncrypted(): android.content.SharedPreferences? = runCatching {
         val key = androidx.security.crypto.MasterKey.Builder(app)
@@ -48,7 +54,7 @@ class PrefsStore(ctx: Context) : CredentialStore {
     }.getOrNull()
 
     /** 把旧的明文凭证搬进来再删掉。留着旧文件 = 加密了个寂寞。 */
-    private fun migrateFromPlain() {
+    private fun migrateFromPlain(p: android.content.SharedPreferences) {
         val old = app.getSharedPreferences(PLAIN, Context.MODE_PRIVATE)
         val rt = old.getString("refresh", null) ?: run { old.edit().clear().apply(); return }
         val org = old.getString("org", null)

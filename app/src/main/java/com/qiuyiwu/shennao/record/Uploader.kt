@@ -103,6 +103,12 @@ class Uploader(
                     vault.deleteSession(session)
                     return DrainResult.Done(ref.id, segs.size)
                 }
+                // 单段的导入（灵魂卡 / 分享）撞上服务端已经收尾的同一个幂等键：这是重复导入
+                // （重装后再导、账本清过），不是丢音频——服务端那份就是这份。删本地，别留永久失败行（012 P3-3）。
+                if (segs.size == 1 && (meta.clientRequestId.startsWith("ble-") || meta.clientRequestId.startsWith("share-"))) {
+                    vault.deleteSession(session)
+                    return DrainResult.Done(ref.id, 0)
+                }
                 // 不正常：清单冻结了，手上还有没进去的音频。删掉就是把录音扔了，
                 // 留着每轮都会失败。报出来让人看见，本地文件原样保留。
                 return DrainResult.Failed(

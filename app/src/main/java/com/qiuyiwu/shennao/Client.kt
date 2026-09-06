@@ -223,7 +223,8 @@ class DeepBrainClient(
      *
      * onEvent 在 IO 线程上被调用，调用方负责切回主线程。
      */
-    fun ask(question: String, onEvent: (Ask.Event) -> Unit) {
+    /** onCancel 收到一个「掐断连接」的函数：界面销毁时调它，阻塞的 readLine 才会退出（012 P2-5）。 */
+    fun ask(question: String, onCancel: ((() -> Unit)) -> Unit = {}, onEvent: (Ask.Event) -> Unit) {
         val c = store.load() ?: return onEvent(Ask.Event.Failed("请先登录"))
         if (accessToken == null && !refresh()) return onEvent(Ask.Event.Failed("登录失效了"))
         var conn: java.net.HttpURLConnection? = null
@@ -242,6 +243,7 @@ class DeepBrainClient(
                 setRequestProperty("Accept", "text/event-stream")
                 doOutput = true
             }
+            onCancel { runCatching { conn.disconnect() } }
             conn.outputStream.use {
                 it.write(JSONObject(mapOf("question" to question)).toString().toByteArray())
             }
@@ -530,6 +532,8 @@ class DeepBrainClient(
     }
 
     fun orgId(): String? = store.load()?.orgId
+    /** 整份凭证（给服务、诊断用）。进程内只有这一个 store，别再自己 new PrefsStore（012 P2-2）。 */
+    fun credentials(): Credentials? = store.load()
 
     fun signedInEmail(): String? = store.load()?.email
     fun signOut() { accessToken = null; store.clear() }

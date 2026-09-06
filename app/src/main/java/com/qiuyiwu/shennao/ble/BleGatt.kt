@@ -235,6 +235,11 @@ class BleGatt(private val ctx: Context) : BleTransport {
         @SuppressLint("MissingPermission")
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
             queue.onComplete()
+            // 下载请求 36 字节必须一次写完，MTU 至少 39。协商失败以前没人管，后面是静默写不出去（012 P2-6）。
+            if (status != BluetoothGatt.GATT_SUCCESS || mtu < 39) {
+                lastError = "这台手机的蓝牙协商不到足够的包长（MTU $mtu），没法从灵魂卡下载"
+                move(BleState.FAILED); return
+            }
             queue.enqueue("发现服务", awaitsCallback = true) { g.discoverServices() }
         }
 

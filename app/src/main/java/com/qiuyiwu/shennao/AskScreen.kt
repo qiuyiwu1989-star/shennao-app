@@ -41,6 +41,9 @@ fun AskScreen(client: DeepBrainClient, onOpen: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     // 搜索页以前没有入口（012 P1-1 的一半）；问不出来的时候换关键词搜
     var searchMode by remember { mutableStateOf(false) }
+    // 切走就掐断流式连接，否则阻塞读要挂到 180 秒（012 P2-5）
+    val cancelAsk = remember { arrayOfNulls<() -> Unit>(1) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { cancelAsk[0]?.invoke() } }
     if (searchMode) {
         Column(Modifier.fillMaxSize()) {
             TextButton(onClick = { searchMode = false }) { Text("← 回到问") }
@@ -57,7 +60,7 @@ fun AskScreen(client: DeepBrainClient, onOpen: (String) -> Unit) {
         busy = true
         scope.launch {
             withContext(Dispatchers.IO) {
-                client.ask(question) { e ->
+                client.ask(question, onCancel = { c -> cancelAsk[0] = c }) { e ->
                     when (e) {
                         is Ask.Event.Mode -> mode = e.mode
                         is Ask.Event.Step -> step = e.what

@@ -239,7 +239,7 @@ class BleImportService : Service() {
      */
     private fun bindThenSync(imp: Importer, takeover: Boolean) {
         val addr = connectedAddress ?: return
-        val creds = com.qiuyiwu.shennao.PrefsStore(this).load()
+        val creds = com.qiuyiwu.shennao.Session.client(this).credentials()
         val binding = CardBinding(this)
         if (!takeover && CardBinding.mismatch(binding.boundOrgId(addr), creds?.orgId)) {
             needsDecision = binding.lastEmail(addr) ?: "另一个账号"; refresh(); return
@@ -300,7 +300,7 @@ class BleImportService : Service() {
      */
     private fun beginSync(files: List<FileEntry>) {
         val addr = connectedAddress ?: ""
-        syncOrgId = com.qiuyiwu.shennao.PrefsStore(this).load()?.orgId ?: ""
+        syncOrgId = com.qiuyiwu.shennao.Session.client(this).credentials()?.orgId ?: ""
         syncQueue = files.filterNot { registry.isImported(addr, it.base, syncOrgId) }.toMutableList()
         syncTotal = syncQueue.size
         syncDone = 0
@@ -368,7 +368,7 @@ class BleImportService : Service() {
                 // 现读一次。单个文件的这次读盘代价可以忽略，跟批量同步时
                 // 「每份文件都读一遍」是完全不同的量级。
                 connectedAddress?.let { addr ->
-                    val org = syncOrgId.ifEmpty { com.qiuyiwu.shennao.PrefsStore(this).load()?.orgId ?: "" }
+                    val org = syncOrgId.ifEmpty { com.qiuyiwu.shennao.Session.client(this).credentials()?.orgId ?: "" }
                     if (org.isNotEmpty()) registry.markImported(addr, entry.base, org)
                 }
                 advanceQueuePast(entry, success = true)

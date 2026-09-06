@@ -74,9 +74,19 @@ fun HistoryScreen(
     }
 
     LaunchedEffect(Unit) {
+        // 本地状态 5 秒扫一次（便宜）；服务端 30 秒问一次，或者本地刚有段送达时立刻问。
+        // 以前每 5 秒打一次网络，这一页开着就是每分钟 12 次（012 P2-1）。
+        var tick = 0
+        var lastPendingLocal = -1
         while (true) {
             rows = withContext(Dispatchers.IO) { scan(File(ctx.filesDir, "recordings")) }
             card = CardStatus.read()
+            val pendingLocal = rows.sumOf { it.total - it.done }
+            val justDelivered = lastPendingLocal >= 0 && pendingLocal < lastPendingLocal
+            lastPendingLocal = pendingLocal
+            val askServer = tick == 0 || tick % 6 == 0 || justDelivered
+            tick++
+            if (!askServer) { delay(5000); continue }
             // 服务端那份查得慢一些，但它才知道转写和分析走到哪了。
             // 两份合起来才是完整的一条链：本地管「传没传出去」，服务端管「后面几站」。
             val r = withContext(Dispatchers.IO) { client.sessionsWithRaw() }

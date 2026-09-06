@@ -42,7 +42,8 @@ object Resume {
     fun pending(ctx: Context): Int {
         val vault = FileVault(File(ctx.filesDir, "recordings"))
         return vault.sessions().sumOf { s ->
-            vault.segments(s).count { it.state != Segment.State.UPLOADED }
+            // 只算已封段：正在录的 pcm 不是「待传」，算进去会让 UploadWorker 在整场录音期间一直 retry/退避（012 P2-3）
+            vault.segments(s).count { it.state == Segment.State.SEALED }
         }
     }
 }
