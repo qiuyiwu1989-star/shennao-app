@@ -45,7 +45,7 @@ class RecordConfirmTest {
         compose.setContent {
             ShennaoTheme { JustFinishedCard(minutes = 1, pending = 0, onOpen = { opened = true }) }
         }
-        compose.onNodeWithText("去「会议」看").assertIsDisplayed().performClick()
+        compose.onNodeWithText("去「记录」看").assertIsDisplayed().performClick()
         assertTrue(opened)
     }
 

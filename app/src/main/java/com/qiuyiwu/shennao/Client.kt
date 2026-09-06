@@ -375,6 +375,7 @@ class DeepBrainClient(
         )
         var r = once()
         if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
+        if (r.status == 0) return ApiResult.Failed("网络不通")
         if (r.status >= 400) {
             val why = runCatching {
                 val e = JSONObject(r.body).opt("error")
@@ -488,6 +489,7 @@ class DeepBrainClient(
         }
         return when {
             r.status == 401 -> ApiResult.Unauthorized
+            r.status == 0 -> ApiResult.Failed("网络不通")
             r.status >= 400 -> ApiResult.Failed("取数失败（${r.status}）")
             else -> runCatching { ApiResult.Ok(parse(r.body)) }
                 .getOrElse { ApiResult.Failed("应答看不懂") }

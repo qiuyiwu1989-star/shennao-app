@@ -185,7 +185,7 @@ class BleGatt(private val ctx: Context) : BleTransport {
     /** 把 GATT 的状态码翻成能指导下一步的人话。 */
     private fun gattStatusHint(status: Int): String = when (status) {
         133 -> "连不上（133）。这是安卓上最常见的蓝牙失败码，按可能性排：\n" +
-               "1. 录音笔已经被别的设备连着（电脑、另一台手机）——BLE 一次只能连一个\n" +
+               "1. 灵魂卡已经被别的设备连着（电脑、另一台手机）——BLE 一次只能连一个\n" +
                "2. 它进入了休眠，按一下它的按键再试\n" +
                "3. 离得太远或有遮挡，靠近到一米内\n" +
                "如果刚才在电脑上用过它，先在电脑上断开连接（不只是关蓝牙）。"

@@ -24,7 +24,12 @@ data class DeviceInfo(
         return "%.1f / %.0f GB".format(u / 1048576.0, t / 1048576.0)
     }
 
-    val batteryLabel: String? get() = batteryPct?.let { if (charging) "充电中 · $it%" else "$it%" }
+    val batteryLabel: String? get() = when {
+        charging && batteryPct == null -> "充电中"
+        charging -> "充电中 · $batteryPct%"
+        batteryPct != null -> "$batteryPct%"
+        else -> null
+    }
 
     companion object {
         /** 把一帧应答并进来。不是控制命令、或者解不出，就原样返回。 */
@@ -39,11 +44,12 @@ data class DeviceInfo(
         }
 
         /** 1B：0~100；110 表示充电中。别的值不认。 */
-        fun decodeBattery(b: ByteArray): Pair<Int, Boolean>? {
+        /** 110 = 充电中，协议没给电量——就显示「充电中」，不编 100%（012 P1-11）。 */
+        fun decodeBattery(b: ByteArray): Pair<Int?, Boolean>? {
             if (b.isEmpty()) return null
             val v = b[0].toInt() and 0xFF
             return when {
-                v == 110 -> 100 to true
+                v == 110 -> null to true
                 v in 0..100 -> v to false
                 else -> null
             }

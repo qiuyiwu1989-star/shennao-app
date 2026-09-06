@@ -43,6 +43,7 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
     var elapsed by remember { mutableStateOf(0L) }
     var pending by remember { mutableStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
+    var uploadProblem by remember { mutableStateOf<String?>(null) }
     var denied by remember { mutableStateOf(false) }
     var sessionId by remember { mutableStateOf<String?>(null) }
     var level by remember { mutableStateOf(0f) }
@@ -89,15 +90,16 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
             val nowRecording = RecordingService.recording
             // 恰好在这一拍从「在录」变成「没在录」——这才是「刚结束」的
             // 那个瞬间，只在这里拍快照，别的时候都别碰它。
-            if (wasRecording && !nowRecording && sessionId != null) {
-                justFinished = sessionId!! to elapsed
-            }
+            // 以「曾在录 → 不在录」为准。以前还要求服务端会话 id 已存在，而它一分钟后才有，
+            // 录不到一分钟就停的人看不到这张卡（012 P1-6）。
+            if (wasRecording && !nowRecording) justFinished = (sessionId ?: "") to elapsed
             wasRecording = nowRecording
             recording = nowRecording
             state = RecordingService.state
             elapsed = RecordingService.elapsedMs
             pending = RecordingService.pendingSegments
             error = RecordingService.micError
+            uploadProblem = RecordingService.uploadProblem
             sessionId = RecordingService.serverSessionId
             level = RecordingService.level
             captions = RecordingService.captions
@@ -122,7 +124,7 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
             // 分到两栏的话，用户要先想清楚「我这次算录还是算导」才知道点哪。
             if (!recording) TextButton(
                 onClick = onImport, modifier = Modifier.heightIn(min = 48.dp),
-            ) { Text("从录音笔导入") }
+            ) { Text("从灵魂卡导入") }
         }
 
         Spacer(Modifier.weight(1f))
@@ -237,19 +239,18 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
          */
         if (!recording && justFinished == null) {
             Spacer(Modifier.height(DS.Rhythm.inner))
+            // 压成一行：这一屏还有场合和大按钮，「念一句」不该是一张三行的卡（012 P1-17）
             DsCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(DS.Pad.tight)) {
-                    Text("按下之前，念一句", style = MaterialTheme.typography.labelMedium,
-                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(DS.Rhythm.tight))
-                    Text(RecordNotice.lines[noticeIndex], style = MaterialTheme.typography.bodyLarge)
-                    Spacer(Modifier.height(DS.Rhythm.tight))
-                    Row {
-                        TextButton(onClick = {
-                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(RecordNotice.lines[noticeIndex]))
-                        }) { Text("复制") }
-                        TextButton(onClick = { noticeIndex = RecordNotice.next(noticeIndex) }) { Text("换一句") }
+                Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("按下之前，念一句", style = MaterialTheme.typography.labelSmall,
+                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(RecordNotice.lines[noticeIndex], style = MaterialTheme.typography.bodyMedium)
                     }
+                    TextButton(onClick = {
+                        clipboard.setText(androidx.compose.ui.text.AnnotatedString(RecordNotice.lines[noticeIndex]))
+                    }, contentPadding = PaddingValues()) { Text("复制") }
+                    TextButton(onClick = { noticeIndex = RecordNotice.next(noticeIndex) }, contentPadding = PaddingValues()) { Text("换一句") }
                 }
             }
         }
@@ -279,10 +280,19 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
                  color = MaterialTheme.colorScheme.error,
                  textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
+        // 上传出的问题以前只有一个没人读的字段（012 P1-15）
+        uploadProblem?.let {
+            Spacer(Modifier.height(DS.Rhythm.element))
+            Text("上传：$it", style = MaterialTheme.typography.bodySmall,
+                 color = MaterialTheme.colorScheme.error,
+                 textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
 
         Spacer(Modifier.weight(1f))
 
-        Surface(
+        // 底部那段说明只给头三次进来的人看；老用户已经知道了（012 P1-17）
+        val tipsSeen = remember { RecordTips.seenTimes(ctx) }
+        if (tipsSeen < 3) Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
             shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth(),
@@ -329,7 +339,7 @@ fun JustFinishedCard(minutes: Int, pending: Int, onOpen: (() -> Unit)?) {
                 )
                 if (onOpen != null) {
                     Spacer(Modifier.height(DS.Rhythm.tight))
-                    TextButton(onClick = onOpen, modifier = Modifier.heightIn(min = 48.dp)) { Text("去「会议」看") }
+                    TextButton(onClick = onOpen, modifier = Modifier.heightIn(min = 48.dp)) { Text("去「记录」看") }
                 }
             }
         }
@@ -546,5 +556,15 @@ internal fun SceneChips(selected: String?, onSelect: (String?) -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/** 录音页底部说明看过几次。纯计数，头三次显示。 */
+internal object RecordTips {
+    fun seenTimes(ctx: android.content.Context): Int {
+        val p = ctx.getSharedPreferences("record_tips", android.content.Context.MODE_PRIVATE)
+        val n = p.getInt("seen", 0)
+        p.edit().putInt("seen", n + 1).apply()
+        return n
     }
 }

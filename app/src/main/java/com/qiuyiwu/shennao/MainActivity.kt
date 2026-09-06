@@ -478,6 +478,10 @@ private fun LoginScreen(state: AppState.Login, onSubmit: (String, String) -> Uni
             value = pw, onValueChange = { pw = it },
             label = { Text("密码") }, singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = {
+                if (!state.busy && email.isNotBlank() && pw.isNotBlank()) onSubmit(email.trim(), pw)
+            }),
             modifier = Modifier.fillMaxWidth(),
         )
         if (state.error != null) {

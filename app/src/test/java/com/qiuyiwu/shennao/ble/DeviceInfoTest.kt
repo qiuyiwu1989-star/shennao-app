@@ -14,7 +14,7 @@ class DeviceInfoTest {
 
     @Test fun `电量 0到100 直接认，110 是充电中，别的不认`() {
         assertEquals(78 to false, DeviceInfo.decodeBattery(byteArrayOf(78)))
-        assertEquals(100 to true, DeviceInfo.decodeBattery(byteArrayOf(110)))
+        assertEquals("110 只说明在充电，协议没给电量，不编 100（012 P1-11）", null to true, DeviceInfo.decodeBattery(byteArrayOf(110)))
         assertNull("超出范围不能编一个数出来", DeviceInfo.decodeBattery(byteArrayOf(200.toByte())))
         assertNull(DeviceInfo.decodeBattery(byteArrayOf()))
     }

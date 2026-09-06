@@ -39,6 +39,15 @@ fun AskScreen(client: DeepBrainClient, onOpen: (String) -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var fallback by remember { mutableStateOf<List<Hit>>(emptyList()) }
     val scope = rememberCoroutineScope()
+    // 搜索页以前没有入口（012 P1-1 的一半）；问不出来的时候换关键词搜
+    var searchMode by remember { mutableStateOf(false) }
+    if (searchMode) {
+        Column(Modifier.fillMaxSize()) {
+            TextButton(onClick = { searchMode = false }) { Text("← 回到问") }
+            SearchScreen(client, onOpen)
+        }
+        return
+    }
 
     fun send() {
         val question = q.trim()
@@ -95,6 +104,7 @@ fun AskScreen(client: DeepBrainClient, onOpen: (String) -> Unit) {
                     "问深脑",
                     "直接问，不用想关键词。比如「陈总上次答应了什么」" +
                         "「这个月我改过几次主意」「上周那场会最后定了没」。",
+                    "改用关键词搜", { searchMode = true },
                 )
             }
 

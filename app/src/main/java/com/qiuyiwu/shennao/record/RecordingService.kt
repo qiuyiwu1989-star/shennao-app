@@ -138,7 +138,7 @@ class RecordingService : Service() {
                 }
                 // 先把上次被杀时留下的半截录音补封了，再开新的一场——
                 // 不然它们会一直躺在磁盘上，用户以为录到了，其实一直没传。
-                scope.launch { recorder.recoverOrphans(); kick() }
+                scope.launch { recorder.recoverOrphans()?.let { OrphanNotice.record(applicationContext, it) }; kick() }
                 val title = intent.getStringExtra("title") ?: "手机录音"
                 // 场合只认词表里的：intent 是公开面，别把任意字符串带到服务端去吃 400
                 val scene = intent.getStringExtra("scene")?.takeIf { Scenes.isKnown(it) }

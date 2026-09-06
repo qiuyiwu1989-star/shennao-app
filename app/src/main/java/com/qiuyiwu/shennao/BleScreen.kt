@@ -227,10 +227,11 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
         // 没连时列出见过的卡——卡不在身边是常态，标成故障会天天吓人。
         if (conn == BleState.READY && addr != null) item {
             val a = addr!!
-            LaunchedEffect(a, client) {
+            // 绑定归服务（BleImportService.bindThenSync）；界面只读「我名下的卡」——以前两处各绑一遍、各报一次错（012 P1-13）
+            LaunchedEffect(a, client, st is ImportState.Listed) {
                 if (client == null) return@LaunchedEffect
-                when (val r = withContext(Dispatchers.IO) { client.bindCard(a) }) {
-                    is ApiResult.Ok -> { bound = r.value; bindError = null }
+                when (val r = withContext(Dispatchers.IO) { client.myCards() }) {
+                    is ApiResult.Ok -> { bound = r.value.cards.firstOrNull { CardMatch.same(it.deviceNo, a) }; bindError = null }
                     is ApiResult.Failed -> bindError = r.message
                     else -> bindError = null
                 }
@@ -539,5 +540,14 @@ private fun KnobRow(title: String, why: String, on: Boolean, onChange: (Boolean)
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(checked = on, onCheckedChange = onChange)
+    }
+}
+
+/** 服务端的设备号（CB08-<地址> 或去冒号的地址）和本机蓝牙地址是不是同一张卡：只比十六进制部分。 */
+internal object CardMatch {
+    private fun hex(s: String) = s.uppercase().filter { it in "0123456789ABCDEF" }
+    fun same(deviceNo: String, address: String): Boolean {
+        val a = hex(address); if (a.length < 12) return false
+        return hex(deviceNo).endsWith(a)
     }
 }

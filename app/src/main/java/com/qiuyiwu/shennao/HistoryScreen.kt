@@ -61,10 +61,13 @@ fun HistoryScreen(
     var card by remember { mutableStateOf(CardStatus.read()) }
     /** 来源分段。null = 全部。服务端没给 source 时分段行不显示，列表照常。 */
     var sourceFilter by remember { mutableStateOf<String?>(null) }
+    val notice = LocalNotice.current
+    var orphan by remember { mutableStateOf(com.qiuyiwu.shennao.record.OrphanNotice.peek(ctx)) }
 
     val onDelete: (String) -> Unit = { id ->
         scope.launch {
-            withContext(Dispatchers.IO) { client.deleteRecording(id) }
+            val d = withContext(Dispatchers.IO) { client.deleteRecording(id) }
+            if (d !is ApiResult.Ok) notice("删不掉：" + ((d as? ApiResult.Failed)?.message ?: "登录失效了"))
             val r = withContext(Dispatchers.IO) { client.sessions() }
             if (r is ApiResult.Ok) served = r.value
         }
@@ -121,6 +124,16 @@ fun HistoryScreen(
             // 卡的状态不放在这里，用户就得去另一栏对账。
             CardBar(card, onOpenBle)
         }
+        // 录音被系统杀掉过：说一句，点「知道了」就走（012 P1-7）
+        orphan?.let { at -> item {
+            Surface(color = MaterialTheme.colorScheme.errorContainer, shape = DS.Radius.card, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(DS.Pad.tight)) {
+                    Text(com.qiuyiwu.shennao.record.OrphanNotice.line(at), style = MaterialTheme.typography.bodyMedium,
+                         color = MaterialTheme.colorScheme.onErrorContainer)
+                    TextButton(onClick = { com.qiuyiwu.shennao.record.OrphanNotice.clear(ctx); orphan = null }) { Text("知道了") }
+                }
+            }
+        } }
 
         // 还在这台手机上的排最前：它们是唯一可能丢的
         if (rows.isNotEmpty()) {

@@ -136,8 +136,16 @@ fun MeScreen(
                 }
                 // 反馈问题：把此刻的状态打成一份文字发出去。不崩的问题（装不上、连不上、传一半停了）
                 // 之前一点痕迹都没有。放在版本旁边：报问题的人第一句就是「我是哪个版本」。
-                TextButton(onClick = { if (!Diagnostics.share(ctx)) notice("打包失败，再试一次") },
-                           contentPadding = PaddingValues()) { Text("反馈问题 · 发一份诊断") }
+                // 打包要读 vault、跑 logcat、开 keystore，不能在主线程（012 P1-16）
+                var packing by remember { mutableStateOf(false) }
+                TextButton(enabled = !packing, onClick = {
+                    packing = true
+                    scope.launch {
+                        val ok = withContext(Dispatchers.IO) { Diagnostics.share(ctx) }
+                        packing = false
+                        if (!ok) notice("打包失败，再试一次")
+                    }
+                }, contentPadding = PaddingValues()) { Text(if (packing) "正在打包…" else "反馈问题 · 发一份诊断") }
 
                 when (val s = state) {
                     is UpdateState.Available -> {

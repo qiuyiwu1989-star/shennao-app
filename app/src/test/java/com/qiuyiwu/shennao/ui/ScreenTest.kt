@@ -378,7 +378,7 @@ class ScreenTest {
         }
         compose.onNodeWithText("认人 3").performClick()
         compose.onNodeWithText("有 3 句不知道是谁说的").assertExists()
-        compose.onNodeWithText("现在还得在网页版认，手机上的认人界面在做了。", substring = true).assertExists()
+        compose.onNodeWithText("在「原话」页点「认人」", substring = true).assertExists()
     }
 
     // ---- 录音：待命时给一句能念出来的话 ----

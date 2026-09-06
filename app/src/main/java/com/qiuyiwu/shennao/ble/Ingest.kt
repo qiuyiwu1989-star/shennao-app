@@ -64,8 +64,9 @@ object Ingest {
          * 共用前缀会把两段不同的录音判成同一条，那比重复更糟。
          */
         val meta = SessionMeta(
+            // 幂等键仍然是文件名（和 Mac 端对齐要靠它）；显示名换成人话（012 P1-5）
             clientRequestId = "ble-" + title.take(80),
-            title = title,
+            title = displayTitle(startedAtEpochMs),
             startedAtEpochMs = startedAtEpochMs,
             finished = true,        // 导入的文件天生就是完整的，不用等停止
         )
@@ -84,6 +85,11 @@ object Ingest {
      * **返回 null 而不是「现在」**——用现在的话，一场三天前的会会排在今天，
      * 而深脑的整条时间轴都建立在这个时刻上。
      */
+    /** 「灵魂卡 · 9月5日 14:00」。文件名 note20260905-140000 是给机器看的。 */
+    fun displayTitle(startedAtEpochMs: Long, zone: java.util.TimeZone = java.util.TimeZone.getDefault()): String {
+        val f = java.text.SimpleDateFormat("M月d日 HH:mm", java.util.Locale.CHINA); f.timeZone = zone
+        return "灵魂卡 · " + f.format(java.util.Date(startedAtEpochMs))
+    }
     fun startedAtFrom(name: String, zone: java.util.TimeZone = java.util.TimeZone.getDefault()): Long? {
         val m = Regex("""(\d{8})-(\d{6})""").find(name) ?: return null
         return runCatching {

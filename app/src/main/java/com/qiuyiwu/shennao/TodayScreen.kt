@@ -86,7 +86,7 @@ fun TodayScreen(
 
         Column(Modifier.padding(DS.Pad.screen)) {
             Header(today)
-            RecordBar(onRecord)
+            if (com.qiuyiwu.shennao.record.RecordingService.recording) RecordBar(onRecord)
             Spacer(Modifier.height(DS.Rhythm.element))
         }
 
@@ -168,7 +168,7 @@ fun TodayScreen(
                                 "有 ${today.counts.awaitingSpeaker} 句不知道是谁说的",
                                 "认出来之后，这个人在所有录音里的话会一起归位——" +
                                     "关于他的判断、他答应过什么，都得先有这一步。\n" +
-                                    "现在还得在网页版认，手机上的认人界面在做了。",
+                                    "到「记录」里打开那场会，在「原话」页点「认人」。",
                             )
                         }
                     }
@@ -198,7 +198,7 @@ private fun Header(t: Today) {
             t.failed -> "取数失败了，不是「没有内容」。"
             t.commitments.isEmpty() && t.predictions.isEmpty() && t.insights.isEmpty() ->
                 if (t.counts.awaitingSpeaker > 0)
-                    "有 ${t.counts.awaitingSpeaker} 条问不了——还没认出是谁说的，到网页里认一下。"
+                    "有 ${t.counts.awaitingSpeaker} 条问不了——还没认出是谁说的，到那场会的「原话」页认一下。"
                 else "今天没有要紧的事。"
             else -> buildList {
                 if (t.counts.overdue > 0) add("${t.counts.overdue} 条承诺过期")
@@ -374,7 +374,8 @@ private fun InsightCard(i: Insight, onOpen: () -> Unit, onFeedback: (String) -> 
                 }
                 // 认知等级必须显示。手机是一扫而过的场景，
                 // 一条「猜想」会被当成事实——比坐在电脑前更危险。
-                AssistChip(onClick = {}, label = { Text(epistemicLabel(i.epistemic)) })
+                Text(epistemicLabel(i.epistemic), style = MaterialTheme.typography.labelMedium,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.height(DS.Rhythm.tight))
             Text(i.statement, style = MaterialTheme.typography.bodyLarge)

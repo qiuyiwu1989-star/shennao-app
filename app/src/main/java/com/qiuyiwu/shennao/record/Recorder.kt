@@ -260,9 +260,12 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
      * 字节数把名字改成真实时长，再封段——否则这一段会声称自己有 60 秒，
      * 而深脑那边的时间轴会从这里开始整场错位。
      */
-    fun recoverOrphans() {
+    /** 返回最近一个被补封的孤儿段结束的墙上时刻；没有孤儿就 null。调用方据此告诉用户「上次被停掉了」。 */
+    fun recoverOrphans(): Long? {
+        var latest: Long? = null
         for (s in vault.sessions()) {
             if (s == session) continue                       // 正在录的这场不动
+            val startedAt = vault.readMeta(s)?.startedAtEpochMs ?: 0L
             for (seg in vault.segments(s)) {
                 if (seg.state != Segment.State.RECORDING) continue
                 val f = vault.segmentFile(s, seg)
@@ -271,7 +274,10 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
                 if (real < 10) { f.delete(); continue }
                 if (truth != seg) f.renameTo(vault.segmentFile(s, truth))
                 sealPcm(s, truth)   // 孤儿是整场的最后一段，没有「下一段」要对齐
+                val wall = startedAt + truth.endMs
+                if (startedAt > 0 && (latest == null || wall > latest!!)) latest = wall
             }
         }
+        return latest
     }
 }
