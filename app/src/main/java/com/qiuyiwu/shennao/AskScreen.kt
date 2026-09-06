@@ -46,7 +46,7 @@ fun AskScreen(client: DeepBrainClient, onOpen: (String) -> Unit) {
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { cancelAsk[0]?.invoke() } }
     if (searchMode) {
         Column(Modifier.fillMaxSize()) {
-            TextButton(onClick = { searchMode = false }) { Text("← 回到问") }
+            LinkButton(onClick = { searchMode = false }, contentPadding = PaddingValues(horizontal = DS.Rhythm.inner)) { Text("← 回到问") }
             SearchScreen(client, onOpen)
         }
         return

@@ -362,7 +362,7 @@ fun JustFinishedCard(minutes: Int, pending: Int, onOpen: (() -> Unit)?, onRename
                 )
                 if (onOpen != null) {
                     Spacer(Modifier.height(DS.Rhythm.tight))
-                    TextButton(onClick = onOpen, modifier = Modifier.heightIn(min = 48.dp)) { Text("去「记录」看") }
+                    LinkButton(onClick = onOpen, modifier = Modifier.heightIn(min = 48.dp)) { Text("去「记录」看") }
                 }
             }
         }

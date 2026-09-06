@@ -430,13 +430,13 @@ private fun AtomCard(a: MeetingAtom, onJump: () -> Unit = {}, onFeedback: (Strin
             Spacer(Modifier.height(DS.Rhythm.tight))
             Text(a.statement, style = MaterialTheme.typography.bodyLarge)
             if (!open) {
-                TextButton(onClick = { open = true }, contentPadding = PaddingValues(0.dp)) { Text("看它凭什么这么说") }
+                LinkButton(onClick = { open = true }) { Text("看它凭什么这么说") }
             } else if (a.quote.isNotBlank()) {
                 Spacer(Modifier.height(DS.Rhythm.tight))
                 Text("「${a.quote}」", style = MaterialTheme.typography.bodyLarge,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
                 // 依据 →：跳到原话那一句。这是证据链在界面上的兑现。
-                TextButton(onClick = onJump, contentPadding = PaddingValues(0.dp)) { Text("回到原话 →") }
+                LinkButton(onClick = onJump) { Text("回到原话 →") }
                 FeedbackRow(said) { v -> said = v; onFeedback(v) }
             } else if (foldByDefault(a.epistemic)) {
                 Spacer(Modifier.height(DS.Rhythm.tight))

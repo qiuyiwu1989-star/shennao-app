@@ -453,7 +453,7 @@ private fun TabIcon(t: Tab) {
         Tab.RECORDS -> Icons.Outlined.List
         // 放大镜说的是「搜索」。这一栏是问答，图标得跟着改口，
         // 否则底栏和屏幕里说的是两件事。
-        Tab.ASK -> Icons.Outlined.Send
+        Tab.ASK -> AskBubble
         Tab.ME -> Icons.Outlined.Person
     }
     // 明确用 material3 的 Icon：material 和 material3 各有一个同名可组合项，
@@ -472,6 +472,14 @@ private fun LoginScreen(state: AppState.Login, onSubmit: (String, String) -> Uni
         Modifier.fillMaxSize().padding(DS.Pad.focus),
         verticalArrangement = Arrangement.Center,
     ) {
+        // 牌子：启动图标的前景形状（脑 + 五道光），和网页 BrandMark 同一份 path
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(R.drawable.ic_launcher_foreground),
+            contentDescription = null,
+            // 前景是白色（为了压在启动器的深底上），登录页是白底——着成 ink 才看得见
+            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.onSurface),
+            modifier = Modifier.size(88.dp).offset(x = (-16).dp),
+        )
         Text("深脑", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(DS.Rhythm.tight))
         // 主张放在登录屏上。APK 是外发的，没有应用商店那一页做介绍——

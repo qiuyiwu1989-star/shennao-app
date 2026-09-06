@@ -402,7 +402,7 @@ private fun InsightCard(i: Insight, onOpen: () -> Unit, onFeedback: (String) -> 
             Text(i.statement, style = MaterialTheme.typography.bodyLarge)
             if (!open) {
                 Spacer(Modifier.height(DS.Rhythm.tight))
-                TextButton(onClick = { open = true }, contentPadding = PaddingValues(0.dp)) {
+                LinkButton(onClick = { open = true }) {
                     Text("看它凭什么这么说")
                 }
             } else {
@@ -453,7 +453,7 @@ private fun Footer(meta: String, canOpen: Boolean, onOpen: () -> Unit) {
         Spacer(Modifier.weight(1f))
         // 「路」：点进去回到那场会。没有路的卡片读完就断了，
         // 那就只是又一条信息流。
-        if (canOpen) TextButton(onClick = onOpen) { Text("去那场会") }
+        if (canOpen) LinkButton(onClick = onOpen, contentPadding = PaddingValues(horizontal = DS.Rhythm.tight)) { Text("去那场会") }
     }
 }
 

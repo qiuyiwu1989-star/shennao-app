@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -79,4 +80,23 @@ fun DsCard(
         Card(modifier = modifier, shape = DS.Radius.card,
              colors = colors, border = border, elevation = elevation) { content() }
     }
+}
+
+/**
+ * 链接式文字按钮：去别处看（去那场会、回到原话、看它凭什么这么说）。
+ * 用「可点的文字」那个蓝（secondary），和动作类按钮（兑现了 / 取消了，黑）分开——
+ * 一眼分得出「点了会跳走」和「点了会记一笔」。
+ */
+@Composable
+fun LinkButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(),
+    content: @Composable RowScope.() -> Unit,
+) {
+    TextButton(
+        onClick = onClick, modifier = modifier, contentPadding = contentPadding,
+        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.secondary),
+        content = content,
+    )
 }
