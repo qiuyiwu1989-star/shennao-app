@@ -66,4 +66,19 @@ class NewEndpointsParseTest {
         assertNull("没有 month 就不画这一行", CreditsParser.usageLine(null))
         assertEquals("这个月还没做过判断", CreditsParser.usageLine(MonthUsage(0, 0, 0)))
     }
+
+    @Test fun `今天：认人列表与承诺的人物 id；老服务端没有就空`() {
+        val t = TodayParser.parse("""{"counts":{"overdue":0,"total":1,"awaitingSpeaker":3},
+            "commitments":[{"id":"c1","speakerName":"陈总","statement":"s","quote":"q","saidDate":"","personId":"p1"}],
+            "awaitingSpeakerTranscripts":[{"transcriptId":"t1","title":"周会","count":2}]}""")
+        assertEquals("p1", t.commitments[0].personId)
+        assertEquals(listOf("t1"), t.awaitingSpeakerTranscripts.map { it.transcriptId })
+        assertEquals(2, t.awaitingSpeakerTranscripts[0].count)
+        val old = TodayParser.parse("""{"counts":{},"commitments":[{"id":"c1","speakerName":"陈总"}]}""")
+        assertNull(old.commitments[0].personId); assertTrue(old.awaitingSpeakerTranscripts.isEmpty())
+    }
+    @Test fun `会议：people 名字对 id`() {
+        val m = SessionsParser.parseMeeting("""{"transcriptId":"t","speakers":["陈总","说话人2"],"people":[{"name":"陈总","personId":"p1"}]}""")!!
+        assertEquals("p1", m.people["陈总"]); assertNull(m.people["说话人2"])
+    }
 }

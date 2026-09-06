@@ -34,6 +34,8 @@ data class Commitment(
     val status: String,
     /** 往回走的路：从这条承诺回到那场会 */
     val transcriptId: String?,
+    /** 对得上人物档案才有；有了名字就能点进人物页（012 P1-1） */
+    val personId: String? = null,
 )
 
 /** 一条新洞察。带着往回走的路。 */
@@ -62,6 +64,8 @@ data class Prediction(
 )
 
 data class TodayCounts(val overdue: Int, val total: Int, val awaitingSpeaker: Int)
+/** 哪几场会里还挂着没认的说话人（012 P3-5） */
+data class AwaitingTranscript(val transcriptId: String, val title: String, val count: Int)
 
 data class Today(
     val counts: TodayCounts,
@@ -71,6 +75,7 @@ data class Today(
     /** 迁移没跑。必须和「没有承诺」分开——后者用户永远不会主动报告 */
     val notReady: Boolean,
     val failed: Boolean,
+    val awaitingSpeakerTranscripts: List<AwaitingTranscript> = emptyList(),
 )
 
 sealed class ApiResult<out T> {
@@ -107,6 +112,7 @@ object TodayParser {
                         overdueDays = if (r.isNull("overdueDays")) null else r.optInt("overdueDays"),
                         status = r.optString("status", "open"),
                         transcriptId = r.optString("transcriptId").takeIf { it.isNotBlank() },
+                        personId = r.optString("personId").takeIf { it.isNotBlank() && it != "null" },
                     )
                 )
             }
@@ -153,6 +159,14 @@ object TodayParser {
             predictions = predictions,
             notReady = o.optBoolean("notReady", false),
             failed = o.optBoolean("failed", false),
+            awaitingSpeakerTranscripts = buildList {
+                val a = o.optJSONArray("awaitingSpeakerTranscripts")
+                for (i in 0 until (a?.length() ?: 0)) {
+                    val r = a!!.optJSONObject(i) ?: continue
+                    val id = r.optString("transcriptId").takeIf { it.isNotBlank() } ?: continue
+                    add(AwaitingTranscript(id, r.optString("title").ifBlank { "未命名" }, r.optInt("count")))
+                }
+            },
         )
     }
 
@@ -234,6 +248,8 @@ data class Meeting(
      */
     val analysisAbsentReason: String?,
     val segments: List<Line> = emptyList(),
+    /** 在场的人里能对到人物档案的：名字 → 人物 id */
+    val people: Map<String, String> = emptyMap(),
 )
 
 object SessionsParser {
@@ -287,6 +303,14 @@ object SessionsParser {
                     speaker = l.optString("speaker").takeIf { it.isNotBlank() && it != "null" },
                     text = text,
                 )
+            },
+            people = buildMap {
+                val pp = o.optJSONArray("people")
+                for (i in 0 until (pp?.length() ?: 0)) {
+                    val r = pp!!.optJSONObject(i) ?: continue
+                    val n = r.optString("name"); val id = r.optString("personId")
+                    if (n.isNotBlank() && id.isNotBlank()) put(n, id)
+                }
             },
             transcriptId = tid,
             title = o.optString("title").ifBlank { "未命名" },
