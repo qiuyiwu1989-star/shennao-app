@@ -1,5 +1,6 @@
 package com.qiuyiwu.shennao
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.heightIn
@@ -47,6 +48,9 @@ fun TodayScreen(
     onSettlePrediction: (String, String) -> Unit = { _, _ -> },
     /** 判断反馈：atomId × up / down / hide。服务端没这个端点时按钮照常显示，点了只记本地。 */
     onFeedback: (String, String) -> Unit = { _, _ -> },
+    /** 点进认人页（那场会的说话人）；点人名进人物页。服务端没给 id 时人名不可点。 */
+    onClaim: (String) -> Unit = {},
+    onOpenPerson: (String) -> Unit = {},
     /** 非空表示现在显示的是离线缓存，并说明是什么时候的 */
     staleLabel: String? = null,
     /** 下拉刷新用。挂起函数返回了才停转圈 */
@@ -151,7 +155,7 @@ fun TodayScreen(
                         0 -> if (today.commitments.isEmpty()) item {
                             Empty("没有要问的", "别人在会上答应过的事，到期了会出现在这里。")
                         } else items(today.commitments, key = { it.id }) { c ->
-                            CommitmentCard(c, onSettle, resetKey) { c.transcriptId?.let(onOpenTranscript) }
+                            CommitmentCard(c, onSettle, resetKey, onOpenPerson = onOpenPerson) { c.transcriptId?.let(onOpenTranscript) }
                         }
                         1 -> if (today.predictions.isEmpty()) item {
                             Empty("没有到期的预测", "写下的预测到期时会来这里要一个说法。")
@@ -161,9 +165,22 @@ fun TodayScreen(
                         } else items(today.insights, key = { it.id }) { i ->
                             InsightCard(i, onOpen = { i.transcriptId?.let(onOpenTranscript) }, onFeedback = { v -> onFeedback(i.id, v) }, resetKey = resetKey)
                         }
-                        else -> item {
-                            // 手机上还没有认人的界面（mobile 侧没有这个端点），
-                            // 所以这里老实说清楚去哪认，而不是画一个点了没反应的按钮。
+                        else -> if (today.awaitingSpeakerTranscripts.isNotEmpty()) {
+                            // 能点进去了：按会列出来（012 P3-5）
+                            items(today.awaitingSpeakerTranscripts, key = { "w" + it.transcriptId }) { w ->
+                                DsCard(Modifier.fillMaxWidth(), onClick = { onClaim(w.transcriptId) }) {
+                                    Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(w.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                            Text("${w.count} 句还不知道是谁说的", style = MaterialTheme.typography.bodySmall,
+                                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        Text("认人 ›", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                            }
+                        } else item {
+                            // 老服务端没给列表：老实说清楚去哪认，而不是画一个点了没反应的按钮
                             Empty(
                                 "有 ${today.counts.awaitingSpeaker} 句不知道是谁说的",
                                 "认出来之后，这个人在所有录音里的话会一起归位——" +
@@ -246,12 +263,16 @@ private fun SectionTitle(title: String, hint: String) {
 }
 
 @Composable
-private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, resetKey: Int = 0, onOpen: () -> Unit) {
+private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, resetKey: Int = 0, onOpenPerson: (String) -> Unit = {}, onOpen: () -> Unit) {
     DsCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // 人名对得上档案就能点进人物页——那里有他的兑现率（012 P1-1）
+                val pid = c.personId
                 Text(c.speakerName, style = MaterialTheme.typography.titleMedium,
-                     fontWeight = FontWeight.SemiBold)
+                     fontWeight = FontWeight.SemiBold,
+                     color = if (pid != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                     modifier = if (pid != null) Modifier.clickable { onOpenPerson(pid) } else Modifier)
                 Spacer(Modifier.weight(1f))
                 // 逾期用文字说清楚，不只靠颜色——阳光下和色觉障碍面前颜色都不可靠
                 val od = c.overdueDays

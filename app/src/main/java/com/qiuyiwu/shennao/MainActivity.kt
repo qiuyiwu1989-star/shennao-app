@@ -339,6 +339,8 @@ private fun App(client: DeepBrainClient) {
                                 resetKey = settleReset,
                                 onPullRefresh = { load() },
                                 onFeedback = { id, v -> scope.launch { if (!feedback(client, id, v) { notice(it) }) settleReset++ } },
+                                onClaim = { tid -> go(nav.push(Route.Speakers(tid))) },
+                                onOpenPerson = { pid -> go(nav.push(Route.Person(pid))) },
                                 onSettlePrediction = { id, verdict ->
                                     scope.launch {
                                         val res = withContext(Dispatchers.IO) { client.settlePrediction(id, verdict) }
@@ -407,6 +409,7 @@ private fun App(client: DeepBrainClient) {
                             onBack = { nav.pop()?.let { go(it) } },
                             onOpenWeb = { path, title -> go(nav.push(Route.Web(path, title))) },
                             onClaimSpeakers = { go(nav.push(Route.Speakers(r.transcriptId))) },
+                            onOpenPerson = { pid -> go(nav.push(Route.Person(pid))) },
                         )
 
                         is Route.Speakers -> SpeakerClaimScreen(

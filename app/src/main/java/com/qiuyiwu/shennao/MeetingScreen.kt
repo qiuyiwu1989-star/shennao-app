@@ -1,5 +1,6 @@
 package com.qiuyiwu.shennao
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.rememberLazyListState
 
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -36,6 +37,7 @@ fun MeetingScreen(
     onClaimSpeakers: (() -> Unit)? = null,
     /** 判断反馈：atomId × up / down / hide */
     onFeedback: (String, String) -> Unit = { _, _ -> },
+    onOpenPerson: ((String) -> Unit)? = null,
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -327,9 +329,16 @@ fun MeetingScreen(
                         Spacer(Modifier.height(DS.Rhythm.tight))
                     }
                     if (m.speakers.isNotEmpty()) item {
-                        Text("在场：" + m.speakers.joinToString("、"),
-                             style = MaterialTheme.typography.bodySmall,
-                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        // 对得上档案的人名可点进人物页（012 P1-1）
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.tight)) {
+                            Text("在场：", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            m.speakers.forEach { name ->
+                                val pid = m.people[name]
+                                Text(name, style = MaterialTheme.typography.bodySmall,
+                                     color = if (pid != null && onOpenPerson != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                     modifier = if (pid != null && onOpenPerson != null) Modifier.clickable { onOpenPerson(pid) } else Modifier)
+                            }
+                        }
                     }
                     val quotes = MeetingTabs.quotesOf(m)
                     if (m.segments.isNotEmpty()) {
