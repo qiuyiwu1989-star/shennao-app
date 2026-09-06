@@ -565,6 +565,7 @@ internal fun SceneChips(selected: String?, onSelect: (String?) -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         androidx.compose.foundation.layout.FlowRow(
             horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.tight, Alignment.CenterHorizontally),
+            maxItemsInEachRow = 3,   // 六个词 3 + 3；以前 5 + 1，「随手记」孤零零掉在第二行
         ) {
             Scenes.all.forEach { (key, label) ->
                 androidx.compose.material3.FilterChip(

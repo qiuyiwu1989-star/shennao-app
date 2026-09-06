@@ -87,6 +87,9 @@ class PrefsStore(ctx: Context) : CredentialStore {
 object Session {
     @Volatile private var client: DeepBrainClient? = null
 
+    /** 只给调试包的夹具模式用（Demo.kt）：换成一个不联网的假客户端。 */
+    fun installForDemo(c: DeepBrainClient) { client = c }
+
     fun client(ctx: Context): DeepBrainClient = client ?: synchronized(this) {
         client ?: DeepBrainClient(
             http = UrlHttp(),

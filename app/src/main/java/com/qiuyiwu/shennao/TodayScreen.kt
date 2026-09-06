@@ -88,7 +88,7 @@ fun TodayScreen(
     Column(Modifier.fillMaxSize()) {
         staleLabel?.let { com.qiuyiwu.shennao.StaleBanner(it) }
 
-        Column(Modifier.padding(DS.Pad.screen)) {
+        Column(Modifier.padding(DS.Pad.screen).padding(top = DS.Rhythm.element)) {
             Header(today)
             if (com.qiuyiwu.shennao.record.RecordingService.recording) RecordBar(onRecord)
             Spacer(Modifier.height(DS.Rhythm.element))
@@ -271,7 +271,7 @@ private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, re
                 val pid = c.personId
                 Text(c.speakerName, style = MaterialTheme.typography.titleMedium,
                      fontWeight = FontWeight.SemiBold,
-                     color = if (pid != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                     color = if (pid != null) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface,
                      modifier = if (pid != null) Modifier.clickable { onOpenPerson(pid) } else Modifier)
                 Spacer(Modifier.weight(1f))
                 // 逾期用文字说清楚，不只靠颜色——阳光下和色觉障碍面前颜色都不可靠

@@ -65,7 +65,7 @@ fun PersonScreen(
                                          color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 c.transcriptId?.let { t ->
-                                    TextButton(onClick = { onOpen(t) }) { Text("去那场会") }
+                                    TextButton(onClick = { onOpen(t) }, contentPadding = PaddingValues()) { Text("去那场会") }
                                 }
                             }
                         }

@@ -160,7 +160,7 @@ fun MeetingScreen(
 
                 item {
                     val t = MeetingTabs.of(m)
-                    TabRow(selectedTabIndex = tab.ordinal, containerColor = MaterialTheme.colorScheme.background) {
+                    TabRow(selectedTabIndex = tab.ordinal, containerColor = MaterialTheme.colorScheme.surface) {
                         MeetingTab.entries.forEach { mt ->
                             Tab(
                                 selected = tab == mt,
@@ -335,7 +335,7 @@ fun MeetingScreen(
                             m.speakers.forEach { name ->
                                 val pid = m.people[name]
                                 Text(name, style = MaterialTheme.typography.bodySmall,
-                                     color = if (pid != null && onOpenPerson != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                     color = if (pid != null && onOpenPerson != null) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
                                      modifier = if (pid != null && onOpenPerson != null) Modifier.clickable { onOpenPerson(pid) } else Modifier)
                             }
                         }

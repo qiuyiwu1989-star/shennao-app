@@ -207,7 +207,7 @@ fun HistoryScreen(
 private fun MiniHead(t: String) {
     Text(t, style = MaterialTheme.typography.labelMedium,
          color = MaterialTheme.colorScheme.onSurfaceVariant,
-         modifier = Modifier.padding(top = 12.dp, bottom = 2.dp))
+         modifier = Modifier.padding(top = DS.Rhythm.tight, bottom = 2.dp))
 }
 
 /**

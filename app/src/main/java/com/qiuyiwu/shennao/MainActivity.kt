@@ -58,6 +58,8 @@ class MainActivity : ComponentActivity() {
          */
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // 夹具模式：只在调试包、只由 adb 带 --ez demo true 起。见 Demo.kt。
+        if (BuildConfig.DEBUG && intent?.getBooleanExtra("demo", false) == true) Demo.install()
         val client = Session.client(this)
         setContent { ShennaoTheme { App(client) } }
         receiveShare(intent)
@@ -273,9 +275,16 @@ private fun App(client: DeepBrainClient) {
             val nav = ready?.nav ?: return@Scaffold
             // 沉浸式（录音中）不带底栏：那时候点底栏也没用，显示出来只会让人以为点错了。
             if (!nav.showChrome) return@Scaffold
-            NavigationBar {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
                 Tab.entries.forEach { t ->
                     NavigationBarItem(
+                        colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                            indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                            selectedIconColor = MaterialTheme.colorScheme.secondary,
+                            selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
                         selected = nav.tab == t,
                         onClick = {
                             go(nav.select(t))

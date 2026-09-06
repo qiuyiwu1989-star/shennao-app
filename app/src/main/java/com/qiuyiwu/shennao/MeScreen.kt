@@ -111,42 +111,32 @@ fun MeScreen(
         // 分两张卡各占一块，是把版面让给了最不需要注意的东西。
         DsCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(DS.Pad.tight)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("账号", style = MaterialTheme.typography.titleSmall)
-                        Text(client.signedInEmail() ?: "未登录",
-                             style = MaterialTheme.typography.bodyMedium,
-                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        // 显示「已有」不显示「剩余」：剩余是倒计时，已有是陈述。全行业在另一边，故意反着做。
-                        credits?.let { c ->
-                            Text("积分 ${c.balance}", style = MaterialTheme.typography.bodyMedium,
-                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            // 规格 010：显示「已用」不显示「剩余」。倒计时式的焦虑条是这个品类差评的第一来源。
-                            CreditsParser.usageLine(c.month)?.let {
-                                Text(it, style = MaterialTheme.typography.bodySmall,
-                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        Text("版本 v${BuildConfig.VERSION_NAME} · 直接下载安装的版本",
-                             style = MaterialTheme.typography.bodySmall,
+                Text("账号", style = MaterialTheme.typography.titleSmall)
+                Text(client.signedInEmail() ?: "未登录",
+                     style = MaterialTheme.typography.bodyMedium,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // 显示「已有」不显示「剩余」：剩余是倒计时，已有是陈述。全行业在另一边，故意反着做。
+                credits?.let { c ->
+                    Spacer(Modifier.height(DS.Rhythm.tight))
+                    Text("积分 ${c.balance}", style = MaterialTheme.typography.titleMedium)
+                    // 规格 010：显示「已用」不显示「剩余」。倒计时式的焦虑条是这个品类差评的第一来源。
+                    CreditsParser.usageLine(c.month)?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall,
                              color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                }
+                Spacer(Modifier.height(DS.Rhythm.tight))
+                // 版本和「检查更新」同一行：以前那个按钮浮在一堆文字中间，和谁都不对齐
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("版本 v${BuildConfig.VERSION_NAME} · 直接下载安装的版本",
+                         style = MaterialTheme.typography.bodySmall,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                         modifier = Modifier.weight(1f))
                     if (checking) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    else TextButton(onClick = { check() }) { Text("检查更新") }
+                    else TextButton(onClick = { check() }, contentPadding = PaddingValues()) { Text("检查更新") }
                 }
                 // 反馈问题：把此刻的状态打成一份文字发出去。不崩的问题（装不上、连不上、传一半停了）
                 // 之前一点痕迹都没有。放在版本旁边：报问题的人第一句就是「我是哪个版本」。
-                // 打包要读 vault、跑 logcat、开 keystore，不能在主线程（012 P1-16）
-                var packing by remember { mutableStateOf(false) }
-                TextButton(enabled = !packing, onClick = {
-                    packing = true
-                    scope.launch {
-                        val ok = withContext(Dispatchers.IO) { Diagnostics.share(ctx) }
-                        packing = false
-                        if (!ok) notice("打包失败，再试一次")
-                    }
-                }, contentPadding = PaddingValues()) { Text(if (packing) "正在打包…" else "反馈问题 · 发一份诊断") }
-
                 when (val s = state) {
                     is UpdateState.Available -> {
                         Spacer(Modifier.height(DS.Rhythm.element))
@@ -181,6 +171,18 @@ fun MeScreen(
                     }
                     null -> Unit
                 }
+                Spacer(Modifier.height(DS.Rhythm.tight))
+                // 打包要读 vault、跑 logcat、开 keystore，不能在主线程（012 P1-16）
+                var packing by remember { mutableStateOf(false) }
+                TextButton(enabled = !packing, onClick = {
+                    packing = true
+                    scope.launch {
+                        val ok = withContext(Dispatchers.IO) { Diagnostics.share(ctx) }
+                        packing = false
+                        if (!ok) notice("打包失败，再试一次")
+                    }
+                }, contentPadding = PaddingValues()) { Text(if (packing) "正在打包…" else "反馈问题 · 发一份诊断") }
+
             }
         }
 
