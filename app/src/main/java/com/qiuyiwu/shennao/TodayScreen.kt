@@ -51,6 +51,8 @@ fun TodayScreen(
     staleLabel: String? = null,
     /** 下拉刷新用。挂起函数返回了才停转圈 */
     onPullRefresh: (suspend () -> Unit)? = null,
+    /** 落账/裁定/反馈失败时调用方把它 +1，卡片上的「已记」就收回来（012 P0-12）。 */
+    resetKey: Int = 0,
 ) {
     /*
      * 三个频道，左右滑。
@@ -149,15 +151,15 @@ fun TodayScreen(
                         0 -> if (today.commitments.isEmpty()) item {
                             Empty("没有要问的", "别人在会上答应过的事，到期了会出现在这里。")
                         } else items(today.commitments, key = { it.id }) { c ->
-                            CommitmentCard(c, onSettle) { c.transcriptId?.let(onOpenTranscript) }
+                            CommitmentCard(c, onSettle, resetKey) { c.transcriptId?.let(onOpenTranscript) }
                         }
                         1 -> if (today.predictions.isEmpty()) item {
                             Empty("没有到期的预测", "写下的预测到期时会来这里要一个说法。")
-                        } else items(today.predictions, key = { it.id }) { PredictionCard(it, onSettlePrediction) }
+                        } else items(today.predictions, key = { it.id }) { PredictionCard(it, onSettlePrediction, resetKey) }
                         2 -> if (today.insights.isEmpty()) item {
                             Empty("还没有新判断", "录一场会，深脑会从里面读出判断。", "录一场", onRecord)
                         } else items(today.insights, key = { it.id }) { i ->
-                            InsightCard(i, onOpen = { i.transcriptId?.let(onOpenTranscript) }, onFeedback = { v -> onFeedback(i.id, v) })
+                            InsightCard(i, onOpen = { i.transcriptId?.let(onOpenTranscript) }, onFeedback = { v -> onFeedback(i.id, v) }, resetKey = resetKey)
                         }
                         else -> item {
                             // 手机上还没有认人的界面（mobile 侧没有这个端点），
@@ -244,7 +246,7 @@ private fun SectionTitle(title: String, hint: String) {
 }
 
 @Composable
-private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, onOpen: () -> Unit) {
+private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, resetKey: Int = 0, onOpen: () -> Unit) {
     DsCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -278,7 +280,7 @@ private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, on
             //
             // 只有兑现和取消两个动作——**系统不裁定任何人**，
             // 这两件事都需要账本以外的信息，只有在场的人知道。
-            var done by remember(c.id) { mutableStateOf<String?>(null) }
+            var done by remember(c.id, resetKey) { mutableStateOf<String?>(null) }
             val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
             if (done == null) {
                 Row {
@@ -314,10 +316,10 @@ private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, on
 }
 
 @Composable
-private fun PredictionCard(p: Prediction, onSettle: (String, String) -> Unit) {
+private fun PredictionCard(p: Prediction, onSettle: (String, String) -> Unit, resetKey: Int = 0) {
     // 三选：应验 / 落空 / 说不清。「说不清」必须是平等的第三个——逼人二选一会污染命中率，
     // 而命中率是这套东西的全部价值。说不清 = 顺延，预测没死，到期还回来。
-    var done by remember(p.id) { mutableStateOf<String?>(null) }
+    var done by remember(p.id, resetKey) { mutableStateOf<String?>(null) }
     DsCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -354,9 +356,9 @@ private fun PredictionCard(p: Prediction, onSettle: (String, String) -> Unit) {
 }
 
 @Composable
-private fun InsightCard(i: Insight, onOpen: () -> Unit, onFeedback: (String) -> Unit = {}) {
+private fun InsightCard(i: Insight, onOpen: () -> Unit, onFeedback: (String) -> Unit = {}, resetKey: Int = 0) {
     // 说过一次就换成一句回执；「别再看」直接把这张卡收掉——不等下次刷新。
-    var said by remember(i.id) { mutableStateOf<String?>(null) }
+    var said by remember(i.id, resetKey) { mutableStateOf<String?>(null) }
     if (said == "hide") return
     // 猜想默认折叠。折叠的不是「猜想」两个字，也不是它在说什么——
     // 折叠的是原话、来源、去那场会那一串**看起来像证据的上下文**，

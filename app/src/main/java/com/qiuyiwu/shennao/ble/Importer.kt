@@ -69,6 +69,7 @@ class Importer(
 
     // ---- 发起 ----
 
+    @Synchronized
     fun startListing(): Boolean {
         listBuf.clear()
         state = ImportState.Listing
@@ -82,6 +83,7 @@ class Importer(
      * 续传时**不清空已收的数据**——那正是续传的意义。清空的话每次断线都要重头，
      * 而 27 KB/s 的链路上重头意味着再等四分钟。
      */
+    @Synchronized
     fun startDownload(entry: FileEntry, from: Long = 0): Boolean {
         candidates = entry.candidates
         candidateIdx = 0
@@ -106,6 +108,7 @@ class Importer(
     }
 
     /** 断线之后接着传。从已经收到的字节数继续。 */
+    @Synchronized
     fun resume(): Boolean {
         val name = candidates.getOrNull(candidateIdx)
             ?: return false.also { state = ImportState.Failed("没有可续的下载", deviceSaid = false) }
@@ -118,6 +121,7 @@ class Importer(
 
     // ---- 收 ----
 
+    @Synchronized
     fun onFrame(f: Proto.Frame) {
         lastHeardAt = now()
         if (f.type != Proto.T.FILE) return
@@ -171,6 +175,7 @@ class Importer(
      *
      * 超时算「断线」而不是「设备拒绝」：它可能只是走远了，重连是对的做法。
      */
+    @Synchronized
     fun tick(): ImportState {
         val idle = now() - lastHeardAt
         val limit = when (state) {

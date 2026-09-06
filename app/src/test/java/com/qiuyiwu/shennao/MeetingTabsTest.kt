@@ -83,3 +83,12 @@ class MeetingTabsTest {
         assertNull(MeetingTabs.lineIndexFor(emptyList(), "那就先把底座做完"))
     }
 }
+
+/** 012 P0-13：原话 tab 逐句前面的条目数按条件算，不写死。 */
+class HeaderItemsTest {
+    @org.junit.Test fun `固定三个，三个条件项各加一`() {
+        org.junit.Assert.assertEquals(3, MeetingTabs.headerItemsBeforeSegments(false, false, false))
+        org.junit.Assert.assertEquals(4, MeetingTabs.headerItemsBeforeSegments(true, false, false))
+        org.junit.Assert.assertEquals(6, MeetingTabs.headerItemsBeforeSegments(true, true, true))
+    }
+}

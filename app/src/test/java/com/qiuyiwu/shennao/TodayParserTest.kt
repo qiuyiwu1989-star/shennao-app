@@ -133,10 +133,11 @@ class SessionsParserTest {
         assertEquals(Stage.UNKNOWN, r[0].stage)
     }
 
-    @Test fun `半截应答不许崩`() {
-        assertEquals(emptyList<SessionCard>(), SessionsParser.parse("""{"sessions":[{"""))
-        assertEquals(emptyList<SessionCard>(), SessionsParser.parse("不是 json"))
-        assertEquals(emptyList<SessionCard>(), SessionsParser.parse("""{"other":1}"""))
+    /** 012 P0-9 反转了判据：半截应答要抛，让 Client.get 变成 Failed——而不是伪装成「没有内容」。 */
+    @Test fun `半截应答要抛，不许伪装成空列表`() {
+        assertThrows(Exception::class.java) { SessionsParser.parse("""{"sessions":[{""") }
+        assertThrows(Exception::class.java) { SessionsParser.parse("不是 json") }
+        assertThrows(Exception::class.java) { SessionsParser.parse("""{"other":1}""") }
     }
 
     @Test fun `没有 sessionId 的行直接丢掉，不要造一个空壳出来`() {

@@ -52,4 +52,6 @@ enum class RecordState {
     INTERRUPTED,
     /** 试了 10 分钟没抢回来，已经停了。录到的部分照常上传 */
     GAVE_UP,
+    /** 写盘失败（多半是存储满了）。不重试：再开麦克风也写不进去。012 P0-7 */
+    DISK_FULL,
 }

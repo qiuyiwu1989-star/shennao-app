@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit
 object Remind {
     const val CHANNEL = "due"
     private const val UNIQUE = "shennao-daily"
-    private const val NOTIF_ID = 2
+    private const val NOTIF_ID = Notif.DAILY_REMIND
     private const val PREFS = "shennao-remind"
 
     /** 每天几点提醒。早上九点：一天开始时看到「今天有三条要问」还来得及安排。 */
@@ -98,6 +98,7 @@ object Remind {
     fun lastKey(ctx: Context): String? =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("last", null)
 
+    fun forget(ctx: Context) { ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply() }
     fun rememberKey(ctx: Context, key: String) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("last", key).apply()
     }

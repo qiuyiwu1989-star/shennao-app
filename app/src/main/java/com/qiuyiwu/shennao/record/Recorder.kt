@@ -40,6 +40,7 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
      * 「它真的在听」的东西，而这正是用户最想确认的那件事。
      */
     @Volatile var level: Float = 0f; private set
+    @Volatile private var diskFailed = false
     val currentSession: String? get() = session
     val isRecording: Boolean get() = running.get()
 
@@ -48,6 +49,7 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
         if (running.get()) return session
         val rec = Capture.open() ?: return null
         state = RecordState.RECORDING
+        diskFailed = false
         val meta = SessionMeta(UUID.randomUUID().toString(), title, now, scene = scene)
         val s = vault.newSession(meta)
         session = s
@@ -112,8 +114,9 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
             startMs = nextStart
             runCatching { device.stop() }; runCatching { device.release() }
             rec = null
+            if (diskFailed) { state = RecordState.DISK_FULL; running.set(false); return }
         }
-        state = if (state == RecordState.GAVE_UP) RecordState.GAVE_UP else RecordState.IDLE
+        state = when (state) { RecordState.GAVE_UP, RecordState.DISK_FULL -> state; else -> RecordState.IDLE }
     }
 
     /**
@@ -160,6 +163,10 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
                     open = openSegment(s, seq, startMs)
                 }
             }
+        } catch (e: java.io.IOException) {
+            // 写不进磁盘（多半是满了）。以前这里吞掉之后重开麦克风继续写、继续失败，
+            // 界面照常走时——录了个寂寞（012 P0-7）。标出来，让上面停下。
+            diskFailed = true
         } catch (e: Exception) {
             // 录音线程出事不能把已经录到的东西一起带走
         } finally {

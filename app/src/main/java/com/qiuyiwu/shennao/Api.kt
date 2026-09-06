@@ -247,8 +247,12 @@ object SessionsParser {
         else -> Stage.UNKNOWN
     }
 
-    fun parse(body: String): List<SessionCard> = runCatching {
-        val arr = JSONObject(body).optJSONArray("sessions") ?: return emptyList()
+    /**
+     * 根节点不对就抛，让 Client.get 变成 Failed。
+     * 以前任何异常都回空列表，「记录」页会显示「还没有录过」——把「取不到」画成了「没有内容」（012 P0-9）。
+     */
+    fun parse(body: String): List<SessionCard> = run {
+        val arr = JSONObject(body).optJSONArray("sessions") ?: throw IllegalStateException("应答里没有 sessions")
         (0 until arr.length()).mapNotNull { i ->
             val o = arr.optJSONObject(i) ?: return@mapNotNull null
             val id = o.optString("sessionId").takeIf { it.isNotBlank() } ?: return@mapNotNull null
@@ -264,7 +268,7 @@ object SessionsParser {
                 source = o.optString("source").takeIf { it.isNotBlank() && it != "null" },
             )
         }
-    }.getOrElse { emptyList() }
+    }
 
     fun parseMeeting(body: String): Meeting? = runCatching {
         val o = JSONObject(body)
@@ -401,8 +405,8 @@ data class Hit(
 )
 
 object SearchParser {
-    fun parse(body: String): List<Hit> = runCatching {
-        val arr = JSONObject(body).optJSONArray("hits") ?: return emptyList()
+    fun parse(body: String): List<Hit> = run {
+        val arr = JSONObject(body).optJSONArray("hits") ?: throw IllegalStateException("应答里没有 hits")
         (0 until arr.length()).mapNotNull { i ->
             val o = arr.optJSONObject(i) ?: return@mapNotNull null
             val text = o.optString("text")
@@ -413,7 +417,7 @@ object SearchParser {
                 transcriptId = o.optString("transcriptId").takeIf { it.isNotBlank() && it != "null" },
             )
         }
-    }.getOrElse { emptyList() }
+    }
 }
 
 /** 认人页：还没认的说话人，各配一句样本；加候选名单。 */

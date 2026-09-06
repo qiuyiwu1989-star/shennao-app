@@ -142,39 +142,14 @@ class DeepBrainClient(
      * 反复重试只会让用户对着转圈等，而正确的做法是把他送去登录页。
      */
     fun today(): ApiResult<Today> = get("/api/mobile/today") { TodayParser.parse(it) }
-
     /**
-     * 取原始应答，成功时交给调用方存进离线缓存。
-     *
-     * 缓存存的是**原始 json 而不是解析后的对象**：解析规则会随版本变，
-     * 存对象等于把当前这版的理解冻在磁盘上，升级之后旧缓存要么读不出来、
-     * 要么读成错的。存原文则永远能用当前这版的解析器重读一遍。
+     * 取「今天」，连原文一起给——调用方要存离线缓存。
+     * 以前是 today() 之后再打第二遍同一个接口只为拿原文（012 P0-1）。
      */
-    fun rawTodayOrNull(): String? = raw("/api/mobile/today")
-    fun rawSessionsOrNull(): String? = raw("/api/mobile/sessions")
+    fun todayWithRaw(): ApiResult<Pair<Today, String>> = get("/api/mobile/today") { TodayParser.parse(it) to it }
+    fun sessionsWithRaw(): ApiResult<Pair<List<SessionCard>, String>> =
+        get("/api/mobile/sessions") { SessionsParser.parse(it) to it }
 
-    private fun raw(path: String): String? {
-        val c = store.load() ?: return null
-        if (accessToken == null && !refresh()) return null
-        fun once() = http.request("GET", "$apiBase$path",
-            mapOf("Authorization" to "Bearer ${accessToken ?: ""}", "x-deepbrain-org-id" to c.orgId))
-        var r = runCatching { once() }.getOrNull() ?: return null
-        if (r.status == 401) {
-            if (!refresh()) return null
-            r = runCatching { once() }.getOrNull() ?: return null
-        }
-        return if (r.status >= 400) null else r.body
-    }
-
-    /**
-     * 设置本场专有名词（0080）。
-     *
-     * 组织底表是建会话时自动合上的，不用管；这里传的是**这场会特有**的词——
-     * 底表里没有的人名、项目名、生造词。
-     *
-     * 录音中途也能改，但只影响**之后**的识别：已经出的字不会回头修正。
-     * 界面必须把这句说出来，否则用户会以为加了词就能把前面的错字改过来。
-     */
     fun setHotwordPins(sessionId: String, pins: List<String>): ApiResult<List<String>> {
         val c = store.load() ?: return ApiResult.Unauthorized
         if (accessToken == null && !refresh()) return ApiResult.Unauthorized

@@ -61,12 +61,12 @@ object Crash {
         val f = File(ctx.filesDir, FILE)
         if (!f.exists()) return
         val body = runCatching { f.readText() }.getOrNull()
-        // 传没传成都删——诊断数据不值得为了送达率去攒重试队列。
-        f.delete()
-        if (body.isNullOrBlank()) return
-        runCatching {
+        if (body.isNullOrBlank()) { f.delete(); return }
+        // 传成了才删。以前先删后传：没网那次崩溃就永远没人知道（012 P0-8）。
+        val r = runCatching {
             http.request("POST", "$apiBase/api/mobile/crash",
                 mapOf("Content-Type" to "application/json"), body)
-        }
+        }.getOrNull()
+        if (r != null && r.status in 200..299) f.delete()
     }
 }

@@ -17,6 +17,11 @@ package com.qiuyiwu.shennao.ble
  * 这是纯逻辑，能在 JVM 上验；而它管的是「有没有真的发出去」这件事，
  * 错了就是「设备连上了但不响应」——最难查的那一类。
  */
+/*
+ * 012 P0-5：这个队列被三个线程碰——蓝牙回调线程、看门狗线程、落盘线程。
+ * ArrayDeque 与 inFlight 没有锁时会丢操作，表现是「写了没反应」。所以对外三个方法全部加锁，
+ * pump 只在锁内被调。
+ */
 class GattQueue(private val execute: (Op) -> Boolean) {
 
     /**
@@ -40,6 +45,7 @@ class GattQueue(private val execute: (Op) -> Boolean) {
     val current: String? get() = inFlight?.label
     val waiting: Int get() = pending.size
 
+    @Synchronized
     fun enqueue(label: String, awaitsCallback: Boolean, run: () -> Boolean) {
         pending.addLast(Op(label, awaitsCallback, run))
         pump()
@@ -50,11 +56,13 @@ class GattQueue(private val execute: (Op) -> Boolean) {
      * 只在成功时调的话，一次失败就会让队列永远卡住，
      * 而表现是「用了一会儿之后设备就不响应了」。
      */
+    @Synchronized
     fun onComplete() {
         inFlight = null
         pump()
     }
 
+    @Synchronized
     fun reset() {
         pending.clear()
         inFlight = null

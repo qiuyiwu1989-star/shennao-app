@@ -124,6 +124,8 @@ private fun App(client: DeepBrainClient) {
     /** 取到的「今天」。它是数据不是位置，所以不进 NavState。 */
     var today by remember { mutableStateOf<Today?>(null) }
     var stale by remember { mutableStateOf<String?>(null) }
+    /** 落账失败次数。传给今天页当键，卡片上的乐观「已记」失败时收回来（012 P0-12）。 */
+    var settleReset by remember { mutableStateOf(0) }
 
     val scope = rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -131,16 +133,15 @@ private fun App(client: DeepBrainClient) {
 
     /** 保住当前位置地取数：登录态还在的话，不要把人踢回「今天」。 */
     suspend fun load(keepNav: Boolean = true) {
-        val r = withContext(Dispatchers.IO) { client.today() }
+        val r = withContext(Dispatchers.IO) { client.todayWithRaw() }
         val nav = (st as? AppState.Ready)?.nav?.takeIf { keepNav } ?: NavState.initial()
         if (r is ApiResult.Ok) {
             stale = null
             // 存原始 json 而不是解析后的对象：解析规则会随版本变，
             // 存对象等于把当前这版的理解冻在磁盘上。
-            withContext(Dispatchers.IO) {
-                client.rawTodayOrNull()?.let { cache.save(Cache.TODAY, it) }
-            }
-            today = r.value
+            val (parsed, raw) = r.value
+            withContext(Dispatchers.IO) { cache.save(Cache.TODAY, raw) }
+            today = parsed
             st = AppState.Ready(nav)
             return
         }
@@ -182,8 +183,10 @@ private fun App(client: DeepBrainClient) {
     val askNotify = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { }
-    LaunchedEffect(st) {
-        if (st is AppState.Ready && android.os.Build.VERSION.SDK_INT >= 33) {
+    // 键是「登录且取到数」这个布尔，不是整个导航状态——否则每切一次栏就重新申请一次，
+    // 拒绝过的人会被反复弹（012 P0-11）。
+    LaunchedEffect(signedInAndLoaded) {
+        if (signedInAndLoaded && android.os.Build.VERSION.SDK_INT >= 33) {
             val granted = androidx.core.content.ContextCompat.checkSelfPermission(
                 ctx, android.Manifest.permission.POST_NOTIFICATIONS
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -333,15 +336,16 @@ private fun App(client: DeepBrainClient) {
                                 onRecord = { go(nav.push(Route.Record)) },
                                 onRefresh = { scope.launch { load() } },
                                 staleLabel = stale,
+                                resetKey = settleReset,
                                 onPullRefresh = { load() },
-                                onFeedback = { id, v -> scope.launch { feedback(client, id, v) { notice(it) } } },
+                                onFeedback = { id, v -> scope.launch { if (!feedback(client, id, v) { notice(it) }) settleReset++ } },
                                 onSettlePrediction = { id, verdict ->
                                     scope.launch {
                                         val res = withContext(Dispatchers.IO) { client.settlePrediction(id, verdict) }
                                         when (res) {
                                             is ApiResult.Ok -> if (res.value) notice("已顺延，到期再问")
-                                            is ApiResult.Failed -> { notice("没记上：${res.message}"); load() }
-                                            else -> { notice("没记上：登录失效了"); load() }
+                                            is ApiResult.Failed -> { notice("没记上：${res.message}"); settleReset++; load() }
+                                            else -> { notice("没记上：登录失效了"); settleReset++; load() }
                                         }
                                     }
                                 },
@@ -352,6 +356,7 @@ private fun App(client: DeepBrainClient) {
                                         // 乐观更新用起来顺手，但失败时必须收回来，
                                         // 否则账本上没有这一笔，而用户以为记过了。
                                         if (res !is ApiResult.Ok) {
+                                            settleReset++
                                             load()
                                             notice(when (res) {
                                                 is ApiResult.Failed -> "没记上：${res.message}"
@@ -387,6 +392,11 @@ private fun App(client: DeepBrainClient) {
                             onOpenCard = { go(nav.push(Route.Ble)) },
                             onSignOut = {
                                 client.signOut()
+                                // 换账号不能带着上一个账号的东西：离线缓存、「已经通知过的判断」、
+                                // 「今天提醒过」都清掉（012 P0-10）。凭证之外的本机记忆都归这里。
+                                cache.clear()
+                                NewJudgments.forget(ctx)
+                                Remind.forget(ctx)
                                 today = null
                                 st = AppState.Login()
                             },
@@ -493,10 +503,9 @@ private fun LoginScreen(state: AppState.Login, onSubmit: (String, String) -> Uni
 }
 
 /** 判断反馈：失败要说，成功不打扰（卡片上已经换成回执了）。 */
-private suspend fun feedback(client: DeepBrainClient, atomId: String, verdict: String, notice: (String) -> Unit) {
+private suspend fun feedback(client: DeepBrainClient, atomId: String, verdict: String, notice: (String) -> Unit): Boolean =
     when (val r = withContext(Dispatchers.IO) { client.feedback(atomId, verdict) }) {
-        is ApiResult.Ok -> Unit
-        is ApiResult.Failed -> notice("没记上：${r.message}")
-        else -> notice("没记上：登录失效了")
+        is ApiResult.Ok -> true
+        is ApiResult.Failed -> { notice("没记上：${r.message}"); false }
+        else -> { notice("没记上：登录失效了"); false }
     }
-}

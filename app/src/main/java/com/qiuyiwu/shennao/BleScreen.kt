@@ -91,6 +91,7 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
     var info by remember { mutableStateOf(BleImportService.info) }
     var addr by remember { mutableStateOf(BleImportService.connectedAddress) }
     var renaming by remember { mutableStateOf<String?>(null) }
+    var seenAddr by remember { mutableStateOf<String?>(null) }
     // 手动兜底列表要说清楚"这份是不是已经同步过了"——不然全部已同步之后
     // 回来看这一屏，会让人怀疑"是不是没传"。
     val registry = remember { com.qiuyiwu.shennao.ble.ImportedRegistry(ctx) }
@@ -105,8 +106,10 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
             st = BleImportService.state
             info = BleImportService.info
             addr = BleImportService.connectedAddress
-            if (conn == BleState.READY && addr != null) {
-                // 连过的卡记下来：卡不在附近是常态，列表里要能看到它
+            // 连过的卡记下来：卡不在附近是常态，列表里要能看到它。
+            // 只在地址变化时记一次——以前每 200 毫秒写一次 SharedPreferences（012 P0-16）。
+            if (conn == BleState.READY && addr != null && addr != seenAddr) {
+                seenAddr = addr
                 names.markSeen(addr!!, devices.firstOrNull { it.id == addr }?.name ?: "灵魂卡")
                 known = names.known()
             }

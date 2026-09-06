@@ -23,7 +23,7 @@ object NewJudgments {
     private const val UNIQUE = "new-judgments"
     private const val CHANNEL = "new-judgments"
     private const val PREFS = "new_judgments"
-    private const val NOTIF_BASE = 4000
+    private const val NOTIF_BASE = Notif.NEW_JUDGMENTS_BASE
 
     /** 每次开 App 排一次（KEEP）；上传完之后再补一次 2 分钟后的单次检查，别让人等 15 分钟。 */
     fun schedule(ctx: Context) {
@@ -76,6 +76,8 @@ object NewJudgments {
     fun known(ctx: Context): Set<String>? =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet("analyzed", null)
 
+    /** 退出登录：忘掉「已经通知过的」。带着上一个账号的集合进新账号，要么漏推、要么一次推一堆。 */
+    fun forget(ctx: Context) { ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply() }
     fun remember(ctx: Context, ids: Set<String>) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putStringSet("analyzed", ids).apply()
     }

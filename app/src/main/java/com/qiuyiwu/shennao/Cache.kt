@@ -29,6 +29,8 @@ class Cache(private val dir: File) {
         }
     }
 
+    /** 退出登录时清空。缓存是账号的，不是手机的。 */
+    fun clear() { runCatching { dir.listFiles()?.forEach { it.delete() } } }
     fun load(key: String): Cached? = runCatching {
         val f = File(dir, "$key.json")
         if (!f.isFile || f.length() == 0L) return null

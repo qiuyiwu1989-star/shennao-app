@@ -54,15 +54,19 @@ class CrashTest {
         assertEquals(0, http.calls)
     }
 
-    @Test fun `有崩溃文件就发一次，然后不管成败都删掉`() {
+    /** 012 P0-8 反转了判据：传失败要留着（没网那次崩溃不能永远没人知道），传成了才删。 */
+    @Test fun `有崩溃文件就发一次，传失败留着，传成才删`() {
         // 诊断数据不值得为了送达率去攒重试队列——见 Crash.kt 里的判据。
         java.io.File(ctx.filesDir, "last_crash.json").writeText(
             JSONObject().put("exceptionClass", "X").put("stack", "at X.y").toString())
         val http = CrashFakeHttp { _, _, _, _ -> HttpResponse(500, "挂了") }
         Crash.uploadLastIfAny(ctx, http, "https://api.test")
         assertEquals(1, http.calls)
-        assertFalse("传失败也要删——不然会一直重试同一条",
-                    java.io.File(ctx.filesDir, "last_crash.json").exists())
+        assertTrue("传失败要留着，下次启动再传", java.io.File(ctx.filesDir, "last_crash.json").exists())
+        val good = CrashFakeHttp { _, _, _, _ -> HttpResponse(200, "{}") }
+        Crash.uploadLastIfAny(ctx, good, "https://api.test")
+        assertEquals(1, good.calls)
+        assertFalse("传成了才删", java.io.File(ctx.filesDir, "last_crash.json").exists())
     }
 
     @Test fun `上传的就是写下的那份原文`() {

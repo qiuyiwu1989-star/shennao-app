@@ -76,19 +76,18 @@ fun HistoryScreen(
             card = CardStatus.read()
             // 服务端那份查得慢一些，但它才知道转写和分析走到哪了。
             // 两份合起来才是完整的一条链：本地管「传没传出去」，服务端管「后面几站」。
-            val r = withContext(Dispatchers.IO) { client.sessions() }
+            val r = withContext(Dispatchers.IO) { client.sessionsWithRaw() }
             if (r is ApiResult.Ok) {
-                served = r.value
+                val (rows2, raw) = r.value
+                served = rows2
                 stale = null
-                withContext(Dispatchers.IO) {
-                    client.rawSessionsOrNull()?.let { cache.save(Cache.SESSIONS, it) }
-                }
+                withContext(Dispatchers.IO) { cache.save(Cache.SESSIONS, raw) }
             } else if (served.isEmpty()) {
                 // 没网就拿上次的。这一页的价值是「让卡住变得看得见」，
                 // 而没网时最容易让人以为「东西都送到了」。
                 val c = withContext(Dispatchers.IO) { cache.load(Cache.SESSIONS) }
                 if (c != null) {
-                    served = SessionsParser.parse(c.body)
+                    served = runCatching { SessionsParser.parse(c.body) }.getOrDefault(emptyList())
                     if (served.isNotEmpty()) {
                         stale = Cache.staleLabel(c.savedAt, System.currentTimeMillis()) ?: "离线 · 刚才的"
                     }

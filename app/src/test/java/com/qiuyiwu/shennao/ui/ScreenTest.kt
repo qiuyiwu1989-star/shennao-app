@@ -1,5 +1,9 @@
 package com.qiuyiwu.shennao.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.qiuyiwu.shennao.*
@@ -469,6 +473,19 @@ class ScreenTest {
         compose.onNodeWithText("不对").assertExists().performClick()
         assertEquals("i1" to "down", got)
         compose.onNodeWithText("记下了：不对").assertExists()
+    }
+
+    /** 012 P0-12：落账失败后调用方把 resetKey +1，卡片上的乐观「已记」必须收回来。 */
+    @Test fun `落账失败要把「已记」收回来`() {
+        val t = today(commitments = listOf(commitment()))
+        var reset by mutableStateOf(0)
+        compose.setContent { ShennaoTheme { TodayScreen(t, {}, {}, {}, resetKey = reset) } }
+        compose.onNodeWithText("兑现了").performClick()
+        compose.onNodeWithText("已记：兑现了").assertExists()
+        reset++
+        compose.waitForIdle()
+        compose.onNodeWithText("兑现了").assertExists()
+        compose.onAllNodesWithText("已记：兑现了").assertCountEquals(0)
     }
 
     private fun noNetClient() =

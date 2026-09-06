@@ -69,7 +69,11 @@ fun MeetingScreen(
         val m = meeting ?: return
         val idx = MeetingTabs.lineIndexFor(m.segments, quote) ?: run { tab = MeetingTab.QUOTES; return }
         tab = MeetingTab.QUOTES; highlight = idx
-        scope.launch { listState.animateScrollToItem(HEADER_ITEMS + idx) }
+        // 逐句前面的条目数不是常量：分享提示、认人卡、在场行都是有条件才画的（012 P0-13）
+        val unnamed = m.speakers.count { it.matches(Regex("""说话人\s*\d+""")) }
+        val head = MeetingTabs.headerItemsBeforeSegments(
+            shareNote != null, unnamed > 0 && onClaimSpeakers != null, m.speakers.isNotEmpty())
+        scope.launch { listState.animateScrollToItem(head + idx) }
     }
 
     // 重新取数：手动排上分析之后要能看到状态从「没有分析」变成「在跑」。
@@ -82,7 +86,9 @@ fun MeetingScreen(
         }
     }
 
-    LaunchedEffect(transcriptId) {
+    var attempt by remember { mutableStateOf(0) }
+    var resetKey by remember { mutableStateOf(0) }
+    LaunchedEffect(transcriptId, attempt) {
         when (val r = withContext(Dispatchers.IO) { client.meeting(transcriptId) }) {
             is ApiResult.Ok -> meeting = r.value
             is ApiResult.Failed -> error = r.message
@@ -128,9 +134,8 @@ fun MeetingScreen(
 
         val m = meeting
         when {
-            error != null -> item {
-                Text(error!!, color = MaterialTheme.colorScheme.error)
-            }
+            // 取失败要能再试。人物页、网页页都有，这一屏之前漏了（012 P0-14）。
+            error != null -> item { Broken(error!!) { error = null; attempt++ } }
             m == null -> item {
                 Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) {
                     CircularProgressIndicator()
@@ -284,11 +289,12 @@ fun MeetingScreen(
                     } else {
                         item { SectionHead("这场会里的承诺", "别人说出口、还没有下文的。在这里也能落账。") }
                         items(m.commitments, key = { "c" + it.id }) { c ->
-                            MeetingCommitmentCard(c) { action ->
+                            MeetingCommitmentCard(c, resetKey) { action ->
                                 scope.launch {
                                     val r = withContext(Dispatchers.IO) { client.settleCommitment(c.id, action) }
                                     // 失败要说出来。乐观更新用起来顺手，但失败必须收回，否则账上没这一笔而用户以为记过了。
                                     if (r !is ApiResult.Ok) {
+                                        resetKey++
                                         notice(when (r) {
                                             is ApiResult.Failed -> "没记上：${r.message}"
                                             is ApiResult.Unauthorized -> "没记上：登录失效了"
@@ -435,8 +441,8 @@ private fun AtomCard(a: MeetingAtom, onJump: () -> Unit = {}, onFeedback: (Strin
 
 /** 承诺卡：这一场里也能落账，不用回首屏找。 */
 @Composable
-private fun MeetingCommitmentCard(c: Commitment, onSettle: (String) -> Unit) {
-    var done by remember(c.id) { mutableStateOf<String?>(if (c.status == "open") null else c.status) }
+private fun MeetingCommitmentCard(c: Commitment, resetKey: Int = 0, onSettle: (String) -> Unit) {
+    var done by remember(c.id, resetKey) { mutableStateOf<String?>(if (c.status == "open") null else c.status) }
     DsCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(DS.Pad.tight)) {
             Row {
@@ -468,8 +474,6 @@ private fun MeetingCommitmentCard(c: Commitment, onSettle: (String) -> Unit) {
 
 // ── 纯逻辑，JVM 可测 ────────────────────────────────────────────
 
-/** 原话 tab 里逐句列表之前固定有几个 item：标题、tab 行、（在场）、（认人卡）、SectionHead。按最多算，滚过头一格无妨。 */
-private const val HEADER_ITEMS = 5
 
 enum class MeetingTab { JUDGMENTS, COMMITMENTS, QUOTES;
     fun label(t: MeetingTabs) = when (this) {
@@ -486,6 +490,9 @@ data class Quote(val key: String, val who: String, val text: String, val support
 data class MeetingTabs(val judgments: Int, val commitments: Int, val quotes: Int) {
     companion object {
         fun of(m: Meeting) = MeetingTabs(m.atoms.size, m.commitments.size, quotesOf(m).size)
+        /** 原话 tab 里逐句之前有几个条目：标题、tab 行、逐句小标题固定三个；其余三个看条件。纯函数，可测。 */
+        fun headerItemsBeforeSegments(hasShareNote: Boolean, hasClaimCard: Boolean, hasSpeakersLine: Boolean): Int =
+            3 + (if (hasShareNote) 1 else 0) + (if (hasClaimCard) 1 else 0) + (if (hasSpeakersLine) 1 else 0)
 
         /**
          * 原话 tab 的内容：这场会里**被引用的**片段。

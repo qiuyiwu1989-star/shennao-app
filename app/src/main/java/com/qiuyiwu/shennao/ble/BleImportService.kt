@@ -51,7 +51,7 @@ class BleImportService : Service() {
         const val EXTRA_FILE = "file"
 
         private const val CHANNEL = "ble-import"
-        private const val NOTIF_ID = 2
+        private const val NOTIF_ID = com.qiuyiwu.shennao.Notif.BLE_IMPORT
 
         /** 服务没起来时这些是默认值——界面据此显示「还没开始」，不是「坏了」。 */
         @Volatile var running: Boolean = false; private set

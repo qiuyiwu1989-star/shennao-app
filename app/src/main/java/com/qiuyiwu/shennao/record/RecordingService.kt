@@ -33,7 +33,7 @@ class RecordingService : Service() {
         const val ACTION_START = "start"
         const val ACTION_STOP = "stop"
         private const val CHANNEL = "recording"
-        private const val NOTIF_ID = 1
+        private const val NOTIF_ID = com.qiuyiwu.shennao.Notif.RECORDING
 
         /** 界面轮询这几个字段。服务活着时它是真相，服务没起来时都是默认值。 */
         @Volatile var recording: Boolean = false; private set
