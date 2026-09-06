@@ -188,7 +188,7 @@ fun AskScreen(client: DeepBrainClient, onOpen: (String) -> Unit) {
 @Composable
 private fun AskEmpty(onExample: (String) -> Unit, onSearch: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = DS.Rhythm.inner)) {
-        Text("问深脑", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text("问深脑", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(DS.Rhythm.tight))
         Text("直接问，不用想关键词。深脑只从录进来的内容里答，不猜。",
              style = MaterialTheme.typography.bodyMedium,

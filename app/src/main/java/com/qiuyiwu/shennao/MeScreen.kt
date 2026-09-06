@@ -59,8 +59,8 @@ fun MeScreen(
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(DS.Pad.screen),
     ) {
-        Text("我的", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold,
-             modifier = Modifier.padding(top = DS.Rhythm.inner, bottom = DS.Rhythm.element))
+        Text("我的", style = MaterialTheme.typography.headlineSmall,
+             modifier = Modifier.padding(top = DS.Rhythm.section, bottom = DS.Rhythm.inner))
 
         // ── 设备 ──
         // 硬件成为商业模式之后，这一栏从「账号页」升级成硬件的控制台——灵魂卡排第一。

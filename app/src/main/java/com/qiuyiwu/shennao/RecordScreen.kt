@@ -130,7 +130,7 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
 
         val idle = state == com.qiuyiwu.shennao.record.RecordState.IDLE && !recording
         if (idle) {
-            Text("准备好了", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+            Text("准备好了", style = MaterialTheme.typography.headlineSmall)
         } else {
             /*
              * 时长用等宽数字。比例字体下「1」比「8」窄，秒数每跳一下整行都会左右抖——

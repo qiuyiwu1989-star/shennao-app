@@ -43,6 +43,12 @@ class DesignSystemTest {
         assertEquals("没成功" to Tone.RISK, stagePill(Stage.FAILED))
     }
 
+    @Test fun `不到一分钟不说 0 分钟`() {
+        assertEquals("不到 1 分钟", minutesLabel(45_000))
+        assertEquals("1 分钟", minutesLabel(60_000))
+        assertEquals("52 分钟", minutesLabel(3_120_000))
+    }
+
     // ---- Markdown：表格、分割线、引用锚 ----
 
     @Test fun `表格按行解析，对齐行跳过`() {

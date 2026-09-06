@@ -95,8 +95,8 @@ fun DetailPage(
 /** 页头。抬头形制统一：主标题一档、副标题一档，间距固定。 */
 @Composable
 fun PageHead(title: String, subtitle: String? = null) {
-    Column(Modifier.padding(DS.Pad.screen).padding(top = DS.Rhythm.inner, bottom = DS.Rhythm.element)) {
-        Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+    Column(Modifier.padding(DS.Pad.screen).padding(top = DS.Rhythm.section, bottom = DS.Rhythm.inner)) {
+        Text(title, style = MaterialTheme.typography.headlineSmall)
         subtitle?.let {
             Spacer(Modifier.height(DS.Rhythm.tight))
             Text(it, style = MaterialTheme.typography.bodyMedium,

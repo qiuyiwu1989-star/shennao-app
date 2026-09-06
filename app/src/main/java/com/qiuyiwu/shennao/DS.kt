@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /*
  * 设计系统在安卓这一侧的落地。规格：docs/design/013-移动端设计系统.md。
@@ -34,12 +35,17 @@ import androidx.compose.ui.unit.dp
 object DS {
     /** 纵向节奏。 */
     object Rhythm {
+        /*
+         * 疏密：一屏里必须同时有「挤在一起的」和「隔得很开的」，眼睛才分得出组。
+         * 4.1.0 到处都是 12，读起来像一份表格；现在紧的更紧（hair 4）、松的更松（section 32）。
+         */
         val page = 64.dp      // 页面级留白（列表底部）
         val block = 40.dp     // 区块之间
-        val section = 28.dp   // 分区小标之前
+        val section = 32.dp   // 分区小标之前
         val inner = 20.dp     // 块内
-        val element = 12.dp   // 元素之间（卡片与卡片）
-        val tight = 6.dp      // 图标与文字、两行之间
+        val element = 14.dp   // 卡片与卡片
+        val tight = 8.dp      // 一组里两行之间
+        val hair = 4.dp       // 标题与它的副行：紧贴，说明是同一件事
     }
 
     /** 圆角。控件 12 / 卡片 16 / 浮层 20 / 药丸。中间档一律不用。 */
@@ -54,6 +60,8 @@ object DS {
     /** 内边距。 */
     object Pad {
         val tight = PaddingValues(16.dp)
+        /** 卡片内边距：左右比上下多一点，字才不贴边。 */
+        val card = PaddingValues(horizontal = 18.dp, vertical = 16.dp)
         val default = PaddingValues(20.dp)
         val focus = PaddingValues(24.dp)
         /** 页面左右留白。所有页型同一个值——同型必同宽。 */
@@ -164,9 +172,9 @@ fun DsRow(
     ) {
         if (leading != null) { leading(); Spacer(Modifier.width(DS.Rhythm.element)) }
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, color = titleColor)
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal, color = titleColor)
             if (subtitle != null) {
-                Spacer(Modifier.height(2.dp))
+                Spacer(Modifier.height(DS.Rhythm.hair))
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -190,11 +198,11 @@ fun Chevron(color: Color = MaterialTheme.colorScheme.outline) {
     )
 }
 
-/** 分区小标：小号、灰、上面留一段。列表里「还在手机上」这种。 */
+/** 分区小标：小号、灰、字距拉开、上面留一大段。列表里「还在手机上」这种。 */
 @Composable
 fun SectionLabel(text: String, modifier: Modifier = Modifier, top: Boolean = true) {
     Text(
-        text, style = MaterialTheme.typography.labelMedium,
+        text, style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.sp),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier.padding(top = if (top) DS.Rhythm.section else 0.dp, bottom = DS.Rhythm.tight),
     )
@@ -204,9 +212,30 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier, top: Boolean = tru
 @Composable
 fun SectionHead(title: String, hint: String? = null) {
     Column(Modifier.padding(top = DS.Rhythm.section, bottom = DS.Rhythm.tight)) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        if (hint != null) Text(hint, style = MaterialTheme.typography.bodyMedium,
-                               color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(title, style = MaterialTheme.typography.titleLarge)
+        if (hint != null) {
+            Spacer(Modifier.height(DS.Rhythm.hair))
+            Text(hint, style = MaterialTheme.typography.bodyMedium,
+                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/**
+ * 卡片底栏：一条发丝线，下面一行动作。
+ * 卡片分三区——头（谁、什么时候）、身（读文）、底（能做什么）。
+ * 4.1.0 四行等距叠着，像表格；有了这条线，「读」和「做」就分开了。
+ */
+@Composable
+fun CardFooter(content: @Composable RowScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = DS.Rhythm.element)) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Row(
+            Modifier.fillMaxWidth().padding(top = DS.Rhythm.tight),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.tight),
+            content = content,
+        )
     }
 }
 
@@ -270,13 +299,13 @@ fun TonalButton(
     enabled: Boolean = true, icon: ImageVector? = null,
 ) {
     FilledTonalButton(
-        onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 40.dp),
+        onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 36.dp),
         shape = DS.Radius.control,
         colors = ButtonDefaults.filledTonalButtonColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             contentColor = MaterialTheme.colorScheme.onSurface,
         ),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
     ) {
         if (icon != null) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(DS.Size.icon - 2.dp))

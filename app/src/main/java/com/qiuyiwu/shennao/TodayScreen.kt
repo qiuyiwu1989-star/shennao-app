@@ -176,8 +176,8 @@ private fun Header(t: Today) {
         }.joinToString(" · ")
     }
     val urgent = lede != null && !t.notReady && !t.failed && t.counts.overdue > 0
-    Column(Modifier.padding(DS.Pad.screen).padding(top = DS.Rhythm.inner, bottom = DS.Rhythm.element)) {
-        Text("今天", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+    Column(Modifier.padding(DS.Pad.screen).padding(top = DS.Rhythm.section, bottom = DS.Rhythm.inner)) {
+        Text("今天", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(DS.Rhythm.tight))
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (urgent) {
@@ -198,8 +198,8 @@ private fun RecordBar(onRecord: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text("正在录音", style = MaterialTheme.typography.titleSmall,
-                     fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text("正在录音", style = MaterialTheme.typography.titleMedium,
+                     color = MaterialTheme.colorScheme.onPrimaryContainer)
                 Text("点进去看时长、或者停止", style = MaterialTheme.typography.bodyMedium,
                      color = MaterialTheme.colorScheme.onPrimaryContainer)
             }
@@ -211,15 +211,23 @@ private fun RecordBar(onRecord: () -> Unit) {
 @Composable
 private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, resetKey: Int = 0, onOpenPerson: (String) -> Unit = {}, onOpen: () -> Unit) {
     DsCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(DS.Pad.tight)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // 人名对得上档案就能点进人物页——那里有他的兑现率（012 P1-1）
-                val pid = c.personId
-                Text(c.speakerName, style = MaterialTheme.typography.titleMedium,
-                     fontWeight = FontWeight.SemiBold,
-                     color = if (pid != null) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface,
-                     modifier = if (pid != null) Modifier.clickable { onOpenPerson(pid) } else Modifier)
-                Spacer(Modifier.weight(1f))
+        Column(Modifier.padding(DS.Pad.card)) {
+            // 头：谁、什么时候说的（紧贴成一组），右边一个词说期限
+            Row(verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
+                    // 人名对得上档案就能点进人物页——那里有他的兑现率（012 P1-1）
+                    val pid = c.personId
+                    Text(c.speakerName, style = MaterialTheme.typography.titleMedium,
+                         color = if (pid != null) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface,
+                         modifier = if (pid != null) Modifier.clickable { onOpenPerson(pid) } else Modifier)
+                    val meta = listOfNotNull(c.saidDate.takeIf { it.isNotBlank() }, c.context).joinToString(" · ")
+                    if (meta.isNotEmpty()) {
+                        Spacer(Modifier.height(DS.Rhythm.hair))
+                        Text(meta, style = MaterialTheme.typography.bodySmall,
+                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Spacer(Modifier.width(DS.Rhythm.element))
                 // 逾期用文字说清楚，不只靠颜色——阳光下和色觉障碍面前颜色都不可靠
                 val od = c.overdueDays
                 when {
@@ -228,27 +236,16 @@ private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, re
                     else -> Pill("期限待确认")
                 }
             }
-            Spacer(Modifier.height(DS.Rhythm.tight))
-            // 原话是主角，不是摘要——「他当时是这么说的」才问得出口
-            Text("「${c.quote}」", style = MaterialTheme.typography.bodyLarge)
+            // 身：原话是主角，不是摘要——「他当时是这么说的」才问得出口。读文档，比界面字大。
             Spacer(Modifier.height(DS.Rhythm.element))
-            Footer(
-                meta = listOfNotNull(c.saidDate.takeIf { it.isNotBlank() }, c.context).joinToString(" · "),
-                canOpen = c.transcriptId != null,
-                onOpen = onOpen,
-            )
-            // 落账。放在卡上而不是详情里：这件事发生在「刚问完他」那一刻，
+            Text("「${c.quote}」", style = MaterialTheme.typography.bodyLarge)
+            // 底：落账。放在卡上而不是详情里：这件事发生在「刚问完他」那一刻，
             // 而那一刻人站在走廊里，不会为了点两下再钻进两层页面。
-            //
-            // 只有兑现和取消两个动作——**系统不裁定任何人**，
-            // 这两件事都需要账本以外的信息，只有在场的人知道。
+            // 只有兑现和取消两个动作——**系统不裁定任何人**。
             var done by remember(c.id, resetKey) { mutableStateOf<String?>(null) }
             val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
-            Spacer(Modifier.height(DS.Rhythm.element))
-            if (done == null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.tight)) {
-                    // 落账是记进账本的动作，给一次确认反馈。
-                    // 命中区 48dp：这两个按钮挨得近，误触的代价是记错一笔。
+            CardFooter {
+                if (done == null) {
                     TonalButton("兑现了", onClick = {
                         // **业务动作在前，触感在后**，且触感不许抛。
                         done = "kept"; onSettle(c.id, "kept")
@@ -260,9 +257,12 @@ private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, re
                         runCatching { haptics.performHapticFeedback(
                             androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }
                     })
+                } else {
+                    Pill(if (done == "kept") "已记：兑现了" else "已记：取消了", Tone.OK)
                 }
-            } else {
-                Pill(if (done == "kept") "已记：兑现了" else "已记：取消了", Tone.OK)
+                Spacer(Modifier.weight(1f))
+                // 「路」：点进去回到那场会。没有路的卡片读完就断了，那就只是又一条信息流。
+                if (c.transcriptId != null) LinkButton(onClick = onOpen, contentPadding = PaddingValues(horizontal = DS.Rhythm.tight)) { Text("去那场会") }
             }
         }
     }
@@ -274,34 +274,34 @@ private fun PredictionCard(p: Prediction, onSettle: (String, String) -> Unit, re
     // 而命中率是这套东西的全部价值。说不清 = 顺延，预测没死，到期还回来。
     var done by remember(p.id, resetKey) { mutableStateOf<String?>(null) }
     DsCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(DS.Pad.tight)) {
+        Column(Modifier.padding(DS.Pad.card)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(p.subject ?: "未指明对象", style = MaterialTheme.typography.titleMedium,
-                     fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.weight(1f))
+                Text(p.subject ?: "未指明对象", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(DS.Rhythm.element))
                 val od = p.overdueDays
                 if (od != null && od > 0) Pill("到期 $od 天", Tone.WARN)
                 else p.dueAt?.let { Pill(it) }
             }
-            Spacer(Modifier.height(DS.Rhythm.tight))
+            Spacer(Modifier.height(DS.Rhythm.element))
             Text(p.statement, style = MaterialTheme.typography.bodyLarge)
             Spacer(Modifier.height(DS.Rhythm.tight))
             // 没有可观测信号的预测是验不了的。空着不能不说——
             // 那说明当初写这条时就没定清楚怎么算数，本身是个该看见的信号。
             Text(
-                p.observableSignal?.let { "看这个：$it" } ?: "当初没写清怎么算数——只能凭印象判断",
+                p.observableSignal?.let { "看这个：$it" } ?: "当初没写清怎么算数，只能凭印象判断",
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (p.observableSignal == null) MaterialTheme.colorScheme.error
                         else MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(DS.Rhythm.element))
-            if (done == null) Row(horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.tight)) {
-                TonalButton("应验了", onClick = { done = "应验"; onSettle(p.id, "borne_out") })
-                TonalButton("落空了", onClick = { done = "落空"; onSettle(p.id, "refuted") })
-                TonalButton("说不清", onClick = { done = "顺延"; onSettle(p.id, "too_early") })
-            } else Pill(
-                if (done == "顺延") "已顺延——到期再问" else "已记：$done", Tone.OK,
-            )
+            CardFooter {
+                if (done == null) {
+                    TonalButton("应验了", onClick = { done = "应验"; onSettle(p.id, "borne_out") })
+                    TonalButton("落空了", onClick = { done = "落空"; onSettle(p.id, "refuted") })
+                    TonalButton("说不清", onClick = { done = "顺延"; onSettle(p.id, "too_early") })
+                } else Pill(
+                    if (done == "顺延") "已顺延，到期再问" else "已记：$done", Tone.OK,
+                )
+            }
         }
     }
 }
@@ -316,25 +316,25 @@ private fun InsightCard(i: Insight, onOpen: () -> Unit, onFeedback: (String) -> 
     // 而那正是让人把猜想读成事实的东西。见 foldByDefault 的注释。
     var open by remember(i.id) { mutableStateOf(!foldByDefault(i.epistemic)) }
     DsCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(DS.Pad.tight)) {
+        Column(Modifier.padding(DS.Pad.card)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.tight)) {
                 i.subject?.let {
-                    Text(it, style = MaterialTheme.typography.titleSmall,
-                         fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f, fill = false))
+                    Text(it, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f, fill = false))
                 }
                 Pill(atomTypeLabel(i.atomType))
                 // 认知等级必须显示。手机是一扫而过的场景，
                 // 一条「猜想」会被当成事实——比坐在电脑前更危险。
                 Pill(epistemicLabel(i.epistemic), epistemicTone(i.epistemic))
             }
-            Spacer(Modifier.height(DS.Rhythm.tight))
+            Spacer(Modifier.height(DS.Rhythm.element))
             Text(i.statement, style = MaterialTheme.typography.bodyLarge)
             if (!open) {
+                Spacer(Modifier.height(DS.Rhythm.hair))
                 LinkButton(onClick = { open = true }) { Text("看它凭什么这么说") }
             } else {
                 if (i.quote.isNotBlank()) {
                     Spacer(Modifier.height(DS.Rhythm.tight))
-                    Text("「${i.quote}」", style = MaterialTheme.typography.bodyLarge,
+                    Text("「${i.quote}」", style = MaterialTheme.typography.bodyMedium,
                          color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else if (foldByDefault(i.epistemic)) {
                     // 猜想没有原话是常态——但要说出来，别让人以为是加载失败。
@@ -343,9 +343,10 @@ private fun InsightCard(i: Insight, onOpen: () -> Unit, onFeedback: (String) -> 
                          style = MaterialTheme.typography.bodyMedium,
                          color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Spacer(Modifier.height(DS.Rhythm.element))
-                Footer(meta = "", canOpen = i.transcriptId != null, onOpen = onOpen) {
+                CardFooter {
                     FeedbackRow(said) { v -> said = v; onFeedback(v) }
+                    Spacer(Modifier.weight(1f))
+                    if (i.transcriptId != null) LinkButton(onClick = onOpen, contentPadding = PaddingValues(horizontal = DS.Rhythm.tight)) { Text("去那场会") }
                 }
             }
         }
@@ -366,19 +367,6 @@ internal fun FeedbackRow(said: String?, onSay: (String) -> Unit) {
             TonalButton("不对", onClick = { onSay("down") })
             QuietButton("别再看", onClick = { onSay("hide") }, contentPadding = PaddingValues(horizontal = DS.Rhythm.tight))
         }
-    }
-}
-
-/** 卡片底行：左边元信息（或别的东西），右边「去那场会」。 */
-@Composable
-private fun Footer(meta: String, canOpen: Boolean, onOpen: () -> Unit, left: (@Composable () -> Unit)? = null) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        if (left != null) left()
-        else Text(meta, style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.weight(1f))
-        // 「路」：点进去回到那场会。没有路的卡片读完就断了，那就只是又一条信息流。
-        if (canOpen) LinkButton(onClick = onOpen, contentPadding = PaddingValues(horizontal = DS.Rhythm.tight)) { Text("去那场会") }
     }
 }
 

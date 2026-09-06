@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -142,7 +143,7 @@ fun MeetingScreen(
             m == null -> item { Loading() }
             else -> {
                 item {
-                    Text(m.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                    Text(m.title, style = MaterialTheme.typography.headlineSmall)
                     Spacer(Modifier.height(DS.Rhythm.tight))
                     Text(
                         listOfNotNull(
@@ -166,8 +167,8 @@ fun MeetingScreen(
                 }
                 if (tab == MeetingTab.JUDGMENTS) item {
                     DsCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(DS.Pad.tight)) {
-                            Text("这场会", style = MaterialTheme.typography.labelMedium,
+                        Column(Modifier.padding(DS.Pad.card)) {
+                            Text("这场会", style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.sp),
                                  color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(DS.Rhythm.tight))
                             // 摘要是 Markdown。当纯文本显示的话，屏幕上就是一堆 ## 和 **，
@@ -381,28 +382,27 @@ private fun AtomCard(a: MeetingAtom, onJump: () -> Unit = {}, onFeedback: (Strin
     var said by remember(a.id) { mutableStateOf<String?>(null) }
     if (said == "hide") return
     DsCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(DS.Pad.tight)) {
+        Column(Modifier.padding(DS.Pad.card)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.tight)) {
                 // 有主语时主语在左、药丸在右；没主语时药丸靠左——不让两颗药丸孤零零挂在右边
                 a.subject?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
-                         modifier = Modifier.weight(1f, fill = false))
+                    Text(it, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f, fill = false))
                 }
                 Pill(atomTypeLabel(a.atomType))
                 // 认知等级必须显示。手机是一扫而过的场景，
                 // 一条「猜想」会被当成事实——比坐在电脑前更危险。
                 Pill(epistemicLabel(a.epistemic), epistemicTone(a.epistemic))
             }
-            Spacer(Modifier.height(DS.Rhythm.tight))
+            Spacer(Modifier.height(DS.Rhythm.element))
             Text(a.statement, style = MaterialTheme.typography.bodyLarge)
             if (!open) {
+                Spacer(Modifier.height(DS.Rhythm.hair))
                 LinkButton(onClick = { open = true }) { Text("看它凭什么这么说") }
             } else if (a.quote.isNotBlank()) {
                 Spacer(Modifier.height(DS.Rhythm.tight))
-                Text("「${a.quote}」", style = MaterialTheme.typography.bodyLarge,
+                Text("「${a.quote}」", style = MaterialTheme.typography.bodyMedium,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(DS.Rhythm.element))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                CardFooter {
                     FeedbackRow(said) { v -> said = v; onFeedback(v) }
                     Spacer(Modifier.weight(1f))
                     // 依据 →：跳到原话那一句。这是证据链在界面上的兑现。
@@ -425,24 +425,24 @@ private fun MeetingCommitmentCard(c: Commitment, resetKey: Int = 0, onSettle: (S
     DsCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(DS.Pad.tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(c.speakerName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.weight(1f))
+                Text(c.speakerName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 c.dueDate?.let { Pill(it) }
             }
-            Spacer(Modifier.height(DS.Rhythm.tight))
+            Spacer(Modifier.height(DS.Rhythm.element))
             Text(c.statement, style = MaterialTheme.typography.bodyLarge)
             if (c.quote.isNotBlank() && c.quote != c.statement) {
                 Spacer(Modifier.height(DS.Rhythm.tight))
-                Text("「${c.quote}」", style = MaterialTheme.typography.bodyLarge,
+                Text("「${c.quote}」", style = MaterialTheme.typography.bodyMedium,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Spacer(Modifier.height(DS.Rhythm.element))
-            if (done == null) Row(horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.tight)) {
-                TonalButton("兑现了", onClick = { done = "kept"; onSettle("kept") })
-                TonalButton("取消了", onClick = { done = "cancelled"; onSettle("cancelled") })
-            } else Pill(
-                "已记：" + when (done) { "kept" -> "兑现了"; "cancelled" -> "取消了"; else -> done }, Tone.OK,
-            )
+            CardFooter {
+                if (done == null) {
+                    TonalButton("兑现了", onClick = { done = "kept"; onSettle("kept") })
+                    TonalButton("取消了", onClick = { done = "cancelled"; onSettle("cancelled") })
+                } else Pill(
+                    "已记：" + when (done) { "kept" -> "兑现了"; "cancelled" -> "取消了"; else -> done }, Tone.OK,
+                )
+            }
         }
     }
 }

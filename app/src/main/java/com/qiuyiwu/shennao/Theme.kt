@@ -136,34 +136,55 @@ private val DarkColors = darkColorScheme(
  * 字阶。单位是 sp 不是 px——sp 跟随系统字号设置，用户调大字体时界面要跟着变。
  * 下限 11sp：10sp 的中文在手机上不可读。
  *
- * 每一档都写清楚**什么时候用它**。选档不是审美问题，是「这段文字是什么」。
- * 2026-09-01 审计发现的病是用错：屏幕上最多的文字是最小号的。
+ * 4.1.1 重定：第一版的档差太小（24 / 16 / 15 / 13），一屏里什么都差不多大，
+ * 眼睛没有落点，这是「廉价」的直接来源。现在四个落点拉开：
+ *
+ *   页题 28 粗    ——一屏一个，是这一屏的名字
+ *   读文 17/27    ——原话、判断、摘要：**要读进去的内容比界面字大**
+ *   界面 14/21    ——说明、按钮、行副标题
+ *   元信息 12/16  ——时间、计数、状态；数字等宽（tnum），一列才对得齐
+ *
+ * 字重只用三档：粗（页题）、中（标题、按钮）、常规（其余）。中文字体在很多机器上
+ * 没有 SemiBold，会退成 Bold，所以不用 600。
  */
+private val Tnum = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+private fun style(size: Int, line: Int, weight: FontWeight = FontWeight.Normal, tracking: Float = 0f, tnum: Boolean = false) =
+    TextStyle(
+        fontSize = size.sp, lineHeight = line.sp, fontWeight = weight,
+        letterSpacing = tracking.sp,
+        fontFeatureSettings = if (tnum) "tnum" else null,
+        platformStyle = Tnum,
+        lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+            alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+            trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.None,
+        ),
+    )
+
 private val ShennaoTypography = Typography(
     /** 巨号。一屏最多一个，且它必须是那一屏的全部意义——目前只有录音时长。 */
-    headlineMedium = TextStyle(fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold),
+    headlineMedium = style(34, 40, FontWeight.Bold, tracking = -0.5f),
     /** 页面标题。每屏一个。 */
-    headlineSmall  = TextStyle(fontSize = 24.sp, lineHeight = 32.sp, fontWeight = FontWeight.SemiBold),
-    /** 区块标题。频道名、分区名。 */
-    titleLarge     = TextStyle(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold),
-    /** 卡片主行：人名、会议名、判断的第一行。 */
-    titleMedium    = TextStyle(fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium),
-    /** 卡片次行标题、列表行的标题。 */
-    titleSmall     = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium),
+    headlineSmall  = style(28, 34, FontWeight.Bold, tracking = -0.3f),
+    /** 分区标题：读出来的判断 / 分析。 */
+    titleLarge     = style(20, 28, FontWeight.Medium),
+    /** 卡片主行：人名、会议名。 */
+    titleMedium    = style(16, 22, FontWeight.Medium),
+    /** 列表行标题、tab。 */
+    titleSmall     = style(15, 22, FontWeight.Medium),
 
-    /** **正文默认档。** 判断、原话、摘要——凡是「要读的内容」都用它。 */
-    bodyLarge      = TextStyle(fontSize = 15.sp, lineHeight = 24.sp),
-    /** 次要正文。「读了也行、不读也不影响」的补充说明。 */
-    bodyMedium     = TextStyle(fontSize = 14.sp, lineHeight = 21.sp),
-    /** **元信息专用。** 时间、来源、计数、状态。一屏之内不该多于 bodyLarge。 */
-    bodySmall      = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
+    /** **读文。** 原话、判断、摘要、分析正文——凡是「要读进去的内容」都用它，且比界面字大。 */
+    bodyLarge      = style(17, 27),
+    /** 界面字：说明、行副标题、提示。 */
+    bodyMedium     = style(14, 21),
+    /** **元信息专用。** 时间、来源、计数。等宽数字。一屏之内不该多于 bodyLarge。 */
+    bodySmall      = style(12, 16, tnum = true),
 
     /** 按钮字。 */
-    labelLarge     = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
-    /** 分区小标、药丸、标签。 */
-    labelMedium    = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium),
-    /** **下限**，不再往下。 */
-    labelSmall     = TextStyle(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium),
+    labelLarge     = style(14, 20, FontWeight.Medium),
+    /** 药丸、tab 计数。等宽数字。 */
+    labelMedium    = style(12, 16, FontWeight.Medium, tracking = 0.2f, tnum = true),
+    /** 分区小标：字距拉开一点，小字才不显得挤。**下限**，不再往下。 */
+    labelSmall     = style(11, 14, FontWeight.Medium, tracking = 1f),
 )
 
 @Composable

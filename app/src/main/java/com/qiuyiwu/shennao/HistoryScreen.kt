@@ -1,6 +1,7 @@
 package com.qiuyiwu.shennao
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -124,7 +125,8 @@ fun HistoryScreen(
         verticalArrangement = Arrangement.spacedBy(DS.Rhythm.element),
     ) {
         item {
-            Text("记录", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(DS.Rhythm.element))
+            Text("记录", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(DS.Rhythm.tight))
             Text("每一场走到哪一站，都在这里。",
                  style = MaterialTheme.typography.bodyMedium,
@@ -173,6 +175,8 @@ fun HistoryScreen(
                 Text("这个来源还没有送到深脑的。", style = MaterialTheme.typography.bodyMedium,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            // 已送到的是「办完的事」，一行一条、发丝线隔开——不给卡：卡留给还在路上的（上面那几条）。
+            // 一屏里有卡有行，眼睛才分得出「要管的」和「看看就行的」。
             items(shown, key = { "s" + it.sessionId }) { s -> ServedRow(s, onOpen, onDelete) }
         }
 
@@ -199,64 +203,66 @@ fun HistoryScreen(
 }
 
 /**
- * 一场已送达的会：标题、时间，和它现在卡在哪一站。
+ * 一场已送达的会：标题、时间，和它现在卡在哪一站。**一行，不是一张卡。**
  *
- * 站点用一个词（药丸）说，不再画「录下来 → 送到 → 转写完 → 分析完」那条线——
- * 四个词里三个灰的一个亮的，读起来像坏了一半；而用户要的只是「我现在能不能看」。
+ * 站点用一个词（药丸）说，不再画「录下来 → 送到 → 转写完 → 分析完」那条线。
  * 分析完的什么都不带：一场办完的事不需要流程状态。
  */
 @Composable
 fun ServedRow(s: SessionCard, onOpen: (String) -> Unit, onDelete: ((String) -> Unit)? = null) {
     val failed = s.stage == Stage.FAILED
     val whenLabel = s.startedAt?.let { day(it) }
-    // 可点的 Card 那个重载是 onClick 在前、modifier 在后，
-    // 按 Modifier 优先的习惯写会匹配不上。
-    DsCard(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = { s.transcriptId?.let(onOpen) },
+    val open: (() -> Unit)? = s.transcriptId?.let { id -> { onOpen(id) } }
+    Column(
+        Modifier.fillMaxWidth()
+            .then(if (open != null) Modifier.clickable(onClick = open) else Modifier),
     ) {
-        Column(Modifier.padding(DS.Pad.tight)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
                 // 标题在前、一行紧凑的元信息在下：先给结论（这是什么），日期和时长是找它的时候才用得上的。
-                Text(SessionTitles.display(s.title, whenLabel), style = MaterialTheme.typography.titleMedium,
-                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                stagePill(s.stage)?.let { (label, tone) ->
-                    Spacer(Modifier.width(DS.Rhythm.element))
-                    Pill(label, tone)
+                Text(SessionTitles.display(s.title, whenLabel), style = MaterialTheme.typography.titleMedium)
+                val meta = listOfNotNull(whenLabel, s.durationMs?.let { minutesLabel(it) }).joinToString(" · ")
+                if (meta.isNotEmpty()) {
+                    Spacer(Modifier.height(DS.Rhythm.hair))
+                    Text(meta, style = MaterialTheme.typography.bodySmall,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            val meta = listOfNotNull(whenLabel, s.durationMs?.let { "${it / 60000} 分钟" }).joinToString(" · ")
-            if (meta.isNotEmpty()) {
-                Spacer(Modifier.height(2.dp))
-                Text(meta, style = MaterialTheme.typography.bodySmall,
-                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (failed && s.problem != null) {
-                Spacer(Modifier.height(DS.Rhythm.element))
-                // 失败的原因要说清楚**该怎么办**，而不只是「出错了」。
-                NoticeBox(Problems.humanize(s.problem), Tone.RISK)
-            }
-            if (failed && onDelete != null) {
-                // 给一条出路。一条救不回来的录音一直挂在列表上，
-                // 用户每次打开都要重新判断一次「这个要不要管」。
-                var confirming by remember { mutableStateOf(false) }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    QuietButton("删掉这条", onClick = { confirming = true })
-                }
-                if (confirming) ConfirmDialog(
-                    title = "删掉这条录音？",
-                    // 说清楚做完会怎样，而不是「确定删除吗」——那是句废话
-                    detail = "音频会从深脑删除，找不回来。这条已经处理失败，" +
-                             "删掉不影响其它录音。",
-                    confirmLabel = "删掉",
-                    destructive = true,
-                    onConfirm = { onDelete(s.sessionId) },
-                    onDismiss = { confirming = false },
-                )
+            stagePill(s.stage)?.let { (label, tone) ->
+                Spacer(Modifier.width(DS.Rhythm.element))
+                Pill(label, tone)
             }
         }
+        if (failed && s.problem != null) {
+            Spacer(Modifier.height(DS.Rhythm.tight))
+            // 失败的原因要说清楚**该怎么办**，而不只是「出错了」。
+            NoticeBox(Problems.humanize(s.problem), Tone.RISK)
+        }
+        if (failed && onDelete != null) {
+            // 给一条出路。一条救不回来的录音一直挂在列表上，
+            // 用户每次打开都要重新判断一次「这个要不要管」。
+            var confirming by remember { mutableStateOf(false) }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                QuietButton("删掉这条", onClick = { confirming = true })
+            }
+            if (confirming) ConfirmDialog(
+                title = "删掉这条录音？",
+                // 说清楚做完会怎样，而不是「确定删除吗」——那是句废话
+                detail = "音频会从深脑删除，找不回来。这条已经处理失败，" +
+                         "删掉不影响其它录音。",
+                confirmLabel = "删掉",
+                destructive = true,
+                onConfirm = { onDelete(s.sessionId) },
+                onDismiss = { confirming = false },
+            )
+        }
+        Spacer(Modifier.height(DS.Rhythm.element))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
+
+/** 「0 分钟」是句假话：不到一分钟就说不到一分钟。纯逻辑，JVM 可测。 */
+internal fun minutesLabel(ms: Long): String = if (ms < 60_000) "不到 1 分钟" else "${ms / 60_000} 分钟"
 
 /** 一站一个词。分析完 / 不知道 → 不显示。纯逻辑，JVM 可测。 */
 internal fun stagePill(stage: Stage): Pair<String, Tone>? = when (stage) {
@@ -277,11 +283,11 @@ private fun day(iso: String): String = runCatching {
 @Composable
 fun SessionRow(s: LocalSession, onDelete: () -> Unit) {
     DsCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(DS.Pad.tight)) {
+        Column(Modifier.padding(DS.Pad.card)) {
             val started = stamp(s.meta.startedAtEpochMs)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(SessionTitles.display(s.meta.title, started), style = MaterialTheme.typography.titleMedium,
-                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                     modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(DS.Rhythm.element))
                 when {
                     s.recording > 0 -> Pill("正在录", Tone.ACCENT)
