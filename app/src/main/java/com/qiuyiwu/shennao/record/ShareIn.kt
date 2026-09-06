@@ -50,19 +50,36 @@ object ShareIn {
     fun stage(ctx: Context, vault: FileVault, uri: Uri): Result {
         val name = displayName(ctx, uri)
         val title = titleOf(name)
-        val bytes = runCatching {
-            ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-        }.getOrNull() ?: return Result.Skipped(title, "读不出这个文件")
-        if (bytes.isEmpty()) return Result.Skipped(title, "文件是空的")
-
         val ext = extOf(name, ctx.contentResolver.getType(uri))
+
+        /*
+         * 流式落盘，边拷边算哈希。以前是整个 readBytes() 进内存，再写临时文件测时长，再写 vault——
+         * 一小时的 wav 有 115 MB，三份就闪退（012 P0-2）。现在文件从头到尾只在磁盘上，内存里只有 64 KB 的缓冲。
+         */
+        val tmp = File(ctx.cacheDir, "share-${System.nanoTime()}.$ext")
+        val digest = MessageDigest.getInstance("SHA-256")
+        var total = 0L
+        val copied = runCatching {
+            ctx.contentResolver.openInputStream(uri)?.use { inp ->
+                tmp.outputStream().use { out ->
+                    val buf = ByteArray(64 * 1024)
+                    while (true) {
+                        val n = inp.read(buf); if (n <= 0) break
+                        out.write(buf, 0, n); digest.update(buf, 0, n); total += n
+                    }
+                }
+                true
+            } ?: false
+        }.getOrDefault(false)
+        if (!copied) { tmp.delete(); return Result.Skipped(title, "读不出这个文件") }
+        if (total == 0L) { tmp.delete(); return Result.Skipped(title, "文件是空的") }
 
         /*
          * 时长从文件本身读。读不出来就不收——填一个假时长上去，服务端的时间轴
          * 会按它排，那是把编造写成事实（Ingest.kt 对「解不出时刻就返回 null」是同一条原则）。
          */
-        val durationMs = durationOf(ctx, bytes, ext)
-            ?: return Result.Skipped(title, "读不出时长，这个格式可能不支持")
+        val durationMs = durationOf(tmp)
+            ?: run { tmp.delete(); return Result.Skipped(title, "读不出时长，这个格式可能不支持") }
 
         /*
          * **幂等键由文件内容决定。** 同一个文件分享两次、或者先在网页传过一次再分享，
@@ -70,7 +87,7 @@ object ShareIn {
          * 在这里会原样重演。内容哈希对分享进来的文件尤其合适：它没有设备文件名可依。
          */
         val meta = SessionMeta(
-            clientRequestId = clientRequestId(sha256(bytes)),
+            clientRequestId = clientRequestId(hex(digest.digest())),
             title = title,
             // 分享进来的文件不知道自己是什么时候录的（元数据常常被剥掉），
             // 只能用现在。这一点和灵魂卡不同——那边文件名里带着录音时刻。
@@ -79,10 +96,11 @@ object ShareIn {
         )
         val session = vault.newSession(meta)
         val seg = Segment(0, 0, durationMs, Segment.State.SEALED, ext = ext)
-        return runCatching {
-            vault.segmentFile(session, seg).writeBytes(bytes)
-            Result.Staged(title, session)
-        }.getOrElse { Result.Skipped(title, "落盘失败") }
+        val dst = vault.segmentFile(session, seg)
+        // 同一个应用目录下 rename 是原子的；万一跨了文件系统就退回拷贝
+        val moved = tmp.renameTo(dst) || runCatching { tmp.copyTo(dst, overwrite = true); tmp.delete(); true }.getOrDefault(false)
+        return if (moved) Result.Staged(title, session)
+               else { vault.deleteSession(session); tmp.delete(); Result.Skipped(title, "落盘失败") }
     }
 
     // ── 纯逻辑，JVM 可测 ────────────────────────────────────────
@@ -123,8 +141,7 @@ object ShareIn {
 
     private val KNOWN = setOf("mp3", "m4a", "wav", "ogg", "opus", "aac", "flac", "webm", "amr", "mp4")
 
-    private fun sha256(b: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(b).joinToString("") { "%02x".format(it) }
+    private fun hex(b: ByteArray): String = b.joinToString("") { "%02x".format(it) }
 
     private fun displayName(ctx: Context, uri: Uri): String? = runCatching {
         ctx.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
@@ -132,20 +149,10 @@ object ShareIn {
         }
     }.getOrNull() ?: uri.lastPathSegment
 
-    private fun durationOf(ctx: Context, bytes: ByteArray, ext: String): Long? {
-        // MediaMetadataRetriever 要一个文件路径。写到缓存里读一次，读完删。
-        val tmp = File.createTempFile("share-", ".$ext", ctx.cacheDir)
-        return try {
-            tmp.writeBytes(bytes)
-            MediaMetadataRetriever().use { r ->
-                r.setDataSource(tmp.absolutePath)
-                r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
-                    ?.takeIf { it > 0 }
-            }
-        } catch (_: Throwable) {
-            null
-        } finally {
-            tmp.delete()
+    private fun durationOf(file: File): Long? = try {
+        MediaMetadataRetriever().use { r ->
+            r.setDataSource(file.absolutePath)
+            r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.takeIf { it > 0 }
         }
-    }
+    } catch (_: Throwable) { null }
 }

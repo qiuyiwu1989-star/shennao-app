@@ -49,73 +49,80 @@ object OggWrap {
         return crc
     }
 
-    private fun page(payloads: List<ByteArray>, granule: Long, serial: Int, seq: Int, flags: Int): ByteArray {
-        val laces = ArrayList<Byte>()
-        for (p in payloads) {
-            var rem = p.size
-            while (rem >= 255) { laces.add(255.toByte()); rem -= 255 }
-            laces.add(rem.toByte())
+    /**
+     * 拼一页。header 27 字节 + 分段表 + 载荷，直接往 ByteArray 里写。
+     * 012 P0-3：以前用 ArrayList<Byte> 逐字节 addAll，7 MB 的文件要装箱上亿次——内存飙五倍、低端机被杀。
+     * 输出字节和旧实现完全一致（CRC 表与算法没动）。
+     */
+    private fun page(payloads: List<ByteArray>, granule: Long, serial: Int, seq: Int, flags: Int): ByteArray =
+        pageOf(payloads.map { it.size }, granule, serial, seq, flags) { out, off ->
+            var o = off
+            payloads.forEach { it.copyInto(out, o); o += it.size }
         }
-        val out = ArrayList<Byte>()
-        out.addAll("OggS".toByteArray().toList())
-        out.add(0); out.add(flags.toByte())
-        for (i in 0 until 8) out.add(((granule ushr (i * 8)) and 0xFF).toByte())
-        for (i in 0 until 4) out.add(((serial ushr (i * 8)) and 0xFF).toByte())
-        for (i in 0 until 4) out.add(((seq ushr (i * 8)) and 0xFF).toByte())
-        repeat(4) { out.add(0) }                     // CRC 占位
-        out.add(laces.size.toByte()); out.addAll(laces)
-        payloads.forEach { out.addAll(it.toList()) }
-        val bytes = out.toByteArray()
-        val crc = oggCrc(bytes)
-        for (i in 0 until 4) bytes[22 + i] = ((crc ushr (i * 8)) and 0xFF).toByte()
-        return bytes
-    }
 
+    /** 数据页：载荷是 raw 里的一段连续区间（count 个定长包），零拷贝切出来。 */
+    private fun pageRaw(raw: ByteArray, from: Int, count: Int, granule: Long, serial: Int, seq: Int, flags: Int): ByteArray =
+        pageOf(List(count) { PACKET_LEN }, granule, serial, seq, flags) { out, off ->
+            raw.copyInto(out, off, from, from + count * PACKET_LEN)
+        }
+
+    private inline fun pageOf(sizes: List<Int>, granule: Long, serial: Int, seq: Int, flags: Int,
+                              fill: (ByteArray, Int) -> Unit): ByteArray {
+        val laces = java.io.ByteArrayOutputStream()
+        for (n in sizes) { var rem = n; while (rem >= 255) { laces.write(255); rem -= 255 }; laces.write(rem) }
+        val lace = laces.toByteArray()
+        val payloadLen = sizes.sum()
+        val out = ByteArray(27 + lace.size + payloadLen)
+        out[0] = 'O'.code.toByte(); out[1] = 'g'.code.toByte(); out[2] = 'g'.code.toByte(); out[3] = 'S'.code.toByte()
+        out[4] = 0; out[5] = flags.toByte()
+        for (i in 0 until 8) out[6 + i] = ((granule ushr (i * 8)) and 0xFF).toByte()
+        for (i in 0 until 4) out[14 + i] = ((serial ushr (i * 8)) and 0xFF).toByte()
+        for (i in 0 until 4) out[18 + i] = ((seq ushr (i * 8)) and 0xFF).toByte()
+        // 22..25 是 CRC，先留 0
+        out[26] = lace.size.toByte()
+        lace.copyInto(out, 27)
+        fill(out, 27 + lace.size)
+        val crc = oggCrc(out)
+        for (i in 0 until 4) out[22 + i] = ((crc ushr (i * 8)) and 0xFF).toByte()
+        return out
+    }
     class WrapError(msg: String) : Exception(msg)
 
+    /** 裸包 → Ogg/Opus。长度不是 40 的整数倍时截掉尾部残包。 */
     /** 裸包 → Ogg/Opus。长度不是 40 的整数倍时截掉尾部残包。 */
     fun wrap(raw: ByteArray, sampleRate: Int = 16000, tag: String = "CB08"): ByteArray {
         val usable = raw.size - (raw.size % PACKET_LEN)
         if (usable < PACKET_LEN) throw WrapError("不足一个完整的 OPUS 包")
-        val packets = (0 until usable step PACKET_LEN).map { raw.copyOfRange(it, it + PACKET_LEN) }
-
+        val packets = usable / PACKET_LEN
         val serial = 0x5153_3638
         var seq = 0
-        val pages = ArrayList<ByteArray>()
-
-        val head = ArrayList<Byte>()
-        head.addAll("OpusHead".toByteArray().toList())
-        head.add(1); head.add(1)
-        head.add((312 and 0xFF).toByte()); head.add((312 shr 8).toByte())   // pre-skip, LE
-        for (i in 0 until 4) head.add(((sampleRate ushr (i * 8)) and 0xFF).toByte())
-        repeat(3) { head.add(0) }                    // output gain(2) + mapping(1)
-
+        val head = java.io.ByteArrayOutputStream().apply {
+            write("OpusHead".toByteArray())
+            write(1); write(1)
+            write(312 and 0xFF); write(312 shr 8)                      // pre-skip, LE
+            for (i in 0 until 4) write((sampleRate ushr (i * 8)) and 0xFF)
+            write(0); write(0); write(0)                               // output gain(2) + mapping(1)
+        }.toByteArray()
         val tagBytes = tag.toByteArray()
-        val tags = ArrayList<Byte>()
-        tags.addAll("OpusTags".toByteArray().toList())
-        for (i in 0 until 4) tags.add(((tagBytes.size ushr (i * 8)) and 0xFF).toByte())
-        tags.addAll(tagBytes.toList()); repeat(4) { tags.add(0) }
-
-        pages += page(listOf(head.toByteArray()), 0, serial, seq++, 0x02)
-        pages += page(listOf(tags.toByteArray()), 0, serial, seq++, 0x00)
-
+        val tags = java.io.ByteArrayOutputStream().apply {
+            write("OpusTags".toByteArray())
+            for (i in 0 until 4) write((tagBytes.size ushr (i * 8)) and 0xFF)
+            write(tagBytes); write(0); write(0); write(0); write(0)
+        }.toByteArray()
+        val out = java.io.ByteArrayOutputStream(usable + usable / 40 + 256)
+        out.write(page(listOf(head), 0, serial, seq++, 0x02))
+        out.write(page(listOf(tags), 0, serial, seq++, 0x00))
         var granule = 0L
         var start = 0
-        while (start < packets.size) {
-            val group = packets.subList(start, minOf(start + 50, packets.size))
-            granule += GRANULE_PER_PACKET * group.size
-            val last = start + 50 >= packets.size
-            pages += page(group, granule, serial, seq++, if (last) 0x04 else 0x00)
+        while (start < packets) {
+            val count = minOf(50, packets - start)
+            granule += GRANULE_PER_PACKET * count
+            val last = start + 50 >= packets
+            out.write(pageRaw(raw, start * PACKET_LEN, count, granule, serial, seq++, if (last) 0x04 else 0x00))
             start += 50
         }
-        var total = 0
-        pages.forEach { total += it.size }
-        val out = ByteArray(total)
-        var o = 0
-        pages.forEach { it.copyInto(out, o); o += it.size }
-        return out
+        return out.toByteArray()
     }
-
     fun durationMs(rawLength: Int): Long = (rawLength / PACKET_LEN).toLong() * FRAME_MS
 
     /** 是不是裸包（而不是已经封好的 Ogg）。 */

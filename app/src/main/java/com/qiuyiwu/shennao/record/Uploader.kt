@@ -251,10 +251,15 @@ class Uploader(
     private fun push(
         sid: String, session: String, seg: Segment, meta: SessionMeta, h: Map<String, String>,
     ): StepResult {
-        val bytes = vault.readSegment(session, seg)
+        // 有文件本体就流式发，不整个读进内存（导入的 opus、分享的 wav 都是一整段，几 MB 到上百 MB）。
+        // 内存 vault（测试）没有文件，退回按字节发。012 P0-4
+        val file = vault.segmentPath(session, seg)
+        val bytes = if (file == null) vault.readSegment(session, seg) else null
+        if (file == null && bytes == null)
             // 文件不见了（被清理器扫掉、或者用户清了数据）。改成已上传会让服务端少收一片、
             // 清单对不上；留着又会每轮都失败。当成不可重试的错误报上去，让人看见。
-            ?: return StepResult.Err("第 ${seg.sequence} 段的音频文件不见了", false)
+            return StepResult.Err("第 ${seg.sequence} 段的音频文件不见了", false)
+        val byteLength = file?.length() ?: bytes!!.size.toLong()
 
         val ticket = http.request(
             "POST", "$apiBase/api/recordings/$sid/chunks/ticket", h,
@@ -262,7 +267,7 @@ class Uploader(
                 "sequence" to seg.sequence,
                 "idempotencyKey" to "${meta.clientRequestId}-${seg.sequence}",
                 "mimeType" to seg.mimeType,   // 每段报自己的真实容器：v0.5 之前封的是 m4a
-                "byteLength" to bytes.size,
+                "byteLength" to byteLength,
                 "startedAtMs" to seg.startMs,
                 // 服务端要求 endedAtMs ≥ 1 且大于开始。零长度的段不该走到这里，
                 // 但真走到了也不能让整场录音卡住。
@@ -300,7 +305,8 @@ class Uploader(
             .getOrNull()?.takeIf { it.isNotBlank() }
             ?: return StepResult.Err("第 ${seg.sequence} 段没拿到上传地址", true)
 
-        val put = http.requestBytes("PUT", url, mapOf("Content-Type" to seg.mimeType), bytes)
+        val put = if (file != null) http.requestFile("PUT", url, mapOf("Content-Type" to seg.mimeType), file)
+                  else http.requestBytes("PUT", url, mapOf("Content-Type" to seg.mimeType), bytes!!)
         if (put.status >= 400) {
             return StepResult.Err("第 ${seg.sequence} 段直传失败（${put.status}）", true)
         }

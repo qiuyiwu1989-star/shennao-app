@@ -41,6 +41,12 @@ interface Http {
         headers: Map<String, String>,
         body: ByteArray,
     ): HttpResponse
+    /**
+     * 传一个文件，流式，不整个读进内存（012 P0-4）。
+     * 默认实现退回 requestBytes——测试里的假 Http 不用管它；真实现（UrlHttp）覆盖成流式。
+     */
+    fun requestFile(method: String, url: String, headers: Map<String, String>, file: java.io.File): HttpResponse =
+        requestBytes(method, url, headers, file.readBytes())
 }
 
 /** 登录凭证。refreshToken 长期存，accessToken 用完即弃。 */
@@ -509,47 +515,44 @@ class DeepBrainClient(
     fun signOut() { accessToken = null; store.clear() }
 }
 
-/** 真实网络出口。用 HttpURLConnection，不引第三方库——这一层没有值得依赖的复杂度。 */
+/**
+ * 真实网络出口。OkHttp（本来就是依赖，实时字幕在用）。
+ *
+ * 012 P0-4 换掉 HttpURLConnection 的三个原因：
+ *   · 它把整个请求体再缓冲一份（不设 streaming mode 的话），上传 7 MB 的导入文件内存就翻倍
+ *   · 它没有写超时：手机网络中途僵住，上传会永远挂着，还握着 Resume.lock
+ *   · 文件不能流式发
+ * 读写超时是「60 秒没有进展」，不是「总共 60 秒」；整次调用封顶 15 分钟——够传一小时录音，不够挂一夜。
+ */
 class UrlHttp(private val timeoutMs: Int = 30_000) : Http {
-    override fun request(
-        method: String,
-        url: String,
-        headers: Map<String, String>,
-        body: String?,
-    ): HttpResponse = send(method, url, headers, body?.toByteArray())
-
-    override fun requestBytes(
-        method: String,
-        url: String,
-        headers: Map<String, String>,
-        body: ByteArray,
-    ): HttpResponse = send(method, url, headers, body)
-
-    private fun send(
-        method: String,
-        url: String,
-        headers: Map<String, String>,
-        body: ByteArray?,
-    ): HttpResponse {
-        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = method
-            connectTimeout = timeoutMs
-            readTimeout = timeoutMs
-            headers.forEach { (k, v) -> setRequestProperty(k, v) }
-            if (body != null) { doOutput = true }
-        }
+    private val client: okhttp3.OkHttpClient by lazy {
+        okhttp3.OkHttpClient.Builder()
+            .connectTimeout(timeoutMs.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
+            .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .callTimeout(15, java.util.concurrent.TimeUnit.MINUTES)
+            .retryOnConnectionFailure(true)
+            .build()
+    }
+    override fun request(method: String, url: String, headers: Map<String, String>, body: String?): HttpResponse =
+        send(method, url, headers, body?.let { okhttp3.RequestBody.create(null, it.toByteArray()) })
+    override fun requestBytes(method: String, url: String, headers: Map<String, String>, body: ByteArray): HttpResponse =
+        send(method, url, headers, okhttp3.RequestBody.create(null, body))
+    override fun requestFile(method: String, url: String, headers: Map<String, String>, file: java.io.File): HttpResponse =
+        send(method, url, headers, okhttp3.RequestBody.create(null, file))
+    private fun send(method: String, url: String, headers: Map<String, String>, body: okhttp3.RequestBody?): HttpResponse {
+        // OkHttp 要求 POST/PUT/PATCH 必须有 body；上层偶尔发空 POST
+        val b = body ?: if (method in setOf("POST", "PUT", "PATCH")) okhttp3.RequestBody.create(null, ByteArray(0)) else null
+        val req = okhttp3.Request.Builder().url(url).method(method, b).apply {
+            headers.forEach { (k, v) -> header(k, v) }
+        }.build()
         return try {
-            if (body != null) conn.outputStream.use { it.write(body) }
-            val code = conn.responseCode
-            // 4xx/5xx 的正文在 errorStream 里。只读 inputStream 的话，
-            // 服务端辛辛苦苦返回的错误说明会被整个丢掉，界面只剩一个数字。
-            val text = (if (code >= 400) conn.errorStream else conn.inputStream)
-                ?.bufferedReader()?.use { it.readText() } ?: ""
-            HttpResponse(code, text)
+            client.newCall(req).execute().use { r ->
+                // 4xx/5xx 的正文也要读：服务端辛辛苦苦返回的错误说明不能丢
+                HttpResponse(r.code, r.body?.string() ?: "")
+            }
         } catch (e: Exception) {
             HttpResponse(0, e.message ?: "网络错误")
-        } finally {
-            conn.disconnect()
         }
     }
 }

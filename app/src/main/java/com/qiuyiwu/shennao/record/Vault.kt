@@ -158,6 +158,8 @@ interface Vault {
     /** 这场录音的所有分段，按序号升序 */
     fun segments(session: String): List<Segment>
     fun readSegment(session: String, seg: Segment): ByteArray?
+    /** 段的文件本体，有就给（真实 vault）；内存 vault 返回 null，上传器退回按字节发。012 P0-4 */
+    fun segmentPath(session: String, seg: Segment): java.io.File? = null
     /** 改后缀=换状态。必须是原子的重命名，不能是「复制+删除」 */
     fun rename(session: String, from: Segment, to: Segment): Boolean
     fun deleteSession(session: String)

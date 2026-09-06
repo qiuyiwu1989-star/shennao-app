@@ -52,6 +52,7 @@ class FileVault(private val root: File) : Vault {
         (dir(session).listFiles() ?: emptyArray())
             .mapNotNull { Segment.parse(it.name) }.sortedBy { it.sequence }
 
+    override fun segmentPath(session: String, seg: Segment): File? = segmentFile(session, seg).takeIf { it.isFile }
     override fun readSegment(session: String, seg: Segment): ByteArray? =
         segmentFile(session, seg).takeIf { it.isFile }?.readBytes()
 
