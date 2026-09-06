@@ -198,6 +198,33 @@ object TodayParser {
 /** 链路四站。名字按用户能理解的说法取，不用服务端的内部状态名。 */
 enum class Stage { RECORDED, DELIVERED, TRANSCRIBED, ANALYZED, FAILED, UNKNOWN }
 
+/**
+ * 列表里怎么称呼一场会。纯逻辑，JVM 可测。
+ *
+ * 服务端有时把文件名当标题（`note20260829-140354`）、有时是默认的「手机录音」——
+ * 一列这种东西读不出「这是哪场」。有时间就用「录音 · 8月29日 14:03」，
+ * 至少能按时间找。真标题（分析起的名）照用。
+ */
+object SessionTitles {
+    private val fileLike = Regex("""^(?:note|rec|REC|record|audio)?[-_ ]?\d{8}[-_T]?\d{4,6}(?:\.\w+)?$""")
+    private val generic = setOf("", "手机录音", "录音", "灵魂卡录音", "Untitled", "untitled")
+
+    fun display(title: String, whenLabel: String?): String {
+        val t = title.trim()
+        val bad = t in generic || fileLike.matches(t)
+        return if (bad) (if (whenLabel != null) "录音 · $whenLabel" else "录音") else t
+    }
+}
+
+/**
+ * 卡住的原因给人看之前去掉内部前缀。服务端偶尔漏翻：「reaper 收尾：这场录音没有留下任何音频或转写」
+ * ——「reaper」是后台任务的名字，用户不该看见。
+ */
+object Problems {
+    private val internalPrefix = Regex("""^[A-Za-z][\w-]*\s*(收尾|清理|reaper)[:：]\s*""")
+    fun humanize(problem: String): String = problem.trim().replace(internalPrefix, "").ifBlank { problem.trim() }
+}
+
 data class SessionCard(
     val sessionId: String,
     val title: String,

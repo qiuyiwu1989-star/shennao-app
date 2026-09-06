@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -114,50 +115,48 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
         }
     }
 
-    Column(
-        Modifier.fillMaxSize().padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Spacer(Modifier.height(DS.Rhythm.element))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) { Text("返回") }
-            Spacer(Modifier.weight(1f))
-            // 录音笔导入放在这里：「录」和「导」是同一件事的两个来源，
-            // 分到两栏的话，用户要先想清楚「我这次算录还是算导」才知道点哪。
-            if (!recording) TextButton(
-                onClick = onImport, modifier = Modifier.heightIn(min = 48.dp),
-            ) { Text("从灵魂卡导入") }
-        }
+    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        // 录音笔导入放在顶栏：「录」和「导」是同一件事的两个来源，
+        // 分到两栏的话，用户要先想清楚「我这次算录还是算导」才知道点哪。
+        TopBar(onBack, actions = {
+            if (!recording) LinkButton(onClick = onImport, contentPadding = PaddingValues(horizontal = DS.Rhythm.element)) { Text("从灵魂卡导入") }
+        })
 
+        Column(
+            Modifier.weight(1f).fillMaxWidth().padding(DS.Pad.screen),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
         Spacer(Modifier.weight(1f))
 
-        /*
-         * 时长用等宽数字。
-         *
-         * 比例字体下「1」比「8」窄，秒数每跳一下整行都会左右抖——
-         * 一个抖动的计时器读起来像是出了问题，而这一屏唯一的职责
-         * 就是让人相信「它还在录」。
-         */
-        Text(
-            if (state == com.qiuyiwu.shennao.record.RecordState.IDLE && !recording) "准备好了"
-            else fmt(elapsed),
-            fontSize = if (recording || state != com.qiuyiwu.shennao.record.RecordState.IDLE) 52.sp else 26.sp,
-            fontWeight = FontWeight.Light,
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-            color = when (state) {
-                com.qiuyiwu.shennao.record.RecordState.INTERRUPTED,
-                com.qiuyiwu.shennao.record.RecordState.GAVE_UP,
-                com.qiuyiwu.shennao.record.RecordState.DISK_FULL -> MaterialTheme.colorScheme.error
-                else -> MaterialTheme.colorScheme.onSurface
-            },
-        )
+        val idle = state == com.qiuyiwu.shennao.record.RecordState.IDLE && !recording
+        if (idle) {
+            Text("准备好了", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+        } else {
+            /*
+             * 时长用等宽数字。比例字体下「1」比「8」窄，秒数每跳一下整行都会左右抖——
+             * 一个抖动的计时器读起来像是出了问题，而这一屏唯一的职责
+             * 就是让人相信「它还在录」。
+             */
+            Text(
+                fmt(elapsed),
+                fontSize = 52.sp,
+                fontWeight = FontWeight.Light,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                color = when (state) {
+                    com.qiuyiwu.shennao.record.RecordState.INTERRUPTED,
+                    com.qiuyiwu.shennao.record.RecordState.GAVE_UP,
+                    com.qiuyiwu.shennao.record.RecordState.DISK_FULL -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.onSurface
+                },
+            )
+        }
 
         if (recording || state == com.qiuyiwu.shennao.record.RecordState.INTERRUPTED) {
             Spacer(Modifier.height(DS.Rhythm.inner))
             Waveform(bars, Modifier.fillMaxWidth().height(56.dp))
         }
 
-        Spacer(Modifier.height(DS.Rhythm.element))
+        Spacer(Modifier.height(DS.Rhythm.tight))
         Text(
             when (state) {
                 // 中断必须一眼看得出来。挂着「正在录音」而其实没在录，
@@ -179,53 +178,39 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
 
         Spacer(Modifier.height(DS.Rhythm.block))
 
-        // 主按钮：录音时是「停止」，否则是「开始」。
-        // 用实心圆而不是矩形按钮——这一屏只有一个动作，它该长得像一个动作。
-        val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
         if (!recording) {
             SceneChips(scene) { scene = it }
-            Spacer(Modifier.height(DS.Rhythm.element))
+            Spacer(Modifier.height(DS.Rhythm.inner))
         }
-        Surface(
-            onClick = {
-                /*
-                 * 触感。开始和停止录音是**有后果**的动作——按下去之后，
-                 * 屏幕上的变化要一秒后才看得出来（服务启动、状态回传）。
-                 * 这一秒里手上没有任何确认，人会怀疑自己没按到，然后再按一次。
-                 */
-                // 同理：先做事，再给手感，且手感不许抛。
-                runCatching { haptics.performHapticFeedback(
-                    androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }
-                if (stopping) Unit
-                else if (recording) RecordingService.stop(ctx)
-                else {
-                    denied = false
-                    justFinished = null
-                    val need = Manifest.permission.RECORD_AUDIO
-                    if (ContextCompat.checkSelfPermission(ctx, need) == PackageManager.PERMISSION_GRANTED)
-                        RecordingService.start(ctx, "手机录音", scene)
-                    else ask.launch(need)
-                }
-            },
-            shape = CircleShape,
-            color = if (recording) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(104.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    if (stopping) "收尾中" else if (recording) "停止" else "开始",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontWeight = FontWeight.Medium,
-                )
+
+        // 主按钮：录音时是「停止」，否则是「开始」。
+        // 实心圆而不是矩形按钮——这一屏只有一个动作，它该长得像一个动作。
+        val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+        RecordButton(recording = recording, stopping = stopping) {
+            /*
+             * 触感。开始和停止录音是**有后果**的动作——按下去之后，
+             * 屏幕上的变化要一秒后才看得出来（服务启动、状态回传）。
+             * 这一秒里手上没有任何确认，人会怀疑自己没按到，然后再按一次。
+             * 先做事，再给手感，且手感不许抛。
+             */
+            runCatching { haptics.performHapticFeedback(
+                androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }
+            if (stopping) Unit
+            else if (recording) RecordingService.stop(ctx)
+            else {
+                denied = false
+                justFinished = null
+                val need = Manifest.permission.RECORD_AUDIO
+                if (ContextCompat.checkSelfPermission(ctx, need) == PackageManager.PERMISSION_GRANTED)
+                    RecordingService.start(ctx, "手机录音", scene)
+                else ask.launch(need)
             }
         }
 
         if (recording) {
             Spacer(Modifier.height(DS.Rhythm.inner))
             // 字幕收在一个开关后面，默认关。见 showCaptions 的注释。
-            TextButton(onClick = { showCaptions = !showCaptions }) {
+            LinkButton(onClick = { showCaptions = !showCaptions }) {
                 Text(if (showCaptions) "收起字幕" else "看字幕")
             }
             if (showCaptions) {
@@ -244,19 +229,19 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
          * 所以它就放在按钮旁边，而不是藏在设置里。
          */
         if (!recording && justFinished == null) {
-            Spacer(Modifier.height(DS.Rhythm.inner))
-            // 压成一行：这一屏还有场合和大按钮，「念一句」不该是一张三行的卡（012 P1-17）
-            DsCard(Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("按下之前，念一句", style = MaterialTheme.typography.labelSmall,
-                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(RecordNotice.lines[noticeIndex], style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(DS.Rhythm.block))
+            DsCard(Modifier.fillMaxWidth(), tone = CardTone.INSET) {
+                Column(Modifier.padding(DS.Pad.tight)) {
+                    Text("按下之前，念一句", style = MaterialTheme.typography.labelMedium,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(DS.Rhythm.tight))
+                    Text(RecordNotice.lines[noticeIndex], style = MaterialTheme.typography.bodyLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.inner)) {
+                        LinkButton(onClick = {
+                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(RecordNotice.lines[noticeIndex]))
+                        }) { Text("复制") }
+                        LinkButton(onClick = { noticeIndex = RecordNotice.next(noticeIndex) }) { Text("换一句") }
                     }
-                    TextButton(onClick = {
-                        clipboard.setText(androidx.compose.ui.text.AnnotatedString(RecordNotice.lines[noticeIndex]))
-                    }, contentPadding = PaddingValues()) { Text("复制") }
-                    TextButton(onClick = { noticeIndex = RecordNotice.next(noticeIndex) }, contentPadding = PaddingValues()) { Text("换一句") }
                 }
             }
         }
@@ -265,56 +250,78 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
         // 不在录、也没有别的可重试错误时才显示——避免跟中断/麦克风被抢的
         // 提示叠在一起，那两种情况本身就是「这一场还没完」的信号。
         if (!recording && justFinished != null && state != com.qiuyiwu.shennao.record.RecordState.INTERRUPTED) {
-            Spacer(Modifier.height(DS.Rhythm.inner))
+            Spacer(Modifier.height(DS.Rhythm.block))
             JustFinishedCard(
                 minutes = (justFinished!!.second / 60000).toInt(), pending = pending, onOpen = onOpenHistory,
                 onRename = { title -> renameJustFinished(ctx, title) },
             )
         }
 
-        Spacer(Modifier.height(DS.Rhythm.inner))
-
         if (denied) {
-            Text(
-                "没有麦克风权限就录不了。到系统设置里给深脑开一下。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
+            Spacer(Modifier.height(DS.Rhythm.inner))
+            NoticeBox("没有麦克风权限就录不了。到系统设置里给深脑开一下。", Tone.RISK)
         }
         // 只显示不可重试的错。网络抖一下就弹红字，用户学会的第一件事就是无视它
         error?.let {
-            Spacer(Modifier.height(DS.Rhythm.element))
-            Text(it, style = MaterialTheme.typography.bodyMedium,
-                 color = MaterialTheme.colorScheme.error,
-                 textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Spacer(Modifier.height(DS.Rhythm.inner))
+            NoticeBox(it, Tone.RISK)
         }
         // 上传出的问题以前只有一个没人读的字段（012 P1-15）
         uploadProblem?.let {
-            Spacer(Modifier.height(DS.Rhythm.element))
-            Text("上传：$it", style = MaterialTheme.typography.bodySmall,
-                 color = MaterialTheme.colorScheme.error,
-                 textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Spacer(Modifier.height(DS.Rhythm.inner))
+            NoticeBox("上传：$it", Tone.WARN)
         }
 
         Spacer(Modifier.weight(1f))
-
-        // 底部那段说明只给头三次进来的人看；老用户已经知道了（012 P1-17）
-        val tipsSeen = remember { RecordTips.seenTimes(ctx) }
-        if (tipsSeen < 3) Surface(
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                "录完自动推到深脑，转写和分析在那边跑。中途断网也不会丢——" +
-                    "没传完的段留在手机上，下次打开接着传。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(14.dp),
-            )
         }
+
+        // 底部那段说明只给头三次进来的人看；老用户已经知道了（012 P1-17）。
+        // 一句灰字，不装在框里——框会让它看起来像一条需要处理的提示。
+        val tipsSeen = remember { RecordTips.seenTimes(ctx) }
+        if (tipsSeen < 3) Text(
+            "录完自动推到深脑，转写和分析在那边跑。中途断网也不会丢——没传完的段留在手机上，下次打开接着传。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.padding(DS.Pad.screen),
+        )
         Spacer(Modifier.height(DS.Rhythm.inner))
+    }
+}
+
+/**
+ * 那个圆。88dp 品牌蓝、里面一个话筒；录音时变红、里面一个方块；收尾时转圈。
+ * 字在圆的下面——圆里写「开始」两个字，看起来像个占位符。
+ */
+@Composable
+private fun RecordButton(recording: Boolean, stopping: Boolean, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Surface(
+            onClick = onClick,
+            shape = CircleShape,
+            color = if (recording) cs.error else cs.primary,
+            modifier = Modifier.size(DS.Size.recordButton),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                when {
+                    stopping -> CircularProgressIndicator(
+                        Modifier.size(DS.Size.iconLarge), color = cs.onPrimary, strokeWidth = DS.Size.rule)
+                    recording -> Box(
+                        Modifier.size(DS.Rhythm.inner)
+                            .background(cs.onError, DS.Radius.tiny))
+                    else -> androidx.compose.material3.Icon(
+                        MicOutlined, contentDescription = "开始", tint = cs.onPrimary,
+                        modifier = Modifier.size(DS.Size.iconLarge))
+                }
+            }
+        }
+        Spacer(Modifier.height(DS.Rhythm.element))
+        Text(
+            if (stopping) "收尾中" else if (recording) "停止" else "开始",
+            style = MaterialTheme.typography.labelLarge,
+            color = cs.onSurfaceVariant,
+        )
     }
 }
 
@@ -330,40 +337,34 @@ fun JustFinishedCard(minutes: Int, pending: Int, onOpen: (() -> Unit)?, onRename
     // 每一场都叫「手机录音」，记录页一列全一样（012 P1-4）。停下来这一刻是起名最自然的时候。
     var name by remember { mutableStateOf("") }
     var named by remember { mutableStateOf(false) }
-    Surface(
-        color = MaterialTheme.colorScheme.primaryContainer,
-        shape = com.qiuyiwu.shennao.DS.Radius.card,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
+    DsCard(Modifier.fillMaxWidth(), tone = CardTone.ACCENT) {
         Column(Modifier.padding(DS.Pad.tight)) {
             Text(
                 if (pending > 0) "刚录的这场（约 $minutes 分钟）还有 $pending 段在传"
                 else "刚录的这场（约 $minutes 分钟）已经送到深脑了",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
             if (onRename != null) {
-                Spacer(Modifier.height(DS.Rhythm.tight))
-                if (named) Text("已改名：$name", style = MaterialTheme.typography.bodySmall,
+                Spacer(Modifier.height(DS.Rhythm.element))
+                if (named) Text("已改名：$name", style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer)
                 else Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(value = name, onValueChange = { name = it.take(60) }, singleLine = true,
+                                      shape = DS.Radius.control,
                                       placeholder = { Text("给这场起个名") }, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(DS.Rhythm.element))
-                    TextButton(enabled = name.isNotBlank(), onClick = { onRename(name.trim()); named = true }) { Text("好") }
+                    TonalButton("好", enabled = name.isNotBlank(), onClick = { onRename(name.trim()); named = true })
                 }
             }
             if (pending == 0) {
+                Spacer(Modifier.height(DS.Rhythm.tight))
                 Text(
                     "转写和分析在那边跑，跑完会出现在「记录」里。",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
-                if (onOpen != null) {
-                    Spacer(Modifier.height(DS.Rhythm.tight))
-                    LinkButton(onClick = onOpen, modifier = Modifier.heightIn(min = 48.dp)) { Text("去「记录」看") }
-                }
+                if (onOpen != null) LinkButton(onClick = onOpen) { Text("去「记录」看") }
             }
         }
     }
@@ -380,13 +381,7 @@ fun JustFinishedCard(minutes: Int, pending: Int, onOpen: (() -> Unit)?, onRename
  */
 @androidx.compose.runtime.Composable
 private fun Captions(lines: List<String>, state: String?, hasSession: Boolean) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shape = com.qiuyiwu.shennao.DS.Radius.card,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp, MaterialTheme.colorScheme.outlineVariant),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
+    DsCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(DS.Pad.tight)) {
             Text("实时字幕", style = MaterialTheme.typography.labelMedium,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -490,19 +485,18 @@ private fun HotwordBox(sessionId: String?) {
                 enabled = sessionId != null && !busy,
                 placeholder = { Text("用顿号或空格分开") },
                 singleLine = true,
+                shape = DS.Radius.control,
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(DS.Rhythm.element))
-            TextButton(
-                // 安卓的命中区下限是 48dp（规范 §12 明写不取交集）。
-                // TextButton 默认高度不够，用透明 padding 撑开、不改视觉尺寸。
-                modifier = Modifier.heightIn(min = 48.dp),
+            TonalButton(
+                "加上",
                 enabled = sessionId != null && !busy && text.isNotBlank(),
                 onClick = {
-                    val id = sessionId ?: return@TextButton
+                    val id = sessionId ?: return@TonalButton
                     val pins = text.split('、', ',', '，', ' ', '\n')
                         .map { it.trim() }.filter { it.isNotEmpty() }.distinct()
-                    if (pins.isEmpty()) return@TextButton
+                    if (pins.isEmpty()) return@TonalButton
                     busy = true; failed = null
                     scope.launch {
                         val r = withContext(Dispatchers.IO) {
@@ -516,15 +510,15 @@ private fun HotwordBox(sessionId: String?) {
                         }
                     }
                 },
-            ) { Text("加上") }
+            )
         }
         if (saved.isNotEmpty()) {
             Spacer(Modifier.height(DS.Rhythm.tight))
             // 显示服务端真正接受的那些，不是用户输入的那些——
             // 超限或重复的词会被丢掉，照抄输入会让人以为它在起作用。
             Text("已生效：" + saved.joinToString("、"),
-                 style = MaterialTheme.typography.bodySmall,
-                 color = MaterialTheme.colorScheme.primary)
+                 style = MaterialTheme.typography.bodyMedium,
+                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         failed?.let {
             Spacer(Modifier.height(DS.Rhythm.tight))
@@ -568,13 +562,14 @@ internal fun SceneChips(selected: String?, onSelect: (String?) -> Unit) {
             maxItemsInEachRow = 3,   // 六个词 3 + 3；以前 5 + 1，「随手记」孤零零掉在第二行
         ) {
             Scenes.all.forEach { (key, label) ->
-                androidx.compose.material3.FilterChip(
+                DsChip(
                     selected = selected == key,
                     onClick = { onSelect(if (selected == key) null else key) },
-                    label = { Text(label) },
+                    label = label,
                 )
             }
         }
+        Spacer(Modifier.height(DS.Rhythm.tight))
         Text(
             if (selected == null) "这是什么场合？不选也行。" else "按「${Scenes.label(selected)}」的方法来分析。",
             style = MaterialTheme.typography.bodySmall,

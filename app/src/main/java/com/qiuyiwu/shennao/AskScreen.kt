@@ -3,15 +3,17 @@ package com.qiuyiwu.shennao
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -43,18 +45,19 @@ fun AskScreen(client: DeepBrainClient, onOpen: (String) -> Unit) {
     var searchMode by remember { mutableStateOf(false) }
     // 切走就掐断流式连接，否则阻塞读要挂到 180 秒（012 P2-5）
     val cancelAsk = remember { arrayOfNulls<() -> Unit>(1) }
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { cancelAsk[0]?.invoke() } }
+    DisposableEffect(Unit) { onDispose { cancelAsk[0]?.invoke() } }
     if (searchMode) {
         Column(Modifier.fillMaxSize()) {
-            LinkButton(onClick = { searchMode = false }, contentPadding = PaddingValues(horizontal = DS.Rhythm.inner)) { Text("← 回到问") }
+            TopBar(onBack = { searchMode = false })
             SearchScreen(client, onOpen)
         }
         return
     }
 
-    fun send() {
-        val question = q.trim()
+    fun send(question0: String = q) {
+        val question = question0.trim()
         if (question.length < 2 || busy) return
+        q = question
         asked = question; answer = ""; step = null; mode = null
         failed = null; insufficient = false; fallback = emptyList()
         busy = true
@@ -82,33 +85,46 @@ fun AskScreen(client: DeepBrainClient, onOpen: (String) -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
-        Spacer(Modifier.height(16.dp))
-        OutlinedTextField(
+    Column(Modifier.fillMaxSize().padding(DS.Pad.screen)) {
+        Spacer(Modifier.height(DS.Rhythm.inner))
+        /*
+         * 输入框是填充底、不描边、圆角——和这一屏的其它东西一家。
+         * 之前是一圈细线的 OutlinedTextField，右边一个「问」字：深底上又是一个空心框。
+         * 发送用图标：它在有字可发时才亮起来。
+         */
+        val canSend = !busy && q.trim().length >= 2
+        TextField(
             value = q, onValueChange = { q = it },
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("上次那件事，他到底怎么说的？") },
             singleLine = true,
             enabled = !busy,
+            shape = DS.Radius.card,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent,
+            ),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
             // 回车就发。手机上多一个「提问」按钮就是多一次拇指移动。
             keyboardActions = KeyboardActions(onSend = { send() }),
             trailingIcon = {
-                TextButton(onClick = { send() }, enabled = !busy && q.trim().length >= 2) {
-                    Text(if (busy) "…" else "问")
-                }
+                if (busy) CircularProgressIndicator(Modifier.size(DS.Size.icon), strokeWidth = DS.Size.rule)
+                else IconAction(
+                    Icons.AutoMirrored.Outlined.Send, "问",
+                    onClick = { send() }, enabled = canSend,
+                    tint = if (canSend) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline,
+                )
             },
         )
         Spacer(Modifier.height(DS.Rhythm.element))
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(DS.Rhythm.element)) {
             if (asked == null) item {
-                Empty(
-                    "问深脑",
-                    "直接问，不用想关键词。比如「陈总上次答应了什么」" +
-                        "「这个月我改过几次主意」「上周那场会最后定了没」。",
-                    "改用关键词搜", { searchMode = true },
-                )
+                AskEmpty(onExample = { send(it) }, onSearch = { searchMode = true })
             }
 
             asked?.let { a -> item {
@@ -119,8 +135,8 @@ fun AskScreen(client: DeepBrainClient, onOpen: (String) -> Unit) {
             // 智能体模式会翻好几篇文档，二十秒里不出字是常态。
             // 说出它正在做什么——这是这段等待里唯一能让人安心的东西。
             if (busy && answer.isEmpty()) item {
-                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(DS.Size.progress), strokeWidth = DS.Size.rule)
                     Spacer(Modifier.width(DS.Rhythm.element))
                     Text(
                         step ?: if (mode == "agent") "在库里翻资料，这个要久一点" else "在想",
@@ -138,10 +154,7 @@ fun AskScreen(client: DeepBrainClient, onOpen: (String) -> Unit) {
                 }
             }
 
-            failed?.let { f -> item {
-                Text(f, style = MaterialTheme.typography.bodyMedium,
-                     color = MaterialTheme.colorScheme.error)
-            } }
+            failed?.let { f -> item { NoticeBox(f, Tone.RISK) } }
 
             if (insufficient) {
                 item {
@@ -155,18 +168,44 @@ fun AskScreen(client: DeepBrainClient, onOpen: (String) -> Unit) {
                     )
                 }
                 if (fallback.isNotEmpty()) {
-                    item {
-                        Text("不过库里这些提到过它：",
-                             style = MaterialTheme.typography.labelMedium,
-                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    item { SectionLabel("不过库里这些提到过它") }
                     items(fallback, key = { it.kind + it.id }) { h ->
                         HitCard(h) { h.transcriptId?.let(onOpen) }
                     }
                 }
+                item { LinkButton(onClick = { searchMode = true }) { Text("改用关键词搜") } }
             }
 
-            item { Spacer(Modifier.height(DS.Rhythm.inner)) }
+            item { Spacer(Modifier.height(DS.Rhythm.page)) }
         }
     }
+}
+
+/**
+ * 空态：说清楚能问什么，并给三个**能点的**例子——点一下就问出去。
+ * 之前是一段文字里夹着三个「」引号的例子，和一个居中浮着的按钮，屏幕四分之三是空的。
+ */
+@Composable
+private fun AskEmpty(onExample: (String) -> Unit, onSearch: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = DS.Rhythm.inner)) {
+        Text("问深脑", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(DS.Rhythm.tight))
+        Text("直接问，不用想关键词。深脑只从录进来的内容里答，不猜。",
+             style = MaterialTheme.typography.bodyMedium,
+             color = MaterialTheme.colorScheme.onSurfaceVariant)
+        SectionLabel("比如")
+        DsGroup {
+            AskExamples.all.forEachIndexed { i, ex ->
+                if (i > 0) RowDivider()
+                DsRow(ex, onClick = { onExample(ex) })
+            }
+        }
+        Spacer(Modifier.height(DS.Rhythm.element))
+        LinkButton(onClick = onSearch) { Text("改用关键词搜") }
+    }
+}
+
+/** 空态里那几个例句。纯数据，JVM 可测。 */
+internal object AskExamples {
+    val all = listOf("陈总上次答应了什么", "这个月我改过几次主意", "上周那场会最后定了没")
 }

@@ -223,8 +223,9 @@ class ScreenTest {
         compose.setContent {
             ShennaoTheme { MeScreen(client, onOpenWeb = { p, t -> opened += p to t }, onSignOut = {}, http = NoNetHttp()) }
         }
-        compose.onNodeWithText("隐私政策").assertIsDisplayed().performClick()
-        compose.onNodeWithText("服务条款").assertIsDisplayed().performClick()
+        // 「我的」按分组列表排，这两行落在首屏之外——先滚到再点
+        compose.onNodeWithText("隐私政策").performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithText("服务条款").performScrollTo().assertIsDisplayed().performClick()
         assertEquals(listOf("/zh/privacy" to "隐私政策", "/zh/terms" to "服务条款"), opened)
     }
 
@@ -274,11 +275,12 @@ class ScreenTest {
         compose.onNodeWithText("分析完").assertDoesNotExist()
     }
 
-    @Test fun `还没分析完的条目要留着进度——这正是这一页存在的理由`() {
+    /** 站点是一个词（药丸），不再是「录下来 → 送到 → 转写完 → 分析完」那条线。 */
+    @Test fun `还没分析完的条目要说它卡在哪一站——这正是这一页存在的理由`() {
         compose.setContent {
             ShennaoTheme { ServedRow(sessionCard(stage = Stage.TRANSCRIBED), onOpen = {}) }
         }
-        compose.onNodeWithText("分析完").assertExists()
+        compose.onNodeWithText("分析中").assertExists()
     }
     // ---- 认知三档：猜想不能和亲证长得一样 ----
 

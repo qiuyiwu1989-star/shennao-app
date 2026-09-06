@@ -258,6 +258,8 @@ private fun App(client: DeepBrainClient) {
             if (nav.current == Route.Today) {
                 FloatingActionButton(
                     onClick = { go(nav.push(Route.Record)) },
+                    // 圆的。方圆角那个是 Material 的默认，而「录」这个动作全 App 只有一个形状：圆
+                    shape = androidx.compose.foundation.shape.CircleShape,
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                 ) {

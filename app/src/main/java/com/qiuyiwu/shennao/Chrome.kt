@@ -7,7 +7,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 
 /*
  * 三态：正在取、什么都没有、出事了。
@@ -34,13 +33,7 @@ fun SkeletonList(rows: Int = 3) {
         verticalArrangement = Arrangement.spacedBy(DS.Rhythm.element),
     ) {
         repeat(rows) { i ->
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                shape = DS.Radius.card,
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp, MaterialTheme.colorScheme.outlineVariant),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
+            DsCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(DS.Pad.tight)) {
                     // 第一行短、第二行长、第三行更短——真实卡片就是这个形状
                     Bar(0.42f)
@@ -60,36 +53,37 @@ private fun Bar(fraction: Float) {
     Box(
         Modifier
             .fillMaxWidth(fraction)
-            .height(12.dp)
-            .background(
-                MaterialTheme.colorScheme.surfaceVariant,
-                androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
-            )
+            .height(DS.Rhythm.element)
+            .background(MaterialTheme.colorScheme.surfaceVariant, DS.Radius.pill)
     )
 }
 
 @Composable
 fun Loading() {
-    Box(Modifier.fillMaxWidth().padding(48.dp), Alignment.Center) {
-        CircularProgressIndicator(strokeWidth = 2.dp)
+    Box(Modifier.fillMaxWidth().padding(DS.Rhythm.block), Alignment.Center) {
+        CircularProgressIndicator(strokeWidth = DS.Size.rule)
     }
 }
 
-/** 真的没有内容。要说清楚「没有」是什么意思，并给一个能做的动作。 */
+/**
+ * 真的没有内容。要说清楚「没有」是什么意思，并给一个能做的动作。
+ *
+ * 靠上放，不居中：居中的空态在一屏里浮着，像加载失败；靠上的读起来是「这一栏现在是空的」。
+ */
 @Composable
 fun Empty(title: String, hint: String, actionLabel: String? = null, onAction: (() -> Unit)? = null) {
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 44.dp),
+        Modifier.fillMaxWidth().padding(horizontal = DS.Rhythm.inner, vertical = DS.Rhythm.block),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(DS.Rhythm.tight))
-        Text(hint, style = MaterialTheme.typography.bodyLarge,
+        Text(hint, style = MaterialTheme.typography.bodyMedium,
              color = MaterialTheme.colorScheme.onSurfaceVariant,
              textAlign = TextAlign.Center)
         if (actionLabel != null && onAction != null) {
-            Spacer(Modifier.height(16.dp))
-            OutlinedButton(onClick = onAction) { Text(actionLabel) }
+            Spacer(Modifier.height(DS.Rhythm.inner))
+            TonalButton(actionLabel, onAction)
         }
     }
 }
@@ -101,17 +95,17 @@ fun Empty(title: String, hint: String, actionLabel: String? = null, onAction: ((
 @Composable
 fun Broken(message: String, onRetry: () -> Unit) {
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 40.dp),
+        Modifier.fillMaxWidth().padding(horizontal = DS.Rhythm.inner, vertical = DS.Rhythm.block),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("没取到", style = MaterialTheme.typography.titleMedium,
              color = MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(DS.Rhythm.tight))
-        Text(message, style = MaterialTheme.typography.bodyLarge,
+        Text(message, style = MaterialTheme.typography.bodyMedium,
              color = MaterialTheme.colorScheme.onSurfaceVariant,
              textAlign = TextAlign.Center)
-        Spacer(Modifier.height(16.dp))
-        Button(onClick = onRetry) { Text("再试一次") }
+        Spacer(Modifier.height(DS.Rhythm.inner))
+        PrimaryButton("再试一次", onRetry)
     }
 }
 
@@ -126,7 +120,7 @@ fun StaleBanner(label: String) {
             label,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            modifier = Modifier.padding(DS.Pad.screen).padding(vertical = DS.Rhythm.tight),
         )
     }
 }

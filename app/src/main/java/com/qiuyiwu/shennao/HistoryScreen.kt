@@ -120,34 +120,30 @@ fun HistoryScreen(
     }) {
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = DS.Pad.default,
+        contentPadding = DS.Pad.list(top = DS.Rhythm.inner),
         verticalArrangement = Arrangement.spacedBy(DS.Rhythm.element),
     ) {
         item {
-            Text("记录", style = MaterialTheme.typography.headlineSmall)
+            Text("记录", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(DS.Rhythm.tight))
             Text("每一场走到哪一站，都在这里。",
                  style = MaterialTheme.typography.bodyMedium,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(DS.Rhythm.element))
+            Spacer(Modifier.height(DS.Rhythm.inner))
             // 灵魂卡那一头。「有什么」和「进来了没有」是同一个问题的两面，
             // 卡的状态不放在这里，用户就得去另一栏对账。
             CardBar(card, onOpenBle)
         }
         // 录音被系统杀掉过：说一句，点「知道了」就走（012 P1-7）
         orphan?.let { at -> item {
-            Surface(color = MaterialTheme.colorScheme.errorContainer, shape = DS.Radius.card, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(DS.Pad.tight)) {
-                    Text(com.qiuyiwu.shennao.record.OrphanNotice.line(at), style = MaterialTheme.typography.bodyMedium,
-                         color = MaterialTheme.colorScheme.onErrorContainer)
-                    TextButton(onClick = { com.qiuyiwu.shennao.record.OrphanNotice.clear(ctx); orphan = null }) { Text("知道了") }
-                }
+            NoticeBox(com.qiuyiwu.shennao.record.OrphanNotice.line(at), Tone.WARN) {
+                QuietButton("知道了", onClick = { com.qiuyiwu.shennao.record.OrphanNotice.clear(ctx); orphan = null })
             }
         } }
 
         // 还在这台手机上的排最前：它们是唯一可能丢的
         if (rows.isNotEmpty()) {
-            item { MiniHead("还在手机上") }
+            item { SectionLabel("还在手机上") }
             items(rows, key = { "l" + it.dir }) { s ->
                 SessionRow(s) {
                     scope.launch {
@@ -161,15 +157,14 @@ fun HistoryScreen(
         }
 
         if (served.isNotEmpty()) {
-            item { MiniHead("已经送到深脑") }
+            item { SectionLabel("已经送到深脑") }
             // 按来源分段：灵魂卡 / 手机 / 分享来的。每个入口各占一格，不做主次视觉差——
             // 一个只用手机的人，界面上不该处处看见「你还没有灵魂卡」。
             if (SourceFilter.available(served)) item {
                 Row(Modifier.fillMaxWidth().padding(bottom = DS.Rhythm.tight),
                     horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.tight)) {
                     SourceFilter.options.forEach { (key, label) ->
-                        FilterChip(selected = sourceFilter == key, onClick = { sourceFilter = key },
-                                   label = { Text(label) })
+                        DsChip(selected = sourceFilter == key, onClick = { sourceFilter = key }, label = label)
                     }
                 }
             }
@@ -203,22 +198,17 @@ fun HistoryScreen(
     }
 }
 
-@Composable
-private fun MiniHead(t: String) {
-    Text(t, style = MaterialTheme.typography.labelMedium,
-         color = MaterialTheme.colorScheme.onSurfaceVariant,
-         modifier = Modifier.padding(top = DS.Rhythm.tight, bottom = 2.dp))
-}
-
 /**
- * 一场已送达的会，显示它走到链路的第几站。
+ * 一场已送达的会：标题、时间，和它现在卡在哪一站。
  *
- * 四站画成一条线而不是一个状态词：状态词只说「现在在哪」，
- * 一条线还说了「还差几步」——而用户真正想知道的是后者。
+ * 站点用一个词（药丸）说，不再画「录下来 → 送到 → 转写完 → 分析完」那条线——
+ * 四个词里三个灰的一个亮的，读起来像坏了一半；而用户要的只是「我现在能不能看」。
+ * 分析完的什么都不带：一场办完的事不需要流程状态。
  */
 @Composable
 fun ServedRow(s: SessionCard, onOpen: (String) -> Unit, onDelete: ((String) -> Unit)? = null) {
     val failed = s.stage == Stage.FAILED
+    val whenLabel = s.startedAt?.let { day(it) }
     // 可点的 Card 那个重载是 onClick 在前、modifier 在后，
     // 按 Modifier 优先的习惯写会匹配不上。
     DsCard(
@@ -226,91 +216,55 @@ fun ServedRow(s: SessionCard, onOpen: (String) -> Unit, onDelete: ((String) -> U
         onClick = { s.transcriptId?.let(onOpen) },
     ) {
         Column(Modifier.padding(DS.Pad.tight)) {
-            // 标题在前、一行紧凑的元信息在下——参考的是"智能纪要"那类列表
-            // 的读法：先给结论（这是什么），日期和时长是找它的时候才用得上的。
-            // 之前是标题和时长并排、日期又落到卡片最下面，读的时候视线要
-            // 跳两趟才拼出"这是哪场、什么时候"。
-            Text(s.title, style = MaterialTheme.typography.titleMedium,
-                 fontWeight = FontWeight.SemiBold)
-            val meta = listOfNotNull(
-                s.startedAt?.let { day(it) },
-                s.durationMs?.let { "${it / 60000} 分钟" },
-            ).joinToString(" · ")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // 标题在前、一行紧凑的元信息在下：先给结论（这是什么），日期和时长是找它的时候才用得上的。
+                Text(SessionTitles.display(s.title, whenLabel), style = MaterialTheme.typography.titleMedium,
+                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                stagePill(s.stage)?.let { (label, tone) ->
+                    Spacer(Modifier.width(DS.Rhythm.element))
+                    Pill(label, tone)
+                }
+            }
+            val meta = listOfNotNull(whenLabel, s.durationMs?.let { "${it / 60000} 分钟" }).joinToString(" · ")
             if (meta.isNotEmpty()) {
                 Spacer(Modifier.height(2.dp))
                 Text(meta, style = MaterialTheme.typography.bodySmall,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            // 分析完的不用再看"走到第几步了"——四个绿勾对一场已经办完的事
-            // 只是噪音，参考设计对处理完的条目就是这么干净、什么流程状态都不带。
-            if (s.stage != Stage.ANALYZED) {
-                Spacer(Modifier.height(DS.Rhythm.element))
-                Chain(s.stage)
-            }
             if (failed && s.problem != null) {
                 Spacer(Modifier.height(DS.Rhythm.element))
                 // 失败的原因要说清楚**该怎么办**，而不只是「出错了」。
-                // 服务端已经把内部术语翻成人话了，这里照着显示。
-                Surface(
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(s.problem, style = MaterialTheme.typography.bodyMedium,
-                         color = MaterialTheme.colorScheme.onErrorContainer,
-                         modifier = Modifier.padding(DS.Pad.tight))
+                NoticeBox(Problems.humanize(s.problem), Tone.RISK)
+            }
+            if (failed && onDelete != null) {
+                // 给一条出路。一条救不回来的录音一直挂在列表上，
+                // 用户每次打开都要重新判断一次「这个要不要管」。
+                var confirming by remember { mutableStateOf(false) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    QuietButton("删掉这条", onClick = { confirming = true })
                 }
-                if (onDelete != null) {
-                    // 给一条出路。一条救不回来的录音一直挂在列表上，
-                    // 用户每次打开都要重新判断一次「这个要不要管」。
-                    var confirming by remember { mutableStateOf(false) }
-                    TextButton(onClick = { confirming = true }) {
-                        Text("删掉这条", color = MaterialTheme.colorScheme.error)
-                    }
-                    if (confirming) ConfirmDialog(
-                        title = "删掉这条录音？",
-                        // 说清楚做完会怎样，而不是「确定删除吗」——那是句废话
-                        detail = "音频会从深脑删除，找不回来。这条已经处理失败，" +
-                                 "删掉不影响其它录音。",
-                        confirmLabel = "删掉",
-                        destructive = true,
-                        onConfirm = { onDelete(s.sessionId) },
-                        onDismiss = { confirming = false },
-                    )
-                }
+                if (confirming) ConfirmDialog(
+                    title = "删掉这条录音？",
+                    // 说清楚做完会怎样，而不是「确定删除吗」——那是句废话
+                    detail = "音频会从深脑删除，找不回来。这条已经处理失败，" +
+                             "删掉不影响其它录音。",
+                    confirmLabel = "删掉",
+                    destructive = true,
+                    onConfirm = { onDelete(s.sessionId) },
+                    onDismiss = { confirming = false },
+                )
             }
         }
     }
 }
 
-@Composable
-private fun Chain(stage: Stage) {
-    val stops = listOf("录下来", "送到", "转写完", "分析完")
-    val reached = when (stage) {
-        Stage.RECORDED -> 1
-        Stage.DELIVERED -> 2
-        Stage.TRANSCRIBED -> 3
-        Stage.ANALYZED -> 4
-        else -> 0
-    }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        stops.forEachIndexed { i, name ->
-            val on = i < reached
-            Text(
-                name,
-                style = MaterialTheme.typography.labelSmall,
-                color = when {
-                    stage == Stage.FAILED && i == reached -> MaterialTheme.colorScheme.error
-                    on -> MaterialTheme.colorScheme.primary
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-            if (i < stops.lastIndex) {
-                Text(" → ", style = MaterialTheme.typography.labelSmall,
-                     color = MaterialTheme.colorScheme.outline)
-            }
-        }
-    }
+/** 一站一个词。分析完 / 不知道 → 不显示。纯逻辑，JVM 可测。 */
+internal fun stagePill(stage: Stage): Pair<String, Tone>? = when (stage) {
+    Stage.RECORDED -> "等转写" to Tone.NEUTRAL
+    Stage.DELIVERED -> "转写中" to Tone.INFO
+    Stage.TRANSCRIBED -> "分析中" to Tone.INFO
+    Stage.FAILED -> "没成功" to Tone.RISK
+    Stage.ANALYZED, Stage.UNKNOWN -> null
 }
 
 private fun day(iso: String): String = runCatching {
@@ -324,27 +278,25 @@ private fun day(iso: String): String = runCatching {
 fun SessionRow(s: LocalSession, onDelete: () -> Unit) {
     DsCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(DS.Pad.tight)) {
+            val started = stamp(s.meta.startedAtEpochMs)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(s.meta.title, style = MaterialTheme.typography.titleSmall,
-                     fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.weight(1f))
-                Text(
-                    when {
-                        s.recording > 0 -> "正在录"
-                        s.meta.finished -> "上传中"
-                        else -> "等待收尾"
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Text(SessionTitles.display(s.meta.title, started), style = MaterialTheme.typography.titleMedium,
+                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(DS.Rhythm.element))
+                when {
+                    s.recording > 0 -> Pill("正在录", Tone.ACCENT)
+                    s.meta.finished -> Pill("上传中", Tone.INFO)
+                    else -> Pill("等待收尾")
+                }
             }
-            Spacer(Modifier.height(DS.Rhythm.tight))
+            Spacer(Modifier.height(DS.Rhythm.element))
             LinearProgressIndicator(
                 progress = { if (s.total == 0) 0f else s.done.toFloat() / s.total },
                 modifier = Modifier.fillMaxWidth(),
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
             )
             Spacer(Modifier.height(DS.Rhythm.tight))
-            Text("${s.bytesLeftLabel} · 开始于 ${stamp(s.meta.startedAtEpochMs)}",
+            Text("${s.bytesLeftLabel} · 开始于 $started",
                  style = MaterialTheme.typography.bodySmall,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
 
@@ -354,9 +306,8 @@ fun SessionRow(s: LocalSession, onDelete: () -> Unit) {
             // 这一栏，没有任何办法清掉，只能眼睁睁看着。
             if (s.recording == 0) {
                 var confirming by remember { mutableStateOf(false) }
-                Spacer(Modifier.height(DS.Rhythm.tight))
-                TextButton(onClick = { confirming = true }) {
-                    Text("删掉这条", color = MaterialTheme.colorScheme.error)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    QuietButton("删掉这条", onClick = { confirming = true })
                 }
                 if (confirming) ConfirmDialog(
                     title = "删掉这条录音？",
@@ -429,23 +380,21 @@ data class CardStatus(val line: String, val busy: Boolean, val attention: Boolea
 
 @Composable
 private fun CardBar(c: CardStatus, onOpen: () -> Unit) {
-    DsCard(Modifier.fillMaxWidth(), onClick = onOpen) {
-        // 间距一律走 DS 档：RhythmGuardTest 钉着裸 dp 的基线，只准降不准涨。
-        Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
-            if (c.busy) CircularProgressIndicator(Modifier.size(DS.Rhythm.element))
-            else Box(
-                Modifier.size(DS.Rhythm.tight).background(
-                    if (c.attention) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline,
-                    androidx.compose.foundation.shape.CircleShape,
+    DsCard(Modifier.fillMaxWidth()) {
+        DsRow(
+            title = c.line, onClick = onOpen,
+            titleColor = if (c.attention) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            leading = {
+                if (c.busy) CircularProgressIndicator(Modifier.size(DS.Size.icon), strokeWidth = DS.Size.rule)
+                else Box(
+                    Modifier.size(DS.Rhythm.tight).background(
+                        if (c.attention) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline,
+                        androidx.compose.foundation.shape.CircleShape,
+                    )
                 )
-            )
-            Spacer(Modifier.width(DS.Rhythm.tight))
-            Text(c.line, style = MaterialTheme.typography.bodySmall,
-                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-            Text("›", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
-        }
+            },
+        )
     }
-    Spacer(Modifier.height(DS.Rhythm.element))
 }
 
 /** 记录页的来源分段。纯逻辑，JVM 可测。 */

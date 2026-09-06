@@ -7,17 +7,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 「我的」：账号、版本、更新。
+ * 「我的」：设备、账号、版本、出口。
+ *
+ * 形制是**分组的列表行**，不是一张张卡：这一屏全是「看一眼确认一下」的信息，
+ * 每条各占一张卡是把版面让给了最不需要注意的东西（2026-09-06 真机截图：五张一样的框）。
  *
  * 更新入口放在这里而不是首页：它是低频动作，而首页的位置应该留给
  * 每天都要看的东西。但**检查要自动做一次**——用户不会主动来点，
@@ -30,9 +31,7 @@ fun MeScreen(
     onSignOut: () -> Unit,
     /** 进灵魂卡那一页（扫描 / 连接 / 同步 / 改名） */
     onOpenCard: () -> Unit = {},
-    // 可注入，默认才是真的联网。不然这一屏没法在测试里脱网跑——
-    // 之前一直是 Update.check(UrlHttp(), ...) 写死在里面，
-    // 是这一版顺手改的，不是重点，但既然要给这一屏加测试就该改掉。
+    // 可注入，默认才是真的联网。不然这一屏没法在测试里脱网跑。
     http: Http = UrlHttp(),
 ) {
     val ctx = LocalContext.current
@@ -58,38 +57,19 @@ fun MeScreen(
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(DS.Pad.default),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(DS.Pad.screen),
     ) {
-        Text("我的", style = MaterialTheme.typography.headlineSmall)
+        Text("我的", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold,
+             modifier = Modifier.padding(top = DS.Rhythm.inner, bottom = DS.Rhythm.element))
 
+        // ── 设备 ──
         // 硬件成为商业模式之后，这一栏从「账号页」升级成硬件的控制台——灵魂卡排第一。
-        // 点进去是 BleScreen 整页，不是一个二级设置。
         val cardLine = remember { com.qiuyiwu.shennao.ble.CardNames(ctx).known() }
-        DsCard(Modifier.fillMaxWidth(), onClick = onOpenCard) {
-            Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("灵魂卡", style = MaterialTheme.typography.titleSmall)
-                    Spacer(Modifier.height(DS.Rhythm.tight))
-                    Text(
-                        when (cardLine.size) {
-                            0 -> "还没连过。连上它，录的每一段会自动过来。"
-                            1 -> cardLine[0].second
-                            else -> cardLine.joinToString(" · ") { it.second }
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.outline)
-            }
-        }
-
         // 录音不被杀。会中不看屏幕是第一原则，而国内 ROM 默认锁屏几分钟就杀后台——
-        // 这张卡只说查到的事实（系统豁免了没），厂商开关查不到就只给路径。
+        // 这一行只说查到的事实（系统豁免了没），厂商开关查不到就只给路径。
         var exempt by remember { mutableStateOf(com.qiuyiwu.shennao.record.KeepAlive.isExempt(ctx)) }
         val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current
-        androidx.compose.runtime.DisposableEffect(lifecycle) {
+        DisposableEffect(lifecycle) {
             val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
                 if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) exempt = com.qiuyiwu.shennao.record.KeepAlive.isExempt(ctx)
             }
@@ -97,140 +77,114 @@ fun MeScreen(
             onDispose { lifecycle.lifecycle.removeObserver(obs) }
         }
         val (keepTitle, keepBody) = com.qiuyiwu.shennao.record.KeepAlive.summary(exempt, com.qiuyiwu.shennao.record.KeepAlive.romHint())
-        DsCard(Modifier.fillMaxWidth(), onClick = {
-            if (!exempt) runCatching { ctx.startActivity(com.qiuyiwu.shennao.record.KeepAlive.requestIntent(ctx)) }
-        }) {
-            Column(Modifier.padding(DS.Pad.tight)) {
-                Text(keepTitle, style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(DS.Rhythm.tight))
-                Text(keepBody, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        DsGroup {
+            DsRow(
+                "灵魂卡",
+                subtitle = when (cardLine.size) {
+                    0 -> "还没连过。连上它，录的每一段会自动过来。"
+                    1 -> cardLine[0].second
+                    else -> cardLine.joinToString(" · ") { it.second }
+                },
+                onClick = onOpenCard,
+            )
+            RowDivider()
+            DsRow(
+                keepTitle, subtitle = keepBody,
+                trailingContent = { Pill(if (exempt) "已允许" else "未允许", if (exempt) Tone.OK else Tone.WARN) },
+                onClick = if (exempt) null else ({
+                    runCatching { ctx.startActivity(com.qiuyiwu.shennao.record.KeepAlive.requestIntent(ctx)) }
+                }),
+            )
         }
 
-        // 账号与版本合成一张卡。密度规则：首屏 ≤ 5 块。这两样都是「看一眼确认一下」的信息，
-        // 分两张卡各占一块，是把版面让给了最不需要注意的东西。
-        DsCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(DS.Pad.tight)) {
-                Text("账号", style = MaterialTheme.typography.titleSmall)
-                Text(client.signedInEmail() ?: "未登录",
-                     style = MaterialTheme.typography.bodyMedium,
-                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                // 显示「已有」不显示「剩余」：剩余是倒计时，已有是陈述。全行业在另一边，故意反着做。
-                credits?.let { c ->
+        // ── 账号 ──
+        SectionLabel("账号")
+        DsGroup {
+            DsRow("账号", subtitle = client.signedInEmail() ?: "未登录")
+            // 显示「已有」不显示「剩余」：剩余是倒计时，已有是陈述。全行业在另一边，故意反着做（规格 010）。
+            credits?.let { c ->
+                RowDivider()
+                DsRow("积分", subtitle = CreditsParser.usageLine(c.month), trailing = "${c.balance}")
+            }
+            RowDivider()
+            // 版本和「检查更新」同一行。「查不到」和「已是最新」必须分开说：网络不通不等于没有新版。
+            DsRow(
+                "版本 v${BuildConfig.VERSION_NAME}",
+                subtitle = when (val s = state) {
+                    is UpdateState.Available -> "有新版 v${s.release.versionName} · ${mb(s.release.sizeBytes)} MB"
+                    is UpdateState.UpToDate -> "已是最新 · 直接下载安装的版本"
+                    is UpdateState.Unknown -> "查不到有没有新版（${s.reason}）"
+                    null -> "直接下载安装的版本"
+                },
+                trailingContent = {
+                    if (checking) CircularProgressIndicator(Modifier.size(DS.Size.icon), strokeWidth = DS.Size.rule)
+                    else LinkButton(onClick = { check() }) { Text("检查更新") }
+                },
+            )
+            (state as? UpdateState.Available)?.let { s ->
+                Column(Modifier.padding(DS.Pad.row)) {
+                    PrimaryButton(
+                        "下载新版", modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            // 交给系统浏览器下载并安装。应用内静默安装需要
+                            // 特权，一个从网页分发的包不该去要那种权限。
+                            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(s.release.url)))
+                        },
+                    )
                     Spacer(Modifier.height(DS.Rhythm.tight))
-                    Text("积分 ${c.balance}", style = MaterialTheme.typography.titleMedium)
-                    // 规格 010：显示「已用」不显示「剩余」。倒计时式的焦虑条是这个品类差评的第一来源。
-                    CreditsParser.usageLine(c.month)?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall,
-                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                Spacer(Modifier.height(DS.Rhythm.tight))
-                // 版本和「检查更新」同一行：以前那个按钮浮在一堆文字中间，和谁都不对齐
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("版本 v${BuildConfig.VERSION_NAME} · 直接下载安装的版本",
+                    Text("装新版不用卸载旧的，登录状态和没传完的录音都会留着。",
                          style = MaterialTheme.typography.bodySmall,
-                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                         modifier = Modifier.weight(1f))
-                    if (checking) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    else TextButton(onClick = { check() }, contentPadding = PaddingValues()) { Text("检查更新") }
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                // 反馈问题：把此刻的状态打成一份文字发出去。不崩的问题（装不上、连不上、传一半停了）
-                // 之前一点痕迹都没有。放在版本旁边：报问题的人第一句就是「我是哪个版本」。
-                when (val s = state) {
-                    is UpdateState.Available -> {
-                        Spacer(Modifier.height(DS.Rhythm.element))
-                        Text("有新版 v${s.release.versionName} · ${mb(s.release.sizeBytes)} MB",
-                             style = MaterialTheme.typography.bodyMedium,
-                             fontWeight = FontWeight.Medium)
-                        Spacer(Modifier.height(DS.Rhythm.element))
-                        Button(
-                            onClick = {
-                                // 交给系统浏览器下载并安装。应用内静默安装需要
-                                // 特权，一个从网页分发的包不该去要那种权限。
-                                ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(s.release.url)))
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text("下载新版") }
-                        Spacer(Modifier.height(DS.Rhythm.tight))
-                        Text("装新版不用卸载旧的，登录状态和没传完的录音都会留着。",
-                             style = MaterialTheme.typography.bodySmall,
-                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    is UpdateState.UpToDate -> {
-                        Spacer(Modifier.height(DS.Rhythm.element))
-                        Text("已是最新", style = MaterialTheme.typography.bodySmall,
-                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    is UpdateState.Unknown -> {
-                        Spacer(Modifier.height(DS.Rhythm.element))
-                        // 「查不到」和「已是最新」必须分开说：网络不通不等于没有新版
-                        Text("查不到有没有新版（${s.reason}）",
-                             style = MaterialTheme.typography.bodySmall,
-                             color = MaterialTheme.colorScheme.error)
-                    }
-                    null -> Unit
-                }
-                Spacer(Modifier.height(DS.Rhythm.tight))
-                // 打包要读 vault、跑 logcat、开 keystore，不能在主线程（012 P1-16）
-                var packing by remember { mutableStateOf(false) }
-                TextButton(enabled = !packing, onClick = {
+            }
+            RowDivider()
+            // 反馈问题：把此刻的状态打成一份文字发出去。不崩的问题（装不上、连不上、传一半停了）
+            // 之前一点痕迹都没有。放在版本旁边：报问题的人第一句就是「我是哪个版本」。
+            // 打包要读 vault、跑 logcat、开 keystore，不能在主线程（012 P1-16）
+            var packing by remember { mutableStateOf(false) }
+            DsRow(
+                if (packing) "正在打包…" else "反馈问题",
+                subtitle = "把此刻的状态打成一份诊断发出去",
+                trailingContent = { if (packing) CircularProgressIndicator(Modifier.size(DS.Size.icon), strokeWidth = DS.Size.rule) },
+                onClick = if (packing) null else ({
                     packing = true
                     scope.launch {
                         val ok = withContext(Dispatchers.IO) { Diagnostics.share(ctx) }
                         packing = false
                         if (!ok) notice("打包失败，再试一次")
                     }
-                }, contentPadding = PaddingValues()) { Text(if (packing) "正在打包…" else "反馈问题 · 发一份诊断") }
-
-            }
+                }),
+            )
         }
 
-        DsCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(DS.Pad.tight)) {
-                Text("在网页里打开", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(DS.Rhythm.tight))
-                Text("完整的转写、播放、认人、记忆库都在网页版。",
-                     style = MaterialTheme.typography.bodySmall,
-                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(DS.Rhythm.element))
-                // 走 App 内 WebView（带登录态）。之前是甩给系统浏览器，
-                // 用户点进去看到的是深脑的登录页——他刚才明明就在 App 里登着。
-                OutlinedButton(onClick = { onOpenWeb("/zh", "深脑") }) { Text("打开深脑网页版") }
-                // 隐私与条款。成熟产品该有的出口，用户想找的时候要找得到——
-                // 不用等到真出了纠纷才发现 App 里压根没有这条路。并在这张卡里，不单占一块。
-                Row(horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.inner)) {
-                    TextButton(onClick = { onOpenWeb("/zh/privacy", "隐私政策") }) { Text("隐私政策") }
-                    TextButton(onClick = { onOpenWeb("/zh/terms", "服务条款") }) { Text("服务条款") }
-                }
-            }
+        // ── 出口 ──
+        SectionLabel("更多")
+        DsGroup {
+            // 走 App 内 WebView（带登录态）。之前是甩给系统浏览器，
+            // 用户点进去看到的是深脑的登录页——他刚才明明就在 App 里登着。
+            DsRow("打开深脑网页版", subtitle = "完整的转写、播放、认人、记忆库都在网页版",
+                  onClick = { onOpenWeb("/zh", "深脑") })
+            RowDivider()
+            /*
+             * 你的数据。对冲「买的是一张服务年票」的停服恐惧。深脑本来就有「不训模型、
+             * 可私有部署」的底子，这里是它的用户面。导出走网页版（带登录态），
+             * 手机上不另做一套导出器。存储期限说实话，不承诺「无限」——那是会被砍的权益。
+             */
+            DsRow("你的数据", subtitle = "原始音频保留 12 个月，转写与判断永久保留。",
+                  onClick = { onOpenWeb("/zh/settings", "导出全部") })
+            // 出口单独一行：塞在副标题右边会把两行字挤成四行（暗色截图审出来的）
+            LinkButton(onClick = { onOpenWeb("/zh/settings", "导出全部") },
+                       contentPadding = DS.Pad.row, modifier = Modifier.padding(bottom = DS.Rhythm.tight)) { Text("导出全部 · 网页版") }
+            RowDivider()
+            // 隐私与条款。成熟产品该有的出口，用户想找的时候要找得到。
+            DsRow("隐私政策", onClick = { onOpenWeb("/zh/privacy", "隐私政策") })
+            RowDivider()
+            DsRow("服务条款", onClick = { onOpenWeb("/zh/terms", "服务条款") })
         }
 
-        /*
-         * 你的数据。对冲「买的是一张服务年票」的停服恐惧——搜狗录音笔停服让
-         * 「终身免费」破产，Limitless 卖身后数据限期导出。深脑本来就有「不训模型、
-         * 可私有部署」的底子，这里是它的用户面。导出走网页版（带登录态），
-         * 手机上不另做一套导出器。存储期限说实话，不承诺「无限」——那是会被砍的权益。
-         */
-        DsCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(DS.Pad.tight)) {
-                Text("你的数据", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(DS.Rhythm.tight))
-                Text("音频、转写、判断都可以整包带走。我们不训模型，也不做「服务年票」。",
-                     style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.height(DS.Rhythm.tight))
-                Text("原始音频保留 12 个月，转写与判断永久保留。",
-                     style = MaterialTheme.typography.bodySmall,
-                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(DS.Rhythm.element))
-                OutlinedButton(onClick = { onOpenWeb("/zh/settings", "导出全部") }) { Text("导出全部 · 网页版") }
-            }
-        }
-
+        Spacer(Modifier.height(DS.Rhythm.inner))
         var signOut by remember { mutableStateOf(false) }
-        OutlinedButton(onClick = { signOut = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("退出登录")
-        }
+        QuietButton("退出登录", onClick = { signOut = true }, modifier = Modifier.fillMaxWidth())
         if (signOut) ConfirmDialog(
             title = "退出登录？",
             // 用户最担心的是「我还没传完的录音会不会没」。直接回答它。
@@ -239,7 +193,7 @@ fun MeScreen(
             onConfirm = onSignOut,
             onDismiss = { signOut = false },
         )
-        Spacer(Modifier.height(DS.Rhythm.element))
+        Spacer(Modifier.height(DS.Rhythm.page))
     }
 }
 
