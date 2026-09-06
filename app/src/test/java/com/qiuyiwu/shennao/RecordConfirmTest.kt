@@ -37,7 +37,7 @@ class RecordConfirmTest {
             ShennaoTheme { JustFinishedCard(minutes = 8, pending = 0, onOpen = {}) }
         }
         compose.onNodeWithText("刚录的这场（约 8 分钟）已经送到深脑了").assertExists()
-        compose.onNodeWithText("转写和分析在那边跑，跑完会出现在「会议」里。").assertExists()
+        compose.onNodeWithText("转写和分析在那边跑，跑完会出现在「记录」里。").assertExists()
     }
 
     @Test fun `送达之后要给一条去看的路`() {

@@ -49,26 +49,27 @@ object AutoConnect {
         if (!shouldTry(known.isEmpty(), granted(ctx) && bluetoothOn(ctx), BleImportService.running, prefs.getLong(KEY_LAST, 0L), now())) return null
         prefs.edit().putLong(KEY_LAST, now()).apply()
 
-        BleImportService.scan(ctx)
-        val deadline = now() + WINDOW_MS
-        while (now() < deadline) {
-            delay(500)
-            pick(known, BleImportService.devices)?.let { addr ->
-                BleImportService.connect(ctx, addr)
-                return addr
+        /*
+         * 扫描自己扫，不起前台服务——以前每次打开 App 都弹一条「正在从灵魂卡导入」，找不到也弹（012 P1-12）。
+         * 扫描不需要服务；找到记住的卡再起服务去连。
+         */
+        val gatt = BleGatt(ctx.applicationContext)
+        val found = java.util.concurrent.ConcurrentHashMap<String, BleDevice>()
+        if (!gatt.scan { d -> found[d.id] = d }) return null
+        try {
+            val deadline = now() + WINDOW_MS
+            while (now() < deadline) {
+                delay(500)
+                if (BleImportService.running) return null   // 用户自己进灵魂卡页在操作：让开
+                pick(known, found.values.toList())?.let { addr ->
+                    gatt.stopScan()
+                    BleImportService.connect(ctx, addr)
+                    return addr
+                }
             }
-            // 扫描起不来（蓝牙中途关了、没权限）：收掉服务，别让通知挂着
-            if (BleImportService.conn == BleState.FAILED) { stopIfIdle(ctx); return null }
-            // 用户自己进了灵魂卡页在操作，或者服务已经不在扫了：让开
-            if (BleImportService.conn != BleState.SCANNING) return null
+            return null
+        } finally {
+            gatt.stopScan()
         }
-        // 找不到就收掉，别让「正在从灵魂卡导入」的通知一直挂着
-        if (BleImportService.conn == BleState.SCANNING) stopIfIdle(ctx)
-        return null
-    }
-
-    /** 只在服务闲着（没在导入）时收掉它。正在传的东西不能被自动扫描误杀。 */
-    private fun stopIfIdle(ctx: Context) {
-        if (BleImportService.state is ImportState.Idle) BleImportService.stop(ctx)
     }
 }

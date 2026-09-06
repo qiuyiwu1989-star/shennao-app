@@ -39,6 +39,7 @@ import kotlinx.coroutines.withContext
 fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     var recording by remember { mutableStateOf(RecordingService.recording) }
+    var stopping by remember { mutableStateOf(false) }
     var state by remember { mutableStateOf(com.qiuyiwu.shennao.record.RecordState.IDLE) }
     var elapsed by remember { mutableStateOf(0L) }
     var pending by remember { mutableStateOf(0) }
@@ -95,6 +96,7 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
             if (wasRecording && !nowRecording) justFinished = (sessionId ?: "") to elapsed
             wasRecording = nowRecording
             recording = nowRecording
+            stopping = RecordingService.stopping
             state = RecordingService.state
             elapsed = RecordingService.elapsedMs
             pending = RecordingService.pendingSegments
@@ -144,7 +146,8 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
             color = when (state) {
                 com.qiuyiwu.shennao.record.RecordState.INTERRUPTED,
-                com.qiuyiwu.shennao.record.RecordState.GAVE_UP -> MaterialTheme.colorScheme.error
+                com.qiuyiwu.shennao.record.RecordState.GAVE_UP,
+                com.qiuyiwu.shennao.record.RecordState.DISK_FULL -> MaterialTheme.colorScheme.error
                 else -> MaterialTheme.colorScheme.onSurface
             },
         )
@@ -163,6 +166,8 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
                     "麦克风被占用了，正在抢回来。已经录到的都在。"
                 com.qiuyiwu.shennao.record.RecordState.GAVE_UP ->
                     "麦克风抢不回来，录音已停止。已录到的部分正在推送。"
+                com.qiuyiwu.shennao.record.RecordState.DISK_FULL ->
+                    "手机存储满了，录音已停止。已录到的部分都在，清出空间就会推送。"
                 com.qiuyiwu.shennao.record.RecordState.RECORDING ->
                     "正在录。可以锁屏，也可以切走——通知栏能看到它还在录。"
                 else -> if (pending > 0) "还有 $pending 段在传" else "点一下开始录这场会"
@@ -191,7 +196,8 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
                 // 同理：先做事，再给手感，且手感不许抛。
                 runCatching { haptics.performHapticFeedback(
                     androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }
-                if (recording) RecordingService.stop(ctx)
+                if (stopping) Unit
+                else if (recording) RecordingService.stop(ctx)
                 else {
                     denied = false
                     justFinished = null
@@ -208,7 +214,7 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Text(
-                    if (recording) "停止" else "开始",
+                    if (stopping) "收尾中" else if (recording) "停止" else "开始",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onPrimary,
                     fontWeight = FontWeight.Medium,
@@ -260,7 +266,10 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
         // 提示叠在一起，那两种情况本身就是「这一场还没完」的信号。
         if (!recording && justFinished != null && state != com.qiuyiwu.shennao.record.RecordState.INTERRUPTED) {
             Spacer(Modifier.height(DS.Rhythm.inner))
-            JustFinishedCard(minutes = (justFinished!!.second / 60000).toInt(), pending = pending, onOpen = onOpenHistory)
+            JustFinishedCard(
+                minutes = (justFinished!!.second / 60000).toInt(), pending = pending, onOpen = onOpenHistory,
+                onRename = { title -> renameJustFinished(ctx, title) },
+            )
         }
 
         Spacer(Modifier.height(DS.Rhythm.inner))
@@ -317,7 +326,10 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
  * 就再也看不见了，所以它必须留在这里，而不是像轻提示那样一闪而过。
  */
 @androidx.compose.runtime.Composable
-fun JustFinishedCard(minutes: Int, pending: Int, onOpen: (() -> Unit)?) {
+fun JustFinishedCard(minutes: Int, pending: Int, onOpen: (() -> Unit)?, onRename: ((String) -> Unit)? = null) {
+    // 每一场都叫「手机录音」，记录页一列全一样（012 P1-4）。停下来这一刻是起名最自然的时候。
+    var name by remember { mutableStateOf("") }
+    var named by remember { mutableStateOf(false) }
     Surface(
         color = MaterialTheme.colorScheme.primaryContainer,
         shape = com.qiuyiwu.shennao.DS.Radius.card,
@@ -331,9 +343,20 @@ fun JustFinishedCard(minutes: Int, pending: Int, onOpen: (() -> Unit)?) {
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
+            if (onRename != null) {
+                Spacer(Modifier.height(DS.Rhythm.tight))
+                if (named) Text("已改名：$name", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer)
+                else Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(value = name, onValueChange = { name = it.take(60) }, singleLine = true,
+                                      placeholder = { Text("给这场起个名") }, modifier = Modifier.weight(1f))
+                    Spacer(Modifier.width(DS.Rhythm.element))
+                    TextButton(enabled = name.isNotBlank(), onClick = { onRename(name.trim()); named = true }) { Text("好") }
+                }
+            }
             if (pending == 0) {
                 Text(
-                    "转写和分析在那边跑，跑完会出现在「会议」里。",
+                    "转写和分析在那边跑，跑完会出现在「记录」里。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -567,4 +590,22 @@ internal object RecordTips {
         p.edit().putInt("seen", n + 1).apply()
         return n
     }
+}
+
+/**
+ * 改刚停那场的名：本地 meta 先改（建会话前生效）；服务端会话已经有了就再 PATCH 一次。
+ * 两边都改是因为不知道现在在哪一步——建会话可能已经发生。PATCH 失败只提示，不回滚本地。
+ */
+private fun renameJustFinished(ctx: android.content.Context, title: String) {
+    val local = RecordingService.lastLocalSession ?: return
+    Thread {
+        val vault = com.qiuyiwu.shennao.record.FileVault(java.io.File(ctx.filesDir, "recordings"))
+        val meta = vault.updateMeta(local) { it.copy(title = title) }
+        meta?.serverSessionId?.let { sid ->
+            val r = Session.client(ctx).renameRecording(sid, title)
+            if (r is ApiResult.Failed) android.os.Handler(android.os.Looper.getMainLooper()).post {
+                android.widget.Toast.makeText(ctx, "本机已改名；深脑那边：${r.message}", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }.start()
 }

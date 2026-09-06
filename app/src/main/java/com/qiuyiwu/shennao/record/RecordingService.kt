@@ -67,6 +67,10 @@ class RecordingService : Service() {
          * 和自己刚做的动作联系起来，只会以为是这次录音出了问题。
          */
         @Volatile var micError: String? = null; private set
+        /** 用户按了停止、最后一段还在封。界面据此显示「收尾中」并禁用按钮。 */
+        @Volatile var stopping: Boolean = false; private set
+        /** 刚停下的那场在本机的目录名。停止后的卡片改名要用它。 */
+        @Volatile var lastLocalSession: String? = null; private set
 
         /** **上传**的问题。属于「会议」那一栏，不该打扰正在录音的人。 */
         @Volatile var uploadProblem: String? = null; private set
@@ -153,17 +157,25 @@ class RecordingService : Service() {
                 startPump()
             }
             ACTION_STOP -> {
+                // 收尾要等录音线程把最后一段编成 AAC（join 最长 5 秒），不能在主线程等——
+                // 以前按下「停止」界面会卡住一到几秒（012 P0-15）。
+                if (stopping) return START_NOT_STICKY
+                stopping = true
                 stopCaptions()
+                lastLocalSession = recorder.currentSession
+                scope.launch {
                 recorder.stop()
                 recording = false
                 state = RecordState.IDLE
                 serverSessionId = null
+                stopping = false
                 // 停止这一刻最要紧：接下来这个服务就要退了，剩下的段要有人接手
                 UploadWorker.kick(applicationContext)
                 // 停止之后不能立刻退出服务：还有分段没传完。
                 // 转成一条「正在上传」的通知继续跑，传完了再自己退。
                 updateNotification("正在上传", "录音已停止，正在推送到深脑", canStop = false)
-                scope.launch { drainUntilEmpty() }
+                drainUntilEmpty()
+                }
             }
         }
         return START_NOT_STICKY
@@ -183,12 +195,16 @@ class RecordingService : Service() {
                         "录音中断了", "麦克风被占用，正在抢回来。已录 ${fmt(elapsedMs)} 都在")
                     RecordState.GAVE_UP -> updateNotification(
                         "录音已停止", "麦克风抢不回来。已录 ${fmt(elapsedMs)} 正在推送", canStop = false)
+                    RecordState.DISK_FULL -> updateNotification(
+                        "录音已停止", "手机存储满了，写不进去。已录 ${fmt(elapsedMs)} 都在", canStop = false)
                     else -> updateNotification("正在录音", "已录 ${fmt(elapsedMs)}")
                 }
-                if (state == RecordState.GAVE_UP) {
+                if (state == RecordState.GAVE_UP || state == RecordState.DISK_FULL) {
                     // 录音线程自己放弃了。把已经录到的传完就收工——
                     // 让服务空转着不会让麦克风回来。
-                    micError = "麦克风被别的应用占着，录音已停止。已录到的部分会照常推送。"
+                    micError = if (state == RecordState.DISK_FULL)
+                        "手机存储满了，录音已停止。清出空间之后，已录到的部分会照常推送。"
+                    else "麦克风被别的应用占着，录音已停止。已录到的部分会照常推送。"
                     launch { drainUntilEmpty() }
                     return@launch
                 }
