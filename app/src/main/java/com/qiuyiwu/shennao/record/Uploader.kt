@@ -58,10 +58,16 @@ class Uploader(
         vault.sessions().associateWith { drain(it) }
 
     fun drain(session: String): DrainResult {
-        val r = attempt(session, false)
+        val r0 = attempt(session, false)
         // 只续一次。续了还是 401 就是真的登录失效了，反复重试只会烧电，
         // 而正确的做法是让界面把人送去重新登录。
-        return if (r is DrainResult.Failed && r.authExpired) attempt(session, true) else r
+        val r = if (r0 is DrainResult.Failed && r0.authExpired) attempt(session, true) else r0
+        // 把「为什么没成」落在这场的 meta 上，记录页照着显示；成了就清掉。
+        // 以前只有录音台那一行 uploadProblem，而人是在记录页看见「上传中 0/1」的（2026-09-07）。
+        val err = (r as? DrainResult.Failed)?.message
+        val meta = vault.readMeta(session)
+        if (meta != null && meta.lastError != err) vault.updateMeta(session) { it.copy(lastError = err) }
+        return r
     }
 
     private fun attempt(session: String, forceAuth: Boolean): DrainResult {

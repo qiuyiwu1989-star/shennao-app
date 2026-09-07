@@ -12,7 +12,10 @@ import org.json.JSONObject
  * 数据是编的，人名场景都不是真的。
  */
 object Demo {
+    /** 夹具模式下给「我的」查更新用的假 Http；正式包永远是 null。 */
+    @Volatile var http: Http? = null
     fun install() {
+        http = DemoHttp()
         val store = object : CredentialStore {
             private var c: Credentials? = Credentials("demo-refresh", "org-demo", "demo@shennao.app")
             override fun load() = c
@@ -35,7 +38,8 @@ object Demo {
                 path.startsWith("/api/mobile/search") -> ok(SEARCH)
                 path == "/api/mobile/credits" -> ok("""{"balance":126,"month":{"deep":3,"quick":11,"credits":19}}""")
                 path == "/api/mobile/card" -> ok("""{"cards":[{"deviceNo":"CB08-AA:BB:CC:DD:EE:01","boundAt":"2026-08-30T10:00:00Z","granted":0,"monthly":30}],"monthly":30}""")
-                path.startsWith("/downloads/latest.json") -> ok("""{"versionName":"3.5.1","versionCode":40,"size":10587187,"sha256":"x","url":"https://demo.invalid/x.apk"}""")
+                // 故意报一个更新的版本、且清单没有校验值：截图审「有新版」那一块，且校验那道门要看得见
+                url.contains("/downloads/latest.json") -> ok("""{"versionName":"9.9.9","versionCode":999,"size":10587187,"sha256":"x","url":"https://demo.invalid/x.apk"}""")
                 method == "POST" || method == "PATCH" -> ok("""{"ok":true}""")
                 else -> HttpResponse(404, """{"error":"demo 没有这个端点"}""")
             }

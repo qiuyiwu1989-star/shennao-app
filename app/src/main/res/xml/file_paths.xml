@@ -2,4 +2,6 @@
 <!-- 只暴露 cache/diag：诊断包走系统分享要一个 content:// URI。录音目录不在这里，不对外。 -->
 <paths>
     <cache-path name="diag" path="diag/" />
+    <!-- 应用内更新：下载并校验过的 apk 交给系统安装器也要一个 content:// URI -->
+    <cache-path name="apk" path="apk/" />
 </paths>

@@ -147,7 +147,16 @@ fun HistoryScreen(
         if (rows.isNotEmpty()) {
             item { SectionLabel("还在手机上") }
             items(rows, key = { "l" + it.dir }) { s ->
-                SessionRow(s) {
+                SessionRow(
+                    s,
+                    onRetry = {
+                        // 立刻推一轮，不等 15 秒轮询。推完重扫，让「卡住了」变回「上传中」或消失。
+                        scope.launch {
+                            withContext(Dispatchers.IO) { runCatching { Resume.kick(ctx) } }
+                            rows = withContext(Dispatchers.IO) { scan(File(ctx.filesDir, "recordings")) }
+                        }
+                    },
+                ) {
                     scope.launch {
                         withContext(Dispatchers.IO) {
                             FileVault(File(ctx.filesDir, "recordings")).deleteSession(s.dir)
@@ -281,7 +290,8 @@ private fun day(iso: String): String = runCatching {
 }.getOrElse { iso.take(10) }
 
 @Composable
-fun SessionRow(s: LocalSession, onDelete: () -> Unit) {
+fun SessionRow(s: LocalSession, onRetry: (() -> Unit)? = null, onDelete: () -> Unit) {
+    val stuck = s.meta.lastError
     DsCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(DS.Pad.card)) {
             val started = stamp(s.meta.startedAtEpochMs)
@@ -291,8 +301,17 @@ fun SessionRow(s: LocalSession, onDelete: () -> Unit) {
                 Spacer(Modifier.width(DS.Rhythm.element))
                 when {
                     s.recording > 0 -> Pill("正在录", Tone.ACCENT)
+                    stuck != null -> Pill("卡住了", Tone.WARN)
                     s.meta.finished -> Pill("上传中", Tone.INFO)
                     else -> Pill("等待收尾")
+                }
+            }
+            // 卡在哪一步、为什么。这一页存在的理由就是「让还没送到变得看得见」——
+            // 只显示「上传中 0/1」等于什么都没说。
+            if (stuck != null && s.recording == 0) {
+                Spacer(Modifier.height(DS.Rhythm.element))
+                NoticeBox(stuck, Tone.WARN) {
+                    if (onRetry != null) TonalButton("再试一次", onClick = onRetry)
                 }
             }
             Spacer(Modifier.height(DS.Rhythm.element))

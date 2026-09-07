@@ -363,6 +363,33 @@ class UploaderTest {
         assertEquals("只该要两张 ticket", 2, h.log.count { it.contains("ticket") })
     }
 
+    /** 记录页要显示「为什么没成」，所以原因落在这场的 meta 上；成了就清掉。 */
+    @Test fun `上传没成的原因落在 meta 上，成了就清掉`() {
+        val v = MemVault().apply {
+            metas["s"] = meta(finished = true)
+            put("s", seg(0, Segment.State.SEALED))
+        }
+        var fail = true
+        val h = ScriptHttp { _, url, _ ->
+            if (url.endsWith("/api/recordings")) HttpResponse(200, CREATED)
+            else if (url.contains("/chunks/ticket")) (if (fail) HttpResponse(503, "") else HttpResponse(200, TICKET))
+            else HttpResponse(200, "")
+        }
+        uploader(v, h).drain("s")
+        assertNotNull(v.metas["s"]!!.lastError)
+        assertTrue(v.metas["s"]!!.lastError!!.contains("503"))
+        fail = false
+        // 段传上去了但 stop 还没走通也算「没成」；这里 stop/finalize 都 200，整场 Done → 目录已删，meta 没了
+        val r = uploader(v, h).drain("s")
+        assertTrue("$r", r is DrainResult.Done)
+    }
+
+    @Test fun `meta 的 lastError 能落盘再读回`() {
+        val m = meta().copy(lastError = "第 0 段要地址失败（分片大小超出范围）")
+        assertEquals(m, SessionMeta.fromJson(m.toJson()))
+        assertNull(SessionMeta.fromJson(meta().toJson())!!.lastError)
+    }
+
     @Test fun `ticket 的 400 要把服务端那句人话带出来`() {
         val v = MemVault().apply {
             metas["s"] = meta(finished = true)

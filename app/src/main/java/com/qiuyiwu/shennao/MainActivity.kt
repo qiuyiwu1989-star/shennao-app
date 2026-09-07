@@ -401,6 +401,8 @@ private fun App(client: DeepBrainClient) {
 
                         is Route.Me -> MeScreen(
                             client = client,
+                            // 夹具模式下查更新也走假数据；正式包 Demo.http 永远是 null
+                            http = (if (BuildConfig.DEBUG) Demo.http else null) ?: UrlHttp(),
                             onOpenWeb = { path, title -> go(nav.push(Route.Web(path, title))) },
                             onOpenCard = { go(nav.push(Route.Ble)) },
                             onSignOut = {

@@ -121,22 +121,7 @@ fun MeScreen(
                     else LinkButton(onClick = { check() }) { Text("检查更新") }
                 },
             )
-            (state as? UpdateState.Available)?.let { s ->
-                Column(Modifier.padding(DS.Pad.row)) {
-                    PrimaryButton(
-                        "下载新版", modifier = Modifier.fillMaxWidth(),
-                        onClick = {
-                            // 交给系统浏览器下载并安装。应用内静默安装需要
-                            // 特权，一个从网页分发的包不该去要那种权限。
-                            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(s.release.url)))
-                        },
-                    )
-                    Spacer(Modifier.height(DS.Rhythm.tight))
-                    Text("装新版不用卸载旧的，登录状态和没传完的录音都会留着。",
-                         style = MaterialTheme.typography.bodySmall,
-                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+            (state as? UpdateState.Available)?.let { s -> UpdateBlock(s.release) }
             RowDivider()
             // 反馈问题：把此刻的状态打成一份文字发出去。不崩的问题（装不上、连不上、传一半停了）
             // 之前一点痕迹都没有。放在版本旁边：报问题的人第一句就是「我是哪个版本」。
@@ -198,3 +183,66 @@ fun MeScreen(
 }
 
 private fun mb(b: Long) = "%.1f".format(b / 1048576.0)
+
+/**
+ * 有新版时那一块：下载 → 校验 → 交给系统装。以前是把人甩给浏览器，下到哪、装不装得上全靠猜。
+ * 校验不过就不装并说清楚；系统没开「允许安装」就先送去开；起不来才退回浏览器。
+ */
+@Composable
+private fun UpdateBlock(release: Release) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var step by remember(release.versionCode) { mutableStateOf<Installer.Step>(Installer.Step.Idle) }
+    val browser = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.url))) }
+    fun fetch() {
+        step = Installer.Step.Downloading(0, release.sizeBytes)
+        scope.launch {
+            step = withContext(Dispatchers.IO) {
+                Installer.download(ctx, release) { d, t -> step = Installer.Step.Downloading(d, t) }
+            }
+            (step as? Installer.Step.Ready)?.let { r ->
+                if (Installer.canInstall(ctx)) { if (!Installer.install(ctx, r.file)) browser() }
+                else Installer.askPermission(ctx)
+            }
+        }
+    }
+    Column(Modifier.padding(DS.Pad.row)) {
+        when (val st = step) {
+            is Installer.Step.Idle -> PrimaryButton(
+                "下载并安装 v${release.versionName} · ${mb(release.sizeBytes)} MB",
+                modifier = Modifier.fillMaxWidth(), onClick = { fetch() })
+            is Installer.Step.Downloading -> {
+                LinearProgressIndicator(
+                    progress = { if (st.total > 0) (st.done.toFloat() / st.total).coerceIn(0f, 1f) else 0f },
+                    modifier = Modifier.fillMaxWidth(), trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
+                Spacer(Modifier.height(DS.Rhythm.tight))
+                Text(Installer.progressLine(st.done, st.total), style = MaterialTheme.typography.bodySmall,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            is Installer.Step.Ready -> {
+                // 下好且校验过。系统那扇门没开就在这里说清楚，开了回来再点一次就装。
+                if (!Installer.canInstall(ctx)) {
+                    NoticeBox("系统还没允许深脑安装应用。点下面去打开，回来再点「安装」。", Tone.WARN) {
+                        TonalButton("去允许", onClick = { Installer.askPermission(ctx) })
+                    }
+                    Spacer(Modifier.height(DS.Rhythm.tight))
+                }
+                PrimaryButton("安装 v${release.versionName}", modifier = Modifier.fillMaxWidth(),
+                              onClick = { if (Installer.canInstall(ctx)) { if (!Installer.install(ctx, st.file)) browser() } else Installer.askPermission(ctx) })
+            }
+            is Installer.Step.Failed -> {
+                NoticeBox(st.reason, Tone.RISK) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.tight)) {
+                        TonalButton("再试一次", onClick = { fetch() })
+                        LinkButton(onClick = browser) { Text("用浏览器下载") }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(DS.Rhythm.tight))
+        Text("装新版不用卸载旧的，登录状态和没传完的录音都会留着。",
+             style = MaterialTheme.typography.bodySmall,
+             color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}

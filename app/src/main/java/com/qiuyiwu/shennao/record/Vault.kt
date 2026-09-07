@@ -106,6 +106,11 @@ data class SessionMeta(
     val serverSessionId: String? = null,
     /** 录前选的场合（Scenes 的键）。没选就 null，建会话时不发这个字段。 */
     val scene: String? = null,
+    /**
+     * 上一轮上传为什么没成。落在这里而不是内存里：记录页要显示它，而记录页和上传
+     * 不在一个进程生命周期里（WorkManager 那条路跑完进程就没了）。成功一轮就清掉。
+     */
+    val lastError: String? = null,
 ) {
     fun toJson(): String = org.json.JSONObject()
         .put("clientRequestId", clientRequestId)
@@ -114,6 +119,7 @@ data class SessionMeta(
         .put("finished", finished)
         .put("serverSessionId", serverSessionId ?: org.json.JSONObject.NULL)
         .put("scene", scene ?: org.json.JSONObject.NULL)
+        .put("lastError", lastError ?: org.json.JSONObject.NULL)
         .toString()
 
     companion object {
@@ -127,6 +133,7 @@ data class SessionMeta(
                 o.optBoolean("finished"),
                 o.optString("serverSessionId").takeIf { it.isNotBlank() && it != "null" },
                 o.optString("scene").takeIf { it.isNotBlank() && it != "null" },
+                o.optString("lastError").takeIf { it.isNotBlank() && it != "null" },
             )
         }.getOrNull()
     }
