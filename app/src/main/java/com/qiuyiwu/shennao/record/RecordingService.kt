@@ -293,7 +293,9 @@ class RecordingService : Service() {
 
     private fun drainOnce() {
         // 走同一把锁：WorkManager 那条路也在推同一批文件
-        val results = runCatching { synchronized(Resume.lock) { uploader.drainAll() } }.getOrElse { return }
+        // 崩了要留痕迹：以前这里静默返回，一场传不上去的录音在日志里一个字都没有。
+        val results = runCatching { synchronized(Resume.lock) { uploader.drainAll() } }
+            .getOrElse { android.util.Log.w("shennao", "上传这一轮崩了", it); return }
         publishSessionId()
         pendingSegments = vault.sessions().sumOf { s ->
             vault.segments(s).count { it.state != Segment.State.UPLOADED }

@@ -42,6 +42,7 @@ private class MemVault : Vault {
         d[to.fileName()] = b
         return true
     }
+    override fun deleteSegment(session: String, seg: Segment): Boolean = files[session]?.remove(seg.fileName()) != null
     override fun deleteSession(session: String) { files.remove(session); deleted += session }
 }
 
@@ -283,21 +284,97 @@ class UploaderTest {
         assertEquals(2, v.segments("s").size)
     }
 
-    @Test fun `failed 的会话不是「已经做完了」——它挡着重传，必须报出来`() {
+    /**
+     * 2026-09-07 真机实录：服务端把一场标成 failed 之后，同一个幂等键每轮都拿回同一条 failed，
+     * 而客户端只会报「需要另建一场重推」却从不另建——用户每次打开 App 都看见同一条错误。
+     */
+    @Test fun `failed 的会话不是「已经做完了」——换个键重建，本地录音不动`() {
+        val v = MemVault().apply {
+            metas["s"] = meta(finished = true)
+            put("s", seg(0, Segment.State.SEALED))
+        }
+        val seen = mutableListOf<String>()
+        val h = ScriptHttp { _, url, body ->
+            if (url.endsWith("/api/recordings")) {
+                val key = org.json.JSONObject(body!!).getString("clientRequestId"); seen += key
+                if (key == "req-abc") HttpResponse(200, """{"session":{"id":"sess-1","status":"failed"}}""")
+                else HttpResponse(200, """{"session":{"id":"sess-2","status":"recording"}}""")
+            } else if (url.contains("/chunks/ticket")) HttpResponse(200, TICKET)
+            else HttpResponse(200, "{}")
+        }
+        val r1 = uploader(v, h).drain("s")
+        assertTrue("$r1", r1 is DrainResult.Failed)
+        assertTrue("换键之后要留给下一轮重试", (r1 as DrainResult.Failed).retryable)
+        assertTrue(r1.message.contains("failed"))
+        assertTrue("失败的会话不该把本地录音删掉", v.deleted.isEmpty())
+        assertEquals("req-abc#r1", v.metas["s"]!!.clientRequestId)
+        assertNull("旧的服务端 id 要清掉，否则下一轮还认它", v.metas["s"]!!.serverSessionId)
+
+        // 下一轮：新键 → 新会话 → 这一段传上去了
+        val r2 = uploader(v, h).drain("s")
+        assertTrue("$r2", r2 is DrainResult.Done)
+        assertEquals(listOf("req-abc", "req-abc#r1"), seen)
+    }
+
+    @Test fun `换键最多三次，再失败才认`() {
+        assertEquals(0, RetryKey.generation("ble-note1"))
+        assertEquals("ble-note1#r1", RetryKey.rotate("ble-note1"))
+        assertEquals("ble-note1#r2", RetryKey.rotate("ble-note1#r1"))
+        assertEquals(2, RetryKey.generation("ble-note1#r2"))
+        assertTrue("前缀不能丢——单段导入的重复判据靠它", RetryKey.rotate("ble-x").startsWith("ble-"))
+        val v = MemVault().apply {
+            metas["s"] = meta(finished = true).copy(clientRequestId = "req-abc#r3")
+            put("s", seg(0, Segment.State.SEALED))
+        }
+        val h = ScriptHttp { _, url, _ ->
+            if (url.endsWith("/api/recordings")) HttpResponse(200, """{"session":{"id":"x","status":"failed"}}""")
+            else HttpResponse(404, "")
+        }
+        val r = uploader(v, h).drain("s") as DrainResult.Failed
+        assertFalse(r.retryable)
+        assertEquals("req-abc#r3", v.metas["s"]!!.clientRequestId)
+    }
+
+    /** 2026-09-05 真机实录：灵魂卡导进来一个 0 字节文件，服务端 400，这场永远停在「上传中 0/1」。 */
+    @Test fun `整场只有一个 0 字节的段——连本地一起清掉，说清楚为什么`() {
+        val v = MemVault().apply {
+            metas["s"] = meta(finished = true).copy(clientRequestId = "ble-note1", title = "录音 · 8月29日")
+            put("s", seg(0, Segment.State.SEALED), ByteArray(0))
+        }
+        val h = happyPath()
+        val r = uploader(v, h).drain("s")
+        assertTrue("$r", r is DrainResult.Failed)
+        assertTrue((r as DrainResult.Failed).message.contains("0 字节"))
+        assertEquals(listOf("s"), v.deleted)
+        assertTrue("空段不该惊动服务端", h.log.isEmpty())
+    }
+
+    @Test fun `某一段是 0 字节——去掉它，别的段照传`() {
+        val v = MemVault().apply {
+            metas["s"] = meta(finished = true)
+            put("s", seg(0, Segment.State.SEALED))
+            put("s", seg(1, Segment.State.SEALED), ByteArray(0))
+            put("s", seg(2, Segment.State.SEALED))
+        }
+        val h = happyPath()
+        val r = uploader(v, h).drain("s")
+        assertTrue("$r", r is DrainResult.Done)
+        assertEquals(listOf(0, 2), v.segments("s").map { it.sequence }.takeIf { v.files.containsKey("s") } ?: listOf(0, 2))
+        assertEquals("只该要两张 ticket", 2, h.log.count { it.contains("ticket") })
+    }
+
+    @Test fun `ticket 的 400 要把服务端那句人话带出来`() {
         val v = MemVault().apply {
             metas["s"] = meta(finished = true)
             put("s", seg(0, Segment.State.SEALED))
         }
         val h = ScriptHttp { _, url, _ ->
-            if (url.endsWith("/api/recordings"))
-                HttpResponse(200, """{"session":{"id":"sess-1","status":"failed"}}""")
+            if (url.endsWith("/api/recordings")) HttpResponse(200, CREATED)
+            else if (url.contains("/chunks/ticket")) HttpResponse(400, """{"error":{"code":"INVALID_INPUT","message":"不支持的录音分片格式"}}""")
             else HttpResponse(404, "")
         }
-        val r = uploader(v, h).drain("s")
-        assertTrue("$r", r is DrainResult.Failed)
-        assertFalse((r as DrainResult.Failed).retryable)
-        assertTrue(r.message.contains("failed"))
-        assertTrue("失败的会话不该把本地录音删掉", v.deleted.isEmpty())
+        val r = uploader(v, h).drain("s") as DrainResult.Failed
+        assertTrue(r.message, r.message.contains("不支持的录音分片格式"))
     }
 
     // ---- 幂等键 ----

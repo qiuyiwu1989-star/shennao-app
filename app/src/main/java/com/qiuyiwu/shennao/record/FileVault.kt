@@ -59,5 +59,6 @@ class FileVault(private val root: File) : Vault {
     override fun rename(session: String, from: Segment, to: Segment): Boolean =
         segmentFile(session, from).renameTo(segmentFile(session, to))
 
+    override fun deleteSegment(session: String, seg: Segment): Boolean = segmentFile(session, seg).delete()
     override fun deleteSession(session: String) { dir(session).deleteRecursively() }
 }

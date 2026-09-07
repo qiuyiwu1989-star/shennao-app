@@ -78,6 +78,25 @@ class Uploader(
         }
         // 还在录、又没有已封段的东西可传——不用惊动服务端
         if (sealed.isEmpty() && !meta.finished) return DrainResult.Idle
+
+        /*
+         * 0 字节的段不能拿去要 ticket：服务端一律 400「分片大小超出范围」，
+         * 而 400 在这里是不可重试的——这一场就永远停在「上传中 0/1」。
+         * 2026-09-05 真机实录：从灵魂卡导入的 note20260829-140354 落盘是 0 字节（卡里那条没录到声音），
+         * 服务端 400 → 三天后 reaper 标成 failed → 之后每轮建会话都拿回 failed，用户看到的是「上传总是有错误」。
+         *
+         * 空段 = 一次失败的落盘，不是音频。整场都是空的就连本地一起清掉，说清楚为什么；
+         * 只有某一段是空的就去掉那一段，别的段照传。
+         */
+        val empty = sealed.filter { s -> sizeOf(session, s) == 0L }
+        if (empty.isNotEmpty()) {
+            if (empty.size == segs.size && meta.finished) {
+                vault.deleteSession(session)
+                return DrainResult.Failed("「${meta.title}」是空的（0 字节），来源那边可能没录到声音。已清掉。", false)
+            }
+            empty.forEach { vault.deleteSegment(session, it) }
+            return attempt(session, forceAuth)
+        }
         // 已结束但还有没封的段：封段是录音线程的活，等它做完。
         // 这里绝不能往下走去 stop——冻结清单会把还没封的那段永久关在门外。
         if (meta.finished && recording.isNotEmpty()) {
@@ -247,8 +266,19 @@ class Uploader(
 
         val status = o.optString("status")
         return when (status) {
-            "failed" -> SessionRef.Err(
-                "深脑那边这场是 failed 状态。它挡着重传——需要另建一场重推。", false)
+            /*
+             * 服务端把这场标成了 failed（多半是 reaper 收尾：一片都没收到）。
+             * 同一个幂等键再怎么推都只会拿回这条 failed——以前在这里报「需要另建一场重推」，
+             * 但没有任何地方真的去另建，用户每次打开 App 都看见同一条错误（2026-09-07）。
+             * 现在自动换键重建：键后面加一代号，服务端就当新会话。最多换三次，再失败才认。
+             */
+            "failed" -> {
+                val gen = RetryKey.generation(meta.clientRequestId)
+                if (gen >= RetryKey.MAX) return SessionRef.Err(
+                    "深脑那边这场连着 ${RetryKey.MAX} 次都是 failed 状态。本地音频还在，反馈问题时带上这条。", false)
+                vault.updateMeta(session) { it.copy(clientRequestId = RetryKey.rotate(it.clientRequestId), serverSessionId = null) }
+                SessionRef.Err("深脑那边这场是 failed 状态，换个新会话重推（第 ${gen + 1} 次）", true)
+            }
             "recording", "uploading" -> SessionRef.Ok(id)
             else -> SessionRef.Frozen(id, status)
         }
@@ -305,7 +335,9 @@ class Uploader(
             return StepResult.Err("第 ${seg.sequence} 段服务端不收（$code）", false)
         }
         if (ticket.status >= 400) {
-            return StepResult.Err("第 ${seg.sequence} 段要地址失败（${ticket.status}）", ticket.status >= 500)
+            // 服务端的 400 都带一句人话（「分片大小超出范围」「不支持的录音分片格式」），照着显示——
+            // 只给一个 400，谁也不知道该改什么。
+            return StepResult.Err("第 ${seg.sequence} 段要地址失败（${messageOf(ticket.body) ?: ticket.status}）", ticket.status >= 500)
         }
         val url = runCatching { JSONObject(ticket.body).optString("uploadUrl") }
             .getOrNull()?.takeIf { it.isNotBlank() }
@@ -341,6 +373,18 @@ class Uploader(
     }.getOrElse { emptyList() }
 
     /** 从错误应答里取 code。取不到就还回状态码本身——总比一句「失败了」强。 */
+    /** 段的字节数。真实 vault 看文件；内存 vault 看数组。都没有就当 -1（不是 0：不知道 ≠ 空）。 */
+    private fun sizeOf(session: String, seg: Segment): Long =
+        vault.segmentPath(session, seg)?.length()
+            ?: vault.readSegment(session, seg)?.size?.toLong()
+            ?: -1L
+
+    /** 服务端错误体 {"error":{"message":...}} 里的那句人话。没有就 null。 */
+    private fun messageOf(body: String): String? = runCatching {
+        val o = JSONObject(body)
+        (o.optJSONObject("error")?.optString("message") ?: o.optString("message")).takeIf { it.isNotBlank() }
+    }.getOrNull()
+
     private fun codeOf(body: String): String = runCatching {
         // 服务端的错误体是 {"error":{"code":...}}，**code 是嵌在里面的**。
         // 按平铺去取会永远拿到空串，然后界面上显示一个「服务端不收（409）」，
@@ -355,4 +399,17 @@ class Uploader(
         f.timeZone = java.util.TimeZone.getTimeZone("UTC")
         return f.format(java.util.Date(ms))
     }
+}
+
+/**
+ * 换键重建的代号。纯逻辑，JVM 可测。
+ *
+ * 幂等键末尾加 `#r1`、`#r2`……服务端就当一条新会话。前缀（ble- / share-）不动，
+ * 上面那条「单段导入撞上已冻结的会话 = 重复导入」的判据照旧成立。
+ */
+internal object RetryKey {
+    const val MAX = 3
+    private val suffix = Regex("""#r(\d+)$""")
+    fun generation(key: String): Int = suffix.find(key)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    fun rotate(key: String): String = key.replace(suffix, "") + "#r" + (generation(key) + 1)
 }

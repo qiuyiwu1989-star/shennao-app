@@ -162,5 +162,7 @@ interface Vault {
     fun segmentPath(session: String, seg: Segment): java.io.File? = null
     /** 改后缀=换状态。必须是原子的重命名，不能是「复制+删除」 */
     fun rename(session: String, from: Segment, to: Segment): Boolean
+    /** 删掉一段。只给 0 字节的段用——那不是音频，是一次失败的落盘。 */
+    fun deleteSegment(session: String, seg: Segment): Boolean = false
     fun deleteSession(session: String)
 }
