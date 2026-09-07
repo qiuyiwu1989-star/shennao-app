@@ -110,7 +110,9 @@ class Uploader(
                                         sealed.size + recording.size)
         }
 
-        val (token, org) = auth(forceAuth) ?: return DrainResult.Failed("还没登录", true)
+        val (token, currentOrg) = auth(forceAuth) ?: return DrainResult.Failed("还没登录", true)
+        // 录的时候在哪个组织就传到哪个组织；老版本录的（没记）才用现在的
+        val org = meta.orgId ?: currentOrg
         val h = mapOf(
             "Authorization" to "Bearer $token",
             "x-deepbrain-org-id" to org,

@@ -30,6 +30,7 @@ object Demo {
             val path = url.substringAfter("demo.invalid")
             return when {
                 path.startsWith("/auth/v1/token") -> ok("""{"access_token":"demo-access","refresh_token":"demo-refresh"}""")
+                path.startsWith("/rest/v1/memberships") -> ok("""[{"org_id":"org-demo","role":"owner","created_at":"2026-01-01","organizations":{"name":"个人空间","plan":"personal"}},{"org_id":"org-team","role":"member","created_at":"2026-03-01","organizations":{"name":"造物云","plan":"team"}}]""")
                 path == "/api/mobile/today" -> ok(TODAY)
                 path == "/api/mobile/sessions" -> ok(SESSIONS)
                 path.startsWith("/api/mobile/transcript/") && path.endsWith("/speakers") -> ok(SPEAKERS)

@@ -357,6 +357,7 @@ class BleImportService : Service() {
                 Ingest.stage(
                     FileVault(File(filesDir, "recordings")),
                     s.bytes, entry.base, entry.time * 1000, started,
+                    orgId = com.qiuyiwu.shennao.Session.client(this).orgId(),
                 )
             }.getOrNull()
             if (ok != null) {

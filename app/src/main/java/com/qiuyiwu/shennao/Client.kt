@@ -537,6 +537,49 @@ class DeepBrainClient(
 
     fun signedInEmail(): String? = store.load()?.email
     fun signOut() { accessToken = null; store.clear() }
+
+    /**
+     * 这个账号加入的所有组织。走 Supabase REST：memberships 自己能读（memberships_self_select），
+     * 顺带把 organizations 的名字嵌出来（orgs_self_select）。服务端不用改——Phase 2 还没部署。
+     * 嵌不出来（老库没建外键）就退回只有 id 的列表，名字用 id 前八位顶着，切换照样能用。
+     */
+    fun orgs(): ApiResult<List<Org>> {
+        val t = validAccessToken() ?: return ApiResult.Unauthorized
+        val h = mapOf("apikey" to supabaseAnonKey, "Authorization" to "Bearer $t")
+        val r = http.request("GET", "$supabaseUrl/rest/v1/memberships?select=org_id,role,created_at,organizations(name,plan)&order=created_at.asc", h)
+        if (r.status == 401) return ApiResult.Unauthorized
+        if (r.status < 400) OrgParser.parse(r.body)?.let { return ApiResult.Ok(it) }
+        // 嵌套查询 400（没有外键关系）→ 退回平铺
+        val plain = http.request("GET", "$supabaseUrl/rest/v1/memberships?select=org_id,role,created_at&order=created_at.asc", h)
+        if (plain.status >= 400) return ApiResult.Failed("组织列表取不到（${plain.status}）")
+        return OrgParser.parse(plain.body)?.let { ApiResult.Ok(it) } ?: ApiResult.Failed("组织列表看不懂")
+    }
+
+    /** 切到另一个组织。只改本机记的 orgId；之后每个请求的 x-deepbrain-org-id 都跟着变。 */
+    fun switchOrg(orgId: String): Boolean {
+        val c = store.load() ?: return false
+        if (c.orgId == orgId) return true
+        store.save(c.copy(orgId = orgId))
+        return true
+    }
+}
+
+/** 一个组织。personal = 个人空间（plan 是 personal 或名字是「个人」那种）。 */
+data class Org(val id: String, val name: String, val role: String, val personal: Boolean)
+
+/** memberships 应答 → 组织列表。纯逻辑，JVM 可测。 */
+object OrgParser {
+    fun parse(body: String): List<Org>? = runCatching {
+        val arr = org.json.JSONArray(body)
+        (0 until arr.length()).mapNotNull { i ->
+            val m = arr.optJSONObject(i) ?: return@mapNotNull null
+            val id = m.optString("org_id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val o = m.optJSONObject("organizations")
+            val plan = o?.optString("plan").orEmpty()
+            val name = o?.optString("name")?.takeIf { it.isNotBlank() } ?: id.take(8)
+            Org(id, name, m.optString("role"), personal = plan == "personal" || name == "个人空间")
+        }
+    }.getOrNull()
 }
 
 /**

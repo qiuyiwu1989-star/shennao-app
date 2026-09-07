@@ -34,6 +34,7 @@ object Ingest {
         title: String,
         durationMs: Long,
         startedAtEpochMs: Long,
+        orgId: String? = null,
     ): String? {
         if (bytes.isEmpty()) return null
 
@@ -69,6 +70,7 @@ object Ingest {
             title = displayTitle(startedAtEpochMs),
             startedAtEpochMs = startedAtEpochMs,
             finished = true,        // 导入的文件天生就是完整的，不用等停止
+            orgId = orgId,
         )
         val session = vault.newSession(meta)
         val seg = Segment(0, 0, realMs, Segment.State.SEALED, ext = "opus")

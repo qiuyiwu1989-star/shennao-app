@@ -146,7 +146,8 @@ class RecordingService : Service() {
                 val title = intent.getStringExtra("title") ?: "手机录音"
                 // 场合只认词表里的：intent 是公开面，别把任意字符串带到服务端去吃 400
                 val scene = intent.getStringExtra("scene")?.takeIf { Scenes.isKnown(it) }
-                if (recorder.start(title, System.currentTimeMillis(), scene) == null) {
+                val org = com.qiuyiwu.shennao.Session.client(applicationContext).orgId()
+                if (recorder.start(title, System.currentTimeMillis(), scene, org) == null) {
                     micError = "麦克风打不开——检查权限，或者有别的应用正占着它"
                     stopSelf()
                     return START_NOT_STICKY

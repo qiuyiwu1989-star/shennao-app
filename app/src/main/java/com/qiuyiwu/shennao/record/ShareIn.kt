@@ -93,6 +93,7 @@ object ShareIn {
             // 只能用现在。这一点和灵魂卡不同——那边文件名里带着录音时刻。
             startedAtEpochMs = System.currentTimeMillis(),
             finished = true,
+            orgId = com.qiuyiwu.shennao.Session.client(ctx).orgId(),
         )
         val session = vault.newSession(meta)
         val seg = Segment(0, 0, durationMs, Segment.State.SEALED, ext = ext)

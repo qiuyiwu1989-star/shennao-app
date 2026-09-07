@@ -405,6 +405,14 @@ private fun App(client: DeepBrainClient) {
                             http = (if (BuildConfig.DEBUG) Demo.http else null) ?: UrlHttp(),
                             onOpenWeb = { path, title -> go(nav.push(Route.Web(path, title))) },
                             onOpenCard = { go(nav.push(Route.Ble)) },
+                            onOrgSwitched = {
+                                // 换组织和换账号一样：上一个组织的缓存、通知去重、提醒都不能带过来
+                                cache.clear()
+                                NewJudgments.forget(ctx)
+                                Remind.forget(ctx)
+                                today = null
+                                scope.launch { load() }
+                            },
                             onSignOut = {
                                 client.signOut()
                                 // 换账号不能带着上一个账号的东西：离线缓存、「已经通知过的判断」、

@@ -31,6 +31,8 @@ fun MeScreen(
     onSignOut: () -> Unit,
     /** 进灵魂卡那一页（扫描 / 连接 / 同步 / 改名） */
     onOpenCard: () -> Unit = {},
+    /** 切了组织：调用方清缓存、重取今天 */
+    onOrgSwitched: () -> Unit = {},
     // 可注入，默认才是真的联网。不然这一屏没法在测试里脱网跑。
     http: Http = UrlHttp(),
 ) {
@@ -99,8 +101,28 @@ fun MeScreen(
 
         // ── 账号 ──
         SectionLabel("账号")
+        // 组织。多组织账号以前只能用最早的那个（012 P3-4）——账号里有个空的测试组织的人，
+        // 登进来「今天」永远是空的，而且没有任何地方告诉他为什么。
+        var orgs by remember { mutableStateOf<List<Org>>(emptyList()) }
+        var orgLoaded by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            orgs = (withContext(Dispatchers.IO) { runCatching { client.orgs() }.getOrNull() } as? ApiResult.Ok)?.value ?: emptyList()
+            orgLoaded = true
+        }
+        var picking by remember { mutableStateOf(false) }
+        val currentOrg = client.orgId()
+        val currentName = orgs.firstOrNull { it.id == currentOrg }?.name
         DsGroup {
             DsRow("账号", subtitle = client.signedInEmail() ?: "未登录")
+            if (orgLoaded && orgs.isNotEmpty()) {
+                RowDivider()
+                DsRow(
+                    "组织",
+                    subtitle = currentName ?: currentOrg?.take(8) ?: "—",
+                    trailing = if (orgs.size > 1) "${orgs.size} 个" else null,
+                    onClick = if (orgs.size > 1) ({ picking = true }) else null,
+                )
+            }
             // 显示「已有」不显示「剩余」：剩余是倒计时，已有是陈述。全行业在另一边，故意反着做（规格 010）。
             credits?.let { c ->
                 RowDivider()
@@ -167,6 +189,15 @@ fun MeScreen(
             DsRow("服务条款", onClick = { onOpenWeb("/zh/terms", "服务条款") })
         }
 
+        if (picking) OrgPicker(
+            orgs = orgs, current = currentOrg,
+            onPick = { o ->
+                picking = false
+                if (client.switchOrg(o.id)) { onOrgSwitched(); notice("已切到「${o.name}」") }
+            },
+            onDismiss = { picking = false },
+        )
+
         Spacer(Modifier.height(DS.Rhythm.inner))
         var signOut by remember { mutableStateOf(false) }
         QuietButton("退出登录", onClick = { signOut = true }, modifier = Modifier.fillMaxWidth())
@@ -183,6 +214,33 @@ fun MeScreen(
 }
 
 private fun mb(b: Long) = "%.1f".format(b / 1048576.0)
+
+/** 选组织。一行一个，当前那个打勾；个人空间标出来。 */
+@Composable
+private fun OrgPicker(orgs: List<Org>, current: String?, onPick: (Org) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = DS.Radius.sheet,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("切换组织", style = MaterialTheme.typography.titleLarge) },
+        text = {
+            Column {
+                Text("「今天」「记录」「问」都按组织分。正在传的录音留在它录制时的组织里，不会跟着跑。",
+                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(DS.Rhythm.element))
+                orgs.forEach { o ->
+                    DsRow(
+                        o.name,
+                        subtitle = listOfNotNull(if (o.personal && o.name != "个人空间") "个人空间" else null, roleLabel(o.role)).joinToString(" · ").ifBlank { null },
+                        trailingContent = { if (o.id == current) Pill("当前", Tone.ACCENT) },
+                        onClick = { onPick(o) },
+                    )
+                }
+            }
+        },
+        confirmButton = { QuietButton("算了", onClick = onDismiss) },
+    )
+}
 
 /**
  * 有新版时那一块：下载 → 校验 → 交给系统装。以前是把人甩给浏览器，下到哪、装不装得上全靠猜。
@@ -245,4 +303,10 @@ private fun UpdateBlock(release: Release) {
              style = MaterialTheme.typography.bodySmall,
              color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+/** 角色说中文。认不出的原样给。 */
+internal fun roleLabel(role: String): String? = when (role) {
+    "owner" -> "拥有者"; "admin" -> "管理员"; "member" -> "成员"; "viewer" -> "只读"
+    "" -> null; else -> role
 }

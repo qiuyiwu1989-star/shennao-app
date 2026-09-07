@@ -384,8 +384,38 @@ class UploaderTest {
         assertTrue("$r", r is DrainResult.Done)
     }
 
+    /** 人在传到一半时切了组织，这场会不该跟着跑到另一个组织去。 */
+    @Test fun `上传用录制时钉下的组织，不用现在的`() {
+        val v = MemVault().apply {
+            metas["s"] = meta(finished = true).copy(orgId = "org-recorded")
+            put("s", seg(0, Segment.State.SEALED))
+        }
+        val seen = mutableListOf<String>()
+        val h = object : Http {
+            override fun request(method: String, url: String, headers: Map<String, String>, body: String?): HttpResponse {
+                seen += headers["x-deepbrain-org-id"] ?: "-"
+                return when {
+                    url.endsWith("/api/recordings") -> HttpResponse(200, CREATED)
+                    url.contains("/chunks/ticket") -> HttpResponse(200, TICKET)
+                    else -> HttpResponse(200, "")
+                }
+            }
+            override fun requestBytes(method: String, url: String, headers: Map<String, String>, body: ByteArray) = HttpResponse(200, "")
+        }
+        // auth 给的是「现在」的组织 org-1；meta 钉的是 org-recorded
+        val r = Uploader(h, v, "https://api.test") { "at" to "org-1" }.drain("s")
+        assertTrue("$r", r is DrainResult.Done)
+        assertTrue(seen.isNotEmpty())
+        assertTrue("所有请求都该带录制时的组织：$seen", seen.all { it == "org-recorded" })
+        // 老版本录的（没记组织）用现在的
+        val v2 = MemVault().apply { metas["s"] = meta(finished = true); put("s", seg(0, Segment.State.SEALED)) }
+        seen.clear()
+        Uploader(h, v2, "https://api.test") { "at" to "org-1" }.drain("s")
+        assertTrue(seen.all { it == "org-1" })
+    }
+
     @Test fun `meta 的 lastError 能落盘再读回`() {
-        val m = meta().copy(lastError = "第 0 段要地址失败（分片大小超出范围）")
+        val m = meta().copy(lastError = "第 0 段要地址失败（分片大小超出范围）", orgId = "org-x")
         assertEquals(m, SessionMeta.fromJson(m.toJson()))
         assertNull(SessionMeta.fromJson(meta().toJson())!!.lastError)
     }

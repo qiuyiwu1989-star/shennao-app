@@ -111,6 +111,11 @@ data class SessionMeta(
      * 不在一个进程生命周期里（WorkManager 那条路跑完进程就没了）。成功一轮就清掉。
      */
     val lastError: String? = null,
+    /**
+     * 录的时候登在哪个组织。上传时用它、不用「现在」的组织——
+     * 人在传到一半时切了组织，这场会不该跟着跑到另一个组织去。null = 老版本录的，用当前的。
+     */
+    val orgId: String? = null,
 ) {
     fun toJson(): String = org.json.JSONObject()
         .put("clientRequestId", clientRequestId)
@@ -120,6 +125,7 @@ data class SessionMeta(
         .put("serverSessionId", serverSessionId ?: org.json.JSONObject.NULL)
         .put("scene", scene ?: org.json.JSONObject.NULL)
         .put("lastError", lastError ?: org.json.JSONObject.NULL)
+        .put("orgId", orgId ?: org.json.JSONObject.NULL)
         .toString()
 
     companion object {
@@ -134,6 +140,7 @@ data class SessionMeta(
                 o.optString("serverSessionId").takeIf { it.isNotBlank() && it != "null" },
                 o.optString("scene").takeIf { it.isNotBlank() && it != "null" },
                 o.optString("lastError").takeIf { it.isNotBlank() && it != "null" },
+                o.optString("orgId").takeIf { it.isNotBlank() && it != "null" },
             )
         }.getOrNull()
     }
