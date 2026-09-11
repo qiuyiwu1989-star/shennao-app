@@ -61,4 +61,8 @@ class ScreenshotTest {
     @Test fun `色板 亮色`() = shoot("palette", dark = false) { TokenBoard() }
     @Test fun `色板 暗色`() = shoot("palette", dark = true) { TokenBoard() }
 
+    /** 记录页的双栏卡片。放的是边角形态，见 SampleCards。 */
+    @Test fun `素材卡片 亮色`() = shoot("cards", dark = false) { SampleCards() }
+    @Test fun `素材卡片 暗色`() = shoot("cards", dark = true) { SampleCards() }
+
 }

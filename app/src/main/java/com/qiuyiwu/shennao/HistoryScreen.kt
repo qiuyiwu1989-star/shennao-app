@@ -184,9 +184,40 @@ fun HistoryScreen(
                 Text("这个来源还没有送到深脑的。", style = MaterialTheme.typography.bodyMedium,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            // 已送到的是「办完的事」，一行一条、发丝线隔开——不给卡：卡留给还在路上的（上面那几条）。
-            // 一屏里有卡有行，眼睛才分得出「要管的」和「看看就行的」。
-            items(shown, key = { "s" + it.sessionId }) { s -> ServedRow(s, onOpen, onDelete) }
+            /*
+             * 分三档，判据是**你还要不要为它做点什么**：
+             *
+             *   还在手机上   → 通栏卡（上面那一段）。唯一可能丢的，必须先看见
+             *   送到了但没成 → 通栏行 + 原因 + 删掉这条。要你处理的
+             *   正常送到的   → 双栏卡片，带一句内容预览。看看就行，但要能一眼挑出哪场有用
+             *
+             * 第三档以前也是一行一条，理由是「卡留给还在路上的，一屏里有卡有行，
+             * 眼睛才分得出要管的和看看就行的」。分级这件事现在由**位置和宽度**接手了
+             * （通栏在上、双栏在下），所以那条理由不再拦着这一档变成卡。
+             * 而它拦不住的那个毛病是真的：一屏十几条「智能纪要 · 9 月 9 日」，
+             * 一行标题加一个日期，答不了「哪一场值得看」。
+             */
+            val (bad, fine) = shown.partition { it.stage == Stage.FAILED }
+            items(bad, key = { "s" + it.sessionId }) { s -> ServedRow(s, onOpen, onDelete) }
+            val byId = fine.associateBy { it.sessionId }
+            items(materialCardPairs(fine.map(::toCardItem)), key = { it.first().id }) { pair ->
+                MaterialCardRow(
+                    pair,
+                    onOpen = { item -> byId[item.id]?.transcriptId?.let(onOpen) },
+                    onRetry = { item ->
+                        // 「重试」= 再跑一次分析。没有 transcriptId 说明还没转写完，
+                        // 那时服务端不会把 retriable 给成 true，这里就不会被点到。
+                        val tid = byId[item.id]?.transcriptId ?: return@MaterialCardRow
+                        scope.launch {
+                            val r = withContext(Dispatchers.IO) { client.analyze(tid) }
+                            notice(if (r is ApiResult.Ok) "已经重新排上队了" else "没排上：" +
+                                ((r as? ApiResult.Failed)?.message ?: "登录失效了"))
+                            val s2 = withContext(Dispatchers.IO) { client.sessions() }
+                            if (s2 is ApiResult.Ok) served = s2.value
+                        }
+                    },
+                )
+            }
         }
 
         if (!loaded) item { SkeletonList(3) }
@@ -269,6 +300,20 @@ fun ServedRow(s: SessionCard, onOpen: (String) -> Unit, onDelete: ((String) -> U
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
+
+/**
+ * SessionCard → 卡片要显示的东西。**这里只搬运，不判断**：
+ * 挑哪一条、进度怎么措辞，都是服务端的事（core 的 pickHighlight / materialProgress）。
+ */
+internal fun toCardItem(s: SessionCard): MaterialCardItem = MaterialCardItem(
+    id = s.sessionId,
+    title = SessionTitles.display(s.title, s.startedAt?.let { day(it) }),
+    whenText = s.startedAt?.let { day(it) } ?: "",
+    // 手机、灵魂卡、工牌录的都算「录音」；只有上传进来的算「导入」。
+    fromRecording = s.source != "share",
+    highlight = s.highlight,
+    progress = s.progress,
+)
 
 /** 「0 分钟」是句假话：不到一分钟就说不到一分钟。纯逻辑，JVM 可测。 */
 internal fun minutesLabel(ms: Long): String = if (ms < 60_000) "不到 1 分钟" else "${ms / 60_000} 分钟"

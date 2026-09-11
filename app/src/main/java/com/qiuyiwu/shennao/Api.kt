@@ -238,6 +238,16 @@ data class SessionCard(
     val captureClient: String? = null,
     /** 入口：card / share / phone / other。由服务端从幂等键前缀派生；没有就 null，界面不分段 */
     val source: String? = null,
+    /**
+     * 卡片顶部那一条。**挑法在服务端**（core 的 pickHighlight），客户端只显示。
+     * 服务端没升级、或这场挑不出值得看的一条 → null，卡片就只有标题，不拿标题去填。
+     */
+    val highlight: Highlight? = null,
+    /**
+     * 走到哪一步。文案也由服务端给，客户端不拼——两端各写一套的后果是
+     * 同一条录音在手机上说「已分析」、在网页上说「没沉下判断」。
+     */
+    val progress: Progress? = null,
 )
 
 data class MeetingAtom(
@@ -309,6 +319,26 @@ object SessionsParser {
                 transcriptId = o.optString("transcriptId").takeIf { it.isNotBlank() && it != "null" },
                 captureClient = o.optString("captureClient").takeIf { it.isNotBlank() && it != "null" },
                 source = o.optString("source").takeIf { it.isNotBlank() && it != "null" },
+                highlight = o.optJSONObject("highlight")?.let { h ->
+                    val text = h.optString("text").takeIf { it.isNotBlank() } ?: return@let null
+                    Highlight(
+                        kind = h.optString("kind").ifBlank { "summary" },
+                        text = text,
+                        // 服务端没确认说话人时这里是 null，界面就不署名。
+                        speaker = h.optString("speaker").takeIf { it.isNotBlank() && it != "null" },
+                        label = h.optString("label").ifBlank { "这一条" },
+                    )
+                },
+                progress = o.optJSONObject("progress")?.let { g ->
+                    val label = g.optString("label").takeIf { it.isNotBlank() } ?: return@let null
+                    Progress(
+                        stage = g.optString("stage").ifBlank { "unknown" },
+                        label = label,
+                        // 只有上传阶段给得出诚实的比例；其余是 null，画不确定进度条。
+                        ratio = if (g.isNull("ratio")) null else g.optDouble("ratio").toFloat(),
+                        retriable = g.optBoolean("retriable", false),
+                    )
+                },
             )
         }
     }
