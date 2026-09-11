@@ -82,8 +82,9 @@ private val LightColors = lightColorScheme(
     secondaryContainer = FocusSoft,
     onSecondaryContainer = Focus,
     surfaceVariant     = Ink100,      // 未选中的 chip、骨架条
-    surfaceContainer   = Ink50,       // 卡片里的嵌块、输入框底
-    surfaceContainerLow = Ink50,
+    // 嵌块底不能和页面底同色：录音台「念一句」那块在浅色截图里直接消失了（Roborazzi 2026-09-12）
+    surfaceContainer   = Ink100,      // 卡片里的嵌块、输入框底
+    surfaceContainerLow = Ink100,
     surfaceContainerHigh = Ink100,
     surfaceContainerHighest = Ink100,
     tertiary           = Iris,

@@ -65,4 +65,39 @@ class ScreenshotTest {
     @Test fun `素材卡片 亮色`() = shoot("cards", dark = false) { SampleCards() }
     @Test fun `素材卡片 暗色`() = shoot("cards", dark = true) { SampleCards() }
 
+    // ---- 真实的屏，用夹具数据（Demo.kt 那套，和 adb --ez demo true 看到的一样）----
+
+    private fun demoClient(): com.qiuyiwu.shennao.DeepBrainClient {
+        com.qiuyiwu.shennao.Demo.install()
+        return com.qiuyiwu.shennao.Session.client(androidx.test.core.app.ApplicationProvider.getApplicationContext())
+    }
+    private fun demoToday(): com.qiuyiwu.shennao.Today =
+        (demoClient().today() as com.qiuyiwu.shennao.ApiResult.Ok).value
+
+    private fun screens(dark: Boolean) {
+        val client = demoClient()
+        val today = demoToday()
+        shoot("today", dark) {
+            androidx.compose.foundation.layout.Column {
+                com.qiuyiwu.shennao.LiveBar(onClick = {})
+                com.qiuyiwu.shennao.TodayScreen(today, {}, {}, {})
+            }
+        }
+    }
+    @Test fun `今天 亮色`() = screens(false)
+    @Test fun `今天 暗色`() = screens(true)
+
+    @Test fun `记录 亮色`() = shoot("records", false) { com.qiuyiwu.shennao.HistoryScreen(demoClient(), {}, {}) }
+    @Test fun `记录 暗色`() = shoot("records", true) { com.qiuyiwu.shennao.HistoryScreen(demoClient(), {}, {}) }
+    @Test fun `我的 亮色`() = shoot("me", false) { com.qiuyiwu.shennao.MeScreen(demoClient(), { _, _ -> }, {}, http = com.qiuyiwu.shennao.Demo.http!!) }
+    @Test fun `我的 暗色`() = shoot("me", true) { com.qiuyiwu.shennao.MeScreen(demoClient(), { _, _ -> }, {}, http = com.qiuyiwu.shennao.Demo.http!!) }
+    @Test fun `问 亮色`() = shoot("ask", false) { com.qiuyiwu.shennao.AskScreen(demoClient()) {} }
+    @Test fun `问 暗色`() = shoot("ask", true) { com.qiuyiwu.shennao.AskScreen(demoClient()) {} }
+    @Test fun `录音台 亮色`() = shoot("record", false) { com.qiuyiwu.shennao.RecordScreen(onBack = {}) }
+    @Test fun `录音台 暗色`() = shoot("record", true) { com.qiuyiwu.shennao.RecordScreen(onBack = {}) }
+    @Test fun `会议 亮色`() = shoot("meeting", false) { com.qiuyiwu.shennao.MeetingScreen(demoClient(), "t1", {}) }
+    @Test fun `会议 暗色`() = shoot("meeting", true) { com.qiuyiwu.shennao.MeetingScreen(demoClient(), "t1", {}) }
+    @Test fun `定时 亮色`() = shoot("schedule", false) { com.qiuyiwu.shennao.ScheduleScreen(onBack = {}) }
+    @Test fun `接入AI 暗色`() = shoot("agents", true) { com.qiuyiwu.shennao.AgentsScreen(onBack = {}) { _, _ -> } }
+
 }

@@ -192,7 +192,7 @@ private fun Header(t: Today) {
         }.joinToString(" · ")
     }
     val urgent = lede != null && !t.notReady && !t.failed && t.counts.overdue > 0
-    Column(Modifier.padding(top = DS.Rhythm.section, bottom = DS.Rhythm.hair)) {
+    Column(Modifier.padding(top = DS.Rhythm.inner, bottom = DS.Rhythm.hair)) {
         Text("今天", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(DS.Rhythm.tight))
         Row(verticalAlignment = Alignment.CenterVertically) {

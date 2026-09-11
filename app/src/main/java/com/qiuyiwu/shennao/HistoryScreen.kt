@@ -127,10 +127,13 @@ fun HistoryScreen(
         item {
             Spacer(Modifier.height(DS.Rhythm.element))
             Text("记录", style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(DS.Rhythm.tight))
-            Text("每一场走到哪一站，都在这里。",
-                 style = MaterialTheme.typography.bodyMedium,
-                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // 副标题只在还没内容时说；有内容时那一行是废话，卡片自己会说
+            if (served.isEmpty() && rows.isEmpty()) {
+                Spacer(Modifier.height(DS.Rhythm.tight))
+                Text("每一场走到哪一站，都在这里。",
+                     style = MaterialTheme.typography.bodyMedium,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             // 灵魂卡那一头。「有什么」和「进来了没有」是同一个问题的两面，
             // 卡的状态不放在这里，用户就得去另一栏对账。
             // 但没连过卡的人不该看见它（2026-09-11 用户反馈：「灵魂卡里面是空的」）——那一行对他只是噪音。
@@ -170,7 +173,8 @@ fun HistoryScreen(
 
         if (served.isNotEmpty()) {
             // 紧接页头，不留分区大空：这一页的正文就是它们
-            item { SectionLabel("已经送到深脑", top = rows.isNotEmpty()) }
+            // 「已经送到深脑」只在上面有「还在手机上」时才需要分开说
+            if (rows.isNotEmpty()) item { SectionLabel("已经送到深脑") }
             // 按来源分段：灵魂卡 / 手机 / 分享来的。每个入口各占一格，不做主次视觉差——
             // 一个只用手机的人，界面上不该处处看见「你还没有灵魂卡」。
             if (SourceFilter.available(served)) item {
