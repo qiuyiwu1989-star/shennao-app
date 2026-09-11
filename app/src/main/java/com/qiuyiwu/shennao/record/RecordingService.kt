@@ -159,7 +159,7 @@ class RecordingService : Service() {
                 try {
                     startForeground(NOTIF_ID, notification("正在录音", "深脑正在录这场会"))
                 } catch (e: Exception) {
-                    micError = "系统不让在后台开始录音——请先打开深脑，再点开始。"
+                    micError = "系统不让在后台开始录音。先打开深脑，再点开始。"
                     recording = false
                     state = RecordState.IDLE
                     stopSelf()
@@ -173,7 +173,7 @@ class RecordingService : Service() {
                 val scene = intent.getStringExtra("scene")?.takeIf { Scenes.isKnown(it) }
                 val org = com.qiuyiwu.shennao.Session.client(applicationContext).orgId()
                 if (recorder.start(title, System.currentTimeMillis(), scene, org) == null) {
-                    micError = "麦克风打不开——检查权限，或者有别的应用正占着它"
+                    micError = "麦克风打不开。检查权限，或者有别的应用正占着它。"
                     stopSelf()
                     return START_NOT_STICKY
                 }
@@ -194,7 +194,7 @@ class RecordingService : Service() {
                 try {
                     startForeground(NOTIF_ID, notification("在听", "有人说话时才会录", canStop = false))
                 } catch (e: Exception) {
-                    micError = "系统不让在后台打开全时聆听——请先打开深脑，再打开它。"
+                    micError = "系统不让在后台打开全时聆听。先打开深脑，再打开它。"
                     return START_NOT_STICKY
                 }
                 scope.launch { recorder.recoverOrphans()?.let { OrphanNotice.record(applicationContext, it) }; kick() }
@@ -235,7 +235,7 @@ class RecordingService : Service() {
                 scope.launch {
                     gate.stop()
                     listenPhase = AlwaysOn.Phase.OFF
-                    updateNotification("正在上传", "聆听已关闭，正在推送到深脑", canStop = false)
+                    updateNotification("正在上传", "聆听已关闭，正在传到深脑", canStop = false)
                     drainUntilEmpty()
                 }
             }
@@ -256,7 +256,7 @@ class RecordingService : Service() {
                 UploadWorker.kick(applicationContext)
                 // 停止之后不能立刻退出服务：还有分段没传完。
                 // 转成一条「正在上传」的通知继续跑，传完了再自己退。
-                updateNotification("正在上传", "录音已停止，正在推送到深脑", canStop = false)
+                updateNotification("正在上传", "录音已停止，正在传到深脑", canStop = false)
                 drainUntilEmpty()
                 }
             }
@@ -307,7 +307,7 @@ class RecordingService : Service() {
                     RecordState.INTERRUPTED -> updateNotification(
                         "录音中断了", "麦克风被占用，正在抢回来。已录 ${fmt(elapsedMs)} 都在")
                     RecordState.GAVE_UP -> updateNotification(
-                        "录音已停止", "麦克风抢不回来。已录 ${fmt(elapsedMs)} 正在推送", canStop = false)
+                        "录音已停止", "麦克风抢不回来。已录 ${fmt(elapsedMs)}，会传到深脑", canStop = false)
                     RecordState.DISK_FULL -> updateNotification(
                         "录音已停止", "手机存储满了，写不进去。已录 ${fmt(elapsedMs)} 都在", canStop = false)
                     else -> updateNotification("正在录音", "已录 ${fmt(elapsedMs)}")
@@ -316,8 +316,8 @@ class RecordingService : Service() {
                     // 录音线程自己放弃了。把已经录到的传完就收工——
                     // 让服务空转着不会让麦克风回来。
                     micError = if (state == RecordState.DISK_FULL)
-                        "手机存储满了，录音已停止。清出空间之后，已录到的部分会照常推送。"
-                    else "麦克风被别的应用占着，录音已停止。已录到的部分会照常推送。"
+                        "手机存储满了，录音已停止。清出空间之后，已录到的会照常传。"
+                    else "麦克风被别的应用占着，录音已停止。已录到的会照常传。"
                     launch { drainUntilEmpty() }
                     return@launch
                 }
@@ -372,7 +372,7 @@ class RecordingService : Service() {
             }.getOrNull() ?: return@launch
             if (r.status >= 400) {
                 // 503 = 服务端没开这个功能。说清楚，不要让人以为是自己网络的问题。
-                captionState = if (r.status == 503) "这台服务器没开实时字幕" else null
+                captionState = if (r.status == 503) "深脑没开实时字幕" else null
                 return@launch
             }
             val o = runCatching { org.json.JSONObject(r.body) }.getOrNull() ?: return@launch

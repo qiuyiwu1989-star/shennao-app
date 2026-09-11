@@ -305,7 +305,7 @@ class UploaderTest {
         val r1 = uploader(v, h).drain("s")
         assertTrue("$r1", r1 is DrainResult.Failed)
         assertTrue("换键之后要留给下一轮重试", (r1 as DrainResult.Failed).retryable)
-        assertTrue(r1.message.contains("failed"))
+        assertTrue(r1.message, r1.message.contains("失败"))
         assertTrue("失败的会话不该把本地录音删掉", v.deleted.isEmpty())
         assertEquals("req-abc#r1", v.metas["s"]!!.clientRequestId)
         assertNull("旧的服务端 id 要清掉，否则下一轮还认它", v.metas["s"]!!.serverSessionId)

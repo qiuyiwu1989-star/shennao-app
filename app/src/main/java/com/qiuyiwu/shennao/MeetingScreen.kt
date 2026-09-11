@@ -214,7 +214,7 @@ fun MeetingScreen(
                         // self_check / persisting / done / failed。
                         SectionHead("分析")
                         if (a.status == "failed") NoticeBox("这场分析失败了。可以重跑一次。", Tone.RISK)
-                        else NoticeBox("分析还在跑（${a.status}）", Tone.INFO)
+                        else NoticeBox("分析还在跑", Tone.INFO)
                     }
                 }
 
@@ -268,7 +268,7 @@ fun MeetingScreen(
                     if (m.commitments.isEmpty()) item {
                         Empty("这场会里没人答应什么", "有人说出口「下周给你」这类话时，会出现在这里。")
                     } else {
-                        item { SectionHead("这场会里的承诺", "别人说出口、还没有下文的。在这里也能落账。") }
+                        item { SectionHead("这场会里的承诺", "别人说出口、还没有下文的。在这里也能记兑现了没。") }
                         items(m.commitments, key = { "c" + it.id }) { c ->
                             MeetingCommitmentCard(c, resetKey) { action ->
                                 scope.launch {

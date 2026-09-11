@@ -99,8 +99,8 @@ class MainActivity : ComponentActivity() {
             val skipped = results.filterIsInstance<com.qiuyiwu.shennao.record.ShareIn.Result.Skipped>()
             if (staged.isNotEmpty()) com.qiuyiwu.shennao.record.UploadWorker.kick(ctx)
             val msg = buildString {
-                if (staged.size == 1) append("已收进深脑：${staged[0].title}，正在上传")
-                else if (staged.size > 1) append("已收进 ${staged.size} 段，正在上传")
+                if (staged.size == 1) append("已收下「${staged[0].title}」，正在传到深脑")
+                else if (staged.size > 1) append("已收下 ${staged.size} 段，正在传到深脑")
                 // 跳过的要说原因。只说「1 个失败」和「设备没这份」在屏幕上长得一样。
                 skipped.forEach { append(if (isEmpty()) "" else "；").append("${it.title}：${it.why}") }
                 if (staged.isNotEmpty()) append("。到「记录」看进度")
@@ -158,7 +158,7 @@ private fun App(client: DeepBrainClient) {
             st = AppState.Ready(nav)
             return
         }
-        st = AppState.Broken((r as? ApiResult.Failed)?.message ?: "取数失败")
+        st = AppState.Broken((r as? ApiResult.Failed)?.message ?: "没取到")
     }
 
     LaunchedEffect(Unit) { load(keepNav = false) }

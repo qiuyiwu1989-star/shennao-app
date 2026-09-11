@@ -71,7 +71,7 @@ class Uploader(
     }
 
     private fun attempt(session: String, forceAuth: Boolean): DrainResult {
-        val meta = vault.readMeta(session) ?: return DrainResult.Failed("这场录音的元信息读不出来", false)
+        val meta = vault.readMeta(session) ?: return DrainResult.Failed("这场录音的信息读不出来", false)
         val segs = vault.segments(session)
         val sealed = segs.filter { it.state == Segment.State.SEALED }
         val recording = segs.filter { it.state == Segment.State.RECORDING }
@@ -139,8 +139,8 @@ class Uploader(
                 // 不正常：清单冻结了，手上还有没进去的音频。删掉就是把录音扔了，
                 // 留着每轮都会失败。报出来让人看见，本地文件原样保留。
                 return DrainResult.Failed(
-                    "深脑那边这场已经收尾了（${ref.status}），但本地还有 $pending 段没进去。" +
-                        "这几段需要另建一场重推。", false)
+                    "深脑已经把这场收尾了（${ref.status}），但手机上还有 $pending 段没送到。" +
+                        "这几段要另起一场才能送到。", false)
             }
             is SessionRef.Ok -> Unit
         }
@@ -183,7 +183,7 @@ class Uploader(
             // 但要把卡住的原因报出去，否则界面只会一直显示「上传中」。
             return if (stuck.isEmpty()) DrainResult.Progress(ready.size, all.size - ready.size)
                    else DrainResult.Failed(
-                       "${all.size - ready.size} 段进不去：${stuck.first()}", true)
+                       "${all.size - ready.size} 段没送到：${stuck.first()}", true)
         }
 
         val totalMs = ready.maxOf { it.endMs }
@@ -214,15 +214,15 @@ class Uploader(
                 return DrainResult.Progress(ready.size - revived, revived)
             }
             // 服务端说不全、却没说缺哪片：这时重试没有意义，报出来让人看见。
-            return DrainResult.Failed("服务端说分片不全，但没说缺哪几片", false)
+            return DrainResult.Failed("深脑说少了几段，但没说是哪几段", false)
         }
         // 已经冻结过了也算成功——重跑到这一步是正常的
         if (stop.status >= 400 && !stop.body.contains("INVALID_STATE")) {
-            return DrainResult.Failed("冻结清单失败（${stop.status}）", stop.status >= 500)
+            return DrainResult.Failed("收尾没成（${stop.status}）", stop.status >= 500)
         }
         val fin = http.request("POST", "$apiBase/api/recordings/$sid/finalize", h, "{}")
         if (fin.status >= 400 && !fin.body.contains("INVALID_STATE")) {
-            return DrainResult.Failed("收尾失败（${fin.status}）", fin.status >= 500)
+            return DrainResult.Failed("收尾没成（${fin.status}）", fin.status >= 500)
         }
 
         vault.deleteSession(session)
@@ -264,12 +264,12 @@ class Uploader(
                 "startedAt" to iso(meta.startedAtEpochMs),
             )).apply { meta.scene?.let { put("scene", it) } }.toString(),
         )
-        if (r.status == 401) return SessionRef.Err("登录过期", true, authExpired = true)
-        if (r.status >= 400) return SessionRef.Err("建会话失败（${r.status}）", r.status >= 500)
+        if (r.status == 401) return SessionRef.Err("登录失效了", true, authExpired = true)
+        if (r.status >= 400) return SessionRef.Err("深脑没接下这场（${r.status}）", r.status >= 500)
         val o = runCatching { JSONObject(r.body).getJSONObject("session") }.getOrNull()
-            ?: return SessionRef.Err("建会话的应答看不懂", true)
+            ?: return SessionRef.Err("深脑的回复看不懂", true)
         val id = o.optString("id").takeIf { it.isNotBlank() }
-            ?: return SessionRef.Err("建会话没返回 id", true)
+            ?: return SessionRef.Err("深脑的回复里没有编号", true)
         if (meta.serverSessionId != id) vault.updateMeta(session) { it.copy(serverSessionId = id) }
 
         val status = o.optString("status")
@@ -283,9 +283,9 @@ class Uploader(
             "failed" -> {
                 val gen = RetryKey.generation(meta.clientRequestId)
                 if (gen >= RetryKey.MAX) return SessionRef.Err(
-                    "深脑那边这场连着 ${RetryKey.MAX} 次都是 failed 状态。本地音频还在，反馈问题时带上这条。", false)
+                    "深脑连着 ${RetryKey.MAX} 次都把这场标成失败。音频还在手机上，反馈问题时带上这条。", false)
                 vault.updateMeta(session) { it.copy(clientRequestId = RetryKey.rotate(it.clientRequestId), serverSessionId = null) }
-                SessionRef.Err("深脑那边这场是 failed 状态，换个新会话重推（第 ${gen + 1} 次）", true)
+                SessionRef.Err("深脑把这场标成了失败，另起一场重传（第 ${gen + 1} 次）", true)
             }
             "recording", "uploading" -> SessionRef.Ok(id)
             else -> SessionRef.Frozen(id, status)
@@ -319,7 +319,7 @@ class Uploader(
                 "uploadMode" to "background",
             )).toString(),
         )
-        if (ticket.status == 401) return StepResult.Err("登录过期", true, authExpired = true)
+        if (ticket.status == 401) return StepResult.Err("登录失效了", true, authExpired = true)
         if (ticket.status == 409) {
             // 409 有好几种，而它们对客户端的含义是同一个：**这一片服务端不再收了**。
             // 之前只认 CHUNK_ALREADY_VERIFIED，其余 409 走到下面变成致命错误，
@@ -340,29 +340,29 @@ class Uploader(
                 vault.rename(session, seg, seg.withState(Segment.State.UPLOADED))
                 return StepResult.Skip
             }
-            return StepResult.Err("第 ${seg.sequence} 段服务端不收（$code）", false)
+            return StepResult.Err("第 ${seg.sequence} 段深脑不收（$code）", false)
         }
         if (ticket.status >= 400) {
             // 服务端的 400 都带一句人话（「分片大小超出范围」「不支持的录音分片格式」），照着显示——
             // 只给一个 400，谁也不知道该改什么。
-            return StepResult.Err("第 ${seg.sequence} 段要地址失败（${messageOf(ticket.body) ?: ticket.status}）", ticket.status >= 500)
+            return StepResult.Err("第 ${seg.sequence} 段传不上去（${messageOf(ticket.body) ?: ticket.status}）", ticket.status >= 500)
         }
         val url = runCatching { JSONObject(ticket.body).optString("uploadUrl") }
             .getOrNull()?.takeIf { it.isNotBlank() }
-            ?: return StepResult.Err("第 ${seg.sequence} 段没拿到上传地址", true)
+            ?: return StepResult.Err("第 ${seg.sequence} 段没拿到传的地址", true)
 
         val put = if (file != null) http.requestFile("PUT", url, mapOf("Content-Type" to seg.mimeType), file)
                   else http.requestBytes("PUT", url, mapOf("Content-Type" to seg.mimeType), bytes!!)
         if (put.status >= 400) {
-            return StepResult.Err("第 ${seg.sequence} 段直传失败（${put.status}）", true)
+            return StepResult.Err("第 ${seg.sequence} 段传到一半断了（${put.status}）", true)
         }
 
         val ok = http.request(
             "POST", "$apiBase/api/recordings/$sid/chunks/${seg.sequence}/complete", h, "{}",
         )
-        if (ok.status == 401) return StepResult.Err("登录过期", true, authExpired = true)
+        if (ok.status == 401) return StepResult.Err("登录失效了", true, authExpired = true)
         if (ok.status >= 400) {
-            return StepResult.Err("第 ${seg.sequence} 段确认失败（${ok.status}）", ok.status >= 500)
+            return StepResult.Err("第 ${seg.sequence} 段传完了但没确认上（${ok.status}）", ok.status >= 500)
         }
         // 确认之后才改名。反过来的话，一旦确认失败，这一片会被当成传好了而永远丢掉。
         vault.rename(session, seg, seg.withState(Segment.State.UPLOADED))

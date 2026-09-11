@@ -132,7 +132,7 @@ fun TodayScreen(
                             // 老服务端没给列表：老实说清楚去哪认，而不是画一个点了没反应的按钮
                             Empty(
                                 "有 ${today.counts.awaitingSpeaker} 句不知道是谁说的",
-                                "认出来之后，这个人在所有录音里的话会一起归位——" +
+                                "认出来之后，这个人在所有录音里的话会一起归位。" +
                                     "关于他的判断、他答应过什么，都得先有这一步。\n" +
                                     "到「记录」里打开那场会，在「原话」页点「认人」。",
                             )
@@ -163,11 +163,11 @@ private fun Header(t: Today) {
     // 四种「空」要分开说。它们在界面上长得一样，而「坏了」这一类用户永远不会主动报告。
     val lede = urgentLede(t)
     val line = when {
-        t.notReady -> "下文还没准备好——服务端的迁移还没跑。"
-        t.failed -> "取数失败了，不是「没有内容」。"
+        t.notReady -> "深脑还在升级，这一栏稍后再来。"
+        t.failed -> "没取到，不是没有内容。下拉再试一次。"
         t.commitments.isEmpty() && t.predictions.isEmpty() && t.insights.isEmpty() ->
             if (t.counts.awaitingSpeaker > 0)
-                "有 ${t.counts.awaitingSpeaker} 条问不了——还没认出是谁说的，到那场会的「原话」页认一下。"
+                "有 ${t.counts.awaitingSpeaker} 条还不知道是谁说的，到那场会的「原话」页认一下。"
             else "今天没有要紧的事。"
         lede != null -> lede
         else -> buildList {
@@ -203,7 +203,7 @@ private fun RecordBar(onRecord: () -> Unit) {
                 Text("点进去看时长、或者停止", style = MaterialTheme.typography.bodyMedium,
                      color = MaterialTheme.colorScheme.onPrimaryContainer)
             }
-            TonalButton("查看", onRecord)
+            TonalButton("去看", onRecord)
         }
     }
 }

@@ -285,7 +285,7 @@ class BleImportService : Service() {
         // 用户点「接着传」时走的是 resume()，picked 没变，队列自然接得上。
         if (s is ImportState.Failed && s.deviceSaid && syncQueue.isNotEmpty()) {
             syncQueue.removeAt(0)
-            note = "跳过了一份文件（设备说没有），接着同步剩下的"
+            note = "跳过了一份，灵魂卡说没有这个文件。接着同步剩下的"
             if (syncQueue.isNotEmpty()) downloadNextInQueue() else refresh()
         }
         ensureTicking(imp)
@@ -374,7 +374,7 @@ class BleImportService : Service() {
                 }
                 advanceQueuePast(entry, success = true)
             } else {
-                note = "落盘失败，请重试"
+                note = "存不下来，再试一次"
                 // 落盘失败不标记「已导入」——留在队列里等下次同步重试，
                 // 但这一轮不再自动往下走：接连失败多半是共同原因（比如存储满了），
                 // 一次性把剩下的都试一遍只会把同一个错误重复报很多次。
@@ -395,7 +395,7 @@ class BleImportService : Service() {
             runCatching {
                 getSystemService(NotificationManager::class.java).notify(
                     NOTIF_ID + 1,
-                    notification("$syncDone 段已从灵魂卡导入", "正在推送到深脑。到「记录」看每一段走到哪一站。"),
+                    notification("$syncDone 段已从灵魂卡导入", "正在传到深脑。到「记录」看每一段走到哪一站。"),
                 )
             }
             // 上传完了分析就会跟上，两分钟后去看一眼有没有新判断
@@ -414,10 +414,10 @@ class BleImportService : Service() {
                     else "${s.got / 1024} KB"
                 )
             is ImportState.Listing -> "正在读灵魂卡" to "列文件中"
-            is ImportState.Done -> "${syncPrefix}导好了" to "正在推送到深脑"
+            is ImportState.Done -> "${syncPrefix}导好了" to "正在传到深脑"
             is ImportState.Failed -> "导入中断" to s.reason
             is ImportState.Listed ->
-                if (syncTotal > 0 && syncDone >= syncTotal) "同步完成" to "共 $syncTotal 份，已推送到深脑"
+                if (syncTotal > 0 && syncDone >= syncTotal) "同步完成" to "共 $syncTotal 份，已传到深脑"
                 else "从灵魂卡导入" to "保持蓝牙开着就行"
             else -> "从灵魂卡导入" to "保持蓝牙开着就行"
         }

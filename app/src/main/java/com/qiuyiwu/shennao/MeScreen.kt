@@ -186,7 +186,7 @@ fun MeScreen(
                 subtitle = when (val s = state) {
                     is UpdateState.Available -> "有新版 v${s.release.versionName} · ${mb(s.release.sizeBytes)} MB"
                     is UpdateState.UpToDate -> "已是最新 · 直接下载安装的版本"
-                    is UpdateState.Unknown -> "查不到有没有新版（${s.reason}）"
+                    is UpdateState.Unknown -> "查不到有没有新版：${s.reason}"
                     null -> "直接下载安装的版本"
                 },
                 trailingContent = {
@@ -289,7 +289,7 @@ private fun OrgPicker(orgs: List<Org>, current: String?, onPick: (Org) -> Unit, 
                 }
             }
         },
-        confirmButton = { QuietButton("算了", onClick = onDismiss) },
+        confirmButton = { QuietButton("取消", onClick = onDismiss) },
     )
 }
 

@@ -117,7 +117,7 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
             decision = BleImportService.needsDecision
             syncTotal = BleImportService.syncTotal
             syncDone = BleImportService.syncDone
-            BleImportService.consumeStaged()?.let { notice("已导入「$it」，正在推送到深脑") }
+            BleImportService.consumeStaged()?.let { notice("已导入「$it」，正在传到深脑") }
             delay(200)
         }
     }
@@ -172,8 +172,8 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
                     OutlinedTextField(value = text, onValueChange = { text = it.take(20) }, singleLine = true)
                 }
             },
-            confirmButton = { TextButton(onClick = { names.rename(target, text); known = names.known(); renaming = null }) { Text("好") } },
-            dismissButton = { TextButton(onClick = { renaming = null }) { Text("算了") } },
+            confirmButton = { TextButton(onClick = { names.rename(target, text); known = names.known(); renaming = null }) { Text("保存") } },
+            dismissButton = { TextButton(onClick = { renaming = null }) { Text("取消") } },
         )
     }
 
@@ -332,7 +332,7 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
                 Text(
                     // 不按服务 UUID 过滤，所以列表里会有别的蓝牙设备。
                     // 直说，别让用户以为「这些都是录音笔」。
-                    "附近所有蓝牙设备都列在这里——灵魂卡多半叫 CB08 或类似名字。" +
+                    "附近所有蓝牙设备都列在这里，灵魂卡多半叫 CB08 或类似名字。" +
                         "带「疑似灵魂卡」的排在最前。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -368,7 +368,7 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
                 Empty(
                     "还没找到",
                     "确认三件事：灵魂卡开着、手机蓝牙开着、" +
-                        "而且它**没有连在电脑或别的手机上**——BLE 一次只能被一个主机连。",
+                        "而且它没有连在电脑或别的手机上。它一次只能被一台设备连。",
                 )
             }
         }
@@ -476,7 +476,7 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
                             Text("导好了", style = MaterialTheme.typography.titleMedium,
                                  fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.height(DS.Rhythm.tight))
-                            Text("${s.bytes.size / 1024} KB，正在推送到深脑。",
+                            Text("${s.bytes.size / 1024} KB，正在传到深脑。",
                                  style = MaterialTheme.typography.bodyMedium,
                                  color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(DS.Rhythm.element))

@@ -51,7 +51,7 @@ object Installer {
         return try {
             client.newCall(okhttp3.Request.Builder().url(release.url).build()).execute().use { r ->
                 if (r.code >= 400) return Step.Failed("下载失败（${r.code}）")
-                val body = r.body ?: return Step.Failed("下载失败：空应答")
+                val body = r.body ?: return Step.Failed("下载失败：没收到内容")
                 val total = body.contentLength().takeIf { it > 0 } ?: release.sizeBytes
                 val md = MessageDigest.getInstance("SHA-256")
                 var done = 0L

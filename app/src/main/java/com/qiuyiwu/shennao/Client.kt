@@ -83,14 +83,14 @@ class DeepBrainClient(
         if (r.status == 400 || r.status == 401) return ApiResult.Failed("邮箱或密码不对")
         if (r.status >= 400) return ApiResult.Failed("登录失败（${r.status}）")
         val o = runCatching { JSONObject(r.body) }.getOrNull()
-            ?: return ApiResult.Failed("登录应答看不懂")
+            ?: return ApiResult.Failed("深脑的回复看不懂，再试一次")
         val refresh = o.optString("refresh_token").takeIf { it.isNotBlank() }
-            ?: return ApiResult.Failed("登录应答里没有 refresh_token")
+            ?: return ApiResult.Failed("深脑的回复不完整，再试一次")
         accessToken = o.optString("access_token").takeIf { it.isNotBlank() }
 
         // 组织 id 是原生端调接口的必备头。拿不到就不算登录成功——
         // 存一份「没有 org 的凭证」下去，后面每个请求都会 403，而且看不出原因。
-        val org = fetchOrgId() ?: return ApiResult.Failed("这个账号还没有组织")
+        val org = fetchOrgId() ?: return ApiResult.Failed("这个账号还没加入任何组织，先在网页版建一个")
         store.save(Credentials(refresh, org, email))
         return ApiResult.Ok(Unit)
     }
@@ -212,7 +212,7 @@ class DeepBrainClient(
         return runCatching {
             val u = JSONObject(r.body).optString("url")
             if (u.isBlank()) ApiResult.Failed("没拿到链接") else ApiResult.Ok(u)
-        }.getOrElse { ApiResult.Failed("应答看不懂") }
+        }.getOrElse { ApiResult.Failed("深脑的回复看不懂") }
     }
 
     /**
@@ -294,11 +294,11 @@ class DeepBrainClient(
         )
         var r = once()
         if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
-        if (r.status >= 400) return ApiResult.Failed("拿不到入场券（${r.status}）")
+        if (r.status >= 400) return ApiResult.Failed("打不开网页版（${r.status}）")
         return runCatching {
             val t = JSONObject(r.body).optString("ticket")
-            if (t.isBlank()) ApiResult.Failed("没拿到入场券") else ApiResult.Ok(t)
-        }.getOrElse { ApiResult.Failed("应答看不懂") }
+            if (t.isBlank()) ApiResult.Failed("打不开网页版") else ApiResult.Ok(t)
+        }.getOrElse { ApiResult.Failed("深脑的回复看不懂") }
     }
 
     /**
@@ -361,7 +361,7 @@ class DeepBrainClient(
         var r = once()
         if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
         if (r.status == 0) return ApiResult.Failed("网络不通")
-        if (r.status == 404 || r.status == 405) return ApiResult.Failed("改名要等服务端更新")
+        if (r.status == 404 || r.status == 405) return ApiResult.Failed("改名要等深脑升级后才能用")
         if (r.status >= 400) return ApiResult.Failed("没改上（${r.status}）")
         return ApiResult.Ok(Unit)
     }
@@ -379,7 +379,7 @@ class DeepBrainClient(
         val r = postJson("/api/mobile/card", body.toString())
         return when (r) {
             is ApiResult.Ok -> runCatching { ApiResult.Ok(CardsParser.card(JSONObject(r.value).getJSONObject("card"))) }
-                .getOrElse { ApiResult.Failed("回包读不懂") }
+                .getOrElse { ApiResult.Failed("深脑的回复看不懂") }
             else -> r as ApiResult<BoundCard>
         }
     }
@@ -452,7 +452,7 @@ class DeepBrainClient(
 
     /** 这个人说过什么、兑现了多少。 */
     fun person(id: String): ApiResult<Person> =
-        get("/api/mobile/people/$id") { PersonParser.parse(it) ?: throw IllegalStateException("看不懂") }
+        get("/api/mobile/people/$id") { PersonParser.parse(it) ?: throw IllegalStateException("深脑的回复看不懂") }
 
     /**
      * 给一条承诺落账。
@@ -477,8 +477,8 @@ class DeepBrainClient(
             if (!refresh()) return ApiResult.Unauthorized
             r = once()
         }
-        if (r.status == 409) return ApiResult.Failed("这条已经落过账了")
-        if (r.status >= 400) return ApiResult.Failed("落账失败（${r.status}）")
+        if (r.status == 409) return ApiResult.Failed("这条已经记过了")
+        if (r.status >= 400) return ApiResult.Failed("没记上（${r.status}）")
         return runCatching { ApiResult.Ok(JSONObject(r.body).optString("status")) }
             .getOrElse { ApiResult.Ok(action) }
     }
@@ -486,7 +486,7 @@ class DeepBrainClient(
     /** 这场会讲了什么。 */
     fun meeting(transcriptId: String): ApiResult<Meeting> =
         get("/api/mobile/transcript/$transcriptId") {
-            SessionsParser.parseMeeting(it) ?: throw IllegalStateException("应答看不懂")
+            SessionsParser.parseMeeting(it) ?: throw IllegalStateException("深脑的回复看不懂")
         }
 
     /**
@@ -510,9 +510,9 @@ class DeepBrainClient(
         return when {
             r.status == 401 -> ApiResult.Unauthorized
             r.status == 0 -> ApiResult.Failed("网络不通")
-            r.status >= 400 -> ApiResult.Failed("取数失败（${r.status}）")
+            r.status >= 400 -> ApiResult.Failed("没取到（${r.status}）")
             else -> runCatching { ApiResult.Ok(parse(r.body)) }
-                .getOrElse { ApiResult.Failed("应答看不懂") }
+                .getOrElse { ApiResult.Failed("深脑的回复看不懂") }
         }
     }
 

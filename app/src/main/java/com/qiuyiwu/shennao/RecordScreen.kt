@@ -164,11 +164,11 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
                 com.qiuyiwu.shennao.record.RecordState.INTERRUPTED ->
                     "麦克风被占用了，正在抢回来。已经录到的都在。"
                 com.qiuyiwu.shennao.record.RecordState.GAVE_UP ->
-                    "麦克风抢不回来，录音已停止。已录到的部分正在推送。"
+                    "麦克风抢不回来，录音已停止。已录到的都在，会传到深脑。"
                 com.qiuyiwu.shennao.record.RecordState.DISK_FULL ->
-                    "手机存储满了，录音已停止。已录到的部分都在，清出空间就会推送。"
+                    "手机存储满了，录音已停止。已录到的都在，清出空间就会传。"
                 com.qiuyiwu.shennao.record.RecordState.RECORDING ->
-                    "正在录。可以锁屏，也可以切走——通知栏能看到它还在录。"
+                    "正在录。可以锁屏，也可以切走，通知栏能看到它还在录。"
                 else -> if (pending > 0) "还有 $pending 段在传" else "点一下开始录这场会"
             },
             style = MaterialTheme.typography.bodyMedium,
@@ -269,7 +269,7 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
         // 上传出的问题以前只有一个没人读的字段（012 P1-15）
         uploadProblem?.let {
             Spacer(Modifier.height(DS.Rhythm.inner))
-            NoticeBox("上传：$it", Tone.WARN)
+            NoticeBox(it, Tone.WARN)
         }
 
         Spacer(Modifier.weight(1f))
@@ -279,7 +279,7 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
         // 一句灰字，不装在框里——框会让它看起来像一条需要处理的提示。
         val tipsSeen = remember { RecordTips.seenTimes(ctx) }
         if (tipsSeen < 3) Text(
-            "录完自动推到深脑，转写和分析在那边跑。中途断网也不会丢——没传完的段留在手机上，下次打开接着传。",
+            "录完自动传到深脑，转写和分析在那边跑。中途断网也不会丢，没传完的留在手机上，下次打开接着传。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -354,7 +354,7 @@ fun JustFinishedCard(minutes: Int, pending: Int, onOpen: (() -> Unit)?, onRename
                                       shape = DS.Radius.control,
                                       placeholder = { Text("给这场起个名") }, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(DS.Rhythm.element))
-                    TonalButton("好", enabled = name.isNotBlank(), onClick = { onRename(name.trim()); named = true })
+                    TonalButton("保存", enabled = name.isNotBlank(), onClick = { onRename(name.trim()); named = true })
                 }
             }
             if (pending == 0) {
@@ -600,7 +600,7 @@ private fun renameJustFinished(ctx: android.content.Context, title: String) {
         meta?.serverSessionId?.let { sid ->
             val r = Session.client(ctx).renameRecording(sid, title)
             if (r is ApiResult.Failed) android.os.Handler(android.os.Looper.getMainLooper()).post {
-                android.widget.Toast.makeText(ctx, "本机已改名；深脑那边：${r.message}", android.widget.Toast.LENGTH_LONG).show()
+                android.widget.Toast.makeText(ctx, "手机上已改名，深脑那边没改上：${r.message}", android.widget.Toast.LENGTH_LONG).show()
             }
         }
     }.start()

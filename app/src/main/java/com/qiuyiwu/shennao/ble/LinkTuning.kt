@@ -45,11 +45,11 @@ object LinkTuning {
 
     /** 说给人听的那一行。没测出来就说没测出来，不编数字。 */
     fun speedLine(kbps: Double?): String =
-        if (kbps == null) "还没测到速度——同步一份录音就有了" else "上次实测 %.1f KB/s".format(kbps)
+        if (kbps == null) "还没测到速度，同步一份录音就有了" else "上次实测 %.1f KB/s".format(kbps)
 
     /** 开关那一行的小字：说清楚它改的是什么、风险在哪。 */
     fun hint(k: Knobs): String = when {
         !k.anyOn -> "三项都关着，用的是一直以来的参数。"
-        else -> "开了实验参数。传着传着掉线就把刚开的那项关掉——固件不一定吃得下。"
+        else -> "开了实验参数。传着传着掉线就把刚开的那项关掉，固件不一定吃得下。"
     }
 }

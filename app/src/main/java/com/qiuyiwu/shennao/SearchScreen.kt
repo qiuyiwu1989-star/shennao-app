@@ -49,7 +49,7 @@ fun SearchScreen(client: DeepBrainClient, onOpen: (String) -> Unit) {
 
         when {
             busy && hits.isEmpty() -> SkeletonList(3)
-            q.trim().length < 2 -> Empty("搜判断、承诺、会议", "输入两个字以上。判断排在最前——它往往直接就是答案。")
+            q.trim().length < 2 -> Empty("搜判断、承诺、会议", "输入两个字以上。判断排在最前，它往往直接就是答案。")
             searched && hits.isEmpty() -> Empty("没找到", "换个说法试试，或者那件事还没被录进来。")
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(DS.Rhythm.element)) {
                 items(hits, key = { it.kind + it.id }) { h ->

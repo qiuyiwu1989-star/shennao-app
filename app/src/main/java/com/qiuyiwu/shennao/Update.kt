@@ -47,7 +47,7 @@ object Update {
      * 服务端回滚过一版时，不该反过来劝用户装个更旧的。
      */
     fun compare(current: Int, remote: Release?): UpdateState = when {
-        remote == null -> UpdateState.Unknown("清单读不出来")
+        remote == null -> UpdateState.Unknown("清单读不懂")
         remote.versionCode > current -> UpdateState.Available(remote)
         else -> UpdateState.UpToDate
     }
@@ -55,7 +55,7 @@ object Update {
     fun check(http: Http, currentCode: Int): UpdateState {
         val r = runCatching { http.request("GET", MANIFEST, emptyMap()) }.getOrNull()
             ?: return UpdateState.Unknown("网络不通")
-        if (r.status >= 400) return UpdateState.Unknown("清单取不到（${r.status}）")
+        if (r.status >= 400) return UpdateState.Unknown("清单取不到，${r.status}")
         return compare(currentCode, parse(r.body))
     }
 }

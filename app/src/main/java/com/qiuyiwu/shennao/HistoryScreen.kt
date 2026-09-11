@@ -68,7 +68,7 @@ fun HistoryScreen(
     val onDelete: (String) -> Unit = { id ->
         scope.launch {
             val d = withContext(Dispatchers.IO) { client.deleteRecording(id) }
-            if (d !is ApiResult.Ok) notice("删不掉：" + ((d as? ApiResult.Failed)?.message ?: "登录失效了"))
+            if (d !is ApiResult.Ok) notice("没删掉：" + ((d as? ApiResult.Failed)?.message ?: "登录失效了"))
             val r = withContext(Dispatchers.IO) { client.sessions() }
             if (r is ApiResult.Ok) served = r.value
         }
@@ -232,7 +232,7 @@ fun HistoryScreen(
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(DS.Rhythm.element))
             Text(
-                "这里看不到：换账号之前导的、装这个版本之前导的。没落这本账，不代表没导过。",
+                "这里看不到换账号之前、装这个版本之前导的。这里没有，不代表没导过。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -347,7 +347,7 @@ fun SessionRow(s: LocalSession, onRetry: (() -> Unit)? = null, onDelete: () -> U
                 when {
                     s.recording > 0 -> Pill("正在录", Tone.ACCENT)
                     stuck != null -> Pill("卡住了", Tone.WARN)
-                    s.meta.finished -> Pill("上传中", Tone.INFO)
+                    s.meta.finished -> Pill("在传", Tone.INFO)
                     else -> Pill("等待收尾")
                 }
             }

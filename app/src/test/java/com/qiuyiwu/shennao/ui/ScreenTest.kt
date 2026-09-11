@@ -133,12 +133,12 @@ class ScreenTest {
 
     @Test fun `迁移没跑完要直说，不能显示成「今天没事」`() {
         compose.setContent { ShennaoTheme { TodayScreen(today(notReady = true), {}, {}, {}) } }
-        compose.onNodeWithText("下文还没准备好——服务端的迁移还没跑。").assertExists()
+        compose.onNodeWithText("深脑还在升级，这一栏稍后再来。").assertExists()
     }
 
     @Test fun `取数失败要直说，不能显示成「今天没事」`() {
         compose.setContent { ShennaoTheme { TodayScreen(today(failed = true), {}, {}, {}) } }
-        compose.onNodeWithText("取数失败了，不是「没有内容」。").assertExists()
+        compose.onNodeWithText("没取到，不是没有内容。下拉再试一次。").assertExists()
     }
 
     // ---- UI 二次成型（2026-09-01）----
@@ -242,7 +242,7 @@ class ScreenTest {
             ShennaoTheme { MeScreen(client, onOpenWeb = { _, _ -> }, onSignOut = {}, http = http) }
         }
         // 网络不通不等于「已是最新」——用户会因为这句话误以为不用管了
-        compose.onNodeWithText("查不到有没有新版（网络不通）").assertExists()
+        compose.onNodeWithText("查不到有没有新版：网络不通").assertExists()
     }
 
     // ---- 会议卡片：参考"智能纪要"改版（2026-09-03）----
