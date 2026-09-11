@@ -89,8 +89,8 @@ class ScreenshotTest {
 
     @Test fun `记录 亮色`() = shoot("records", false) { com.qiuyiwu.shennao.HistoryScreen(demoClient(), {}, {}) }
     @Test fun `记录 暗色`() = shoot("records", true) { com.qiuyiwu.shennao.HistoryScreen(demoClient(), {}, {}) }
-    @Test fun `我的 亮色`() = shoot("me", false) { com.qiuyiwu.shennao.MeScreen(demoClient(), { _, _ -> }, {}, http = com.qiuyiwu.shennao.Demo.http!!) }
-    @Test fun `我的 暗色`() = shoot("me", true) { com.qiuyiwu.shennao.MeScreen(demoClient(), { _, _ -> }, {}, http = com.qiuyiwu.shennao.Demo.http!!) }
+    @Test fun `我的 亮色`() = shoot("me", false) { com.qiuyiwu.shennao.MeScreen(demoClient(), { _, _ -> }, {}, http = com.qiuyiwu.shennao.Demo.http!!, versionName = "x.y.z") }
+    @Test fun `我的 暗色`() = shoot("me", true) { com.qiuyiwu.shennao.MeScreen(demoClient(), { _, _ -> }, {}, http = com.qiuyiwu.shennao.Demo.http!!, versionName = "x.y.z") }
     @Test fun `问 亮色`() = shoot("ask", false) { com.qiuyiwu.shennao.AskScreen(demoClient()) {} }
     @Test fun `问 暗色`() = shoot("ask", true) { com.qiuyiwu.shennao.AskScreen(demoClient()) {} }
     @Test fun `录音台 亮色`() = shoot("record", false) { com.qiuyiwu.shennao.RecordScreen(onBack = {}) }

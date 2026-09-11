@@ -37,6 +37,8 @@ fun MeScreen(
     onOrgSwitched: () -> Unit = {},
     onOpenSchedule: () -> Unit = {},
     onOpenAgents: () -> Unit = {},
+    /** 截图测试传固定值：版本号跟着每次发布变，基准图不该每发一版就红一次 */
+    versionName: String = BuildConfig.VERSION_NAME,
     // 可注入，默认才是真的联网。不然这一屏没法在测试里脱网跑。
     http: Http = UrlHttp(),
 ) {
@@ -211,7 +213,7 @@ fun MeScreen(
         DsGroup {
             // 「查不到」和「已是最新」必须分开说：网络不通不等于没有新版。
             DsRow(
-                "版本 v${BuildConfig.VERSION_NAME}",
+                "版本 v$versionName",
                 subtitle = when (val s = state) {
                     is UpdateState.Available -> "有新版 v${s.release.versionName} · ${mb(s.release.sizeBytes)} MB"
                     is UpdateState.UpToDate -> "已是最新"
