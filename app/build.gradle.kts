@@ -4,6 +4,7 @@ import java.io.FileInputStream
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("io.github.takahirom.roborazzi")
 }
 
 // 配置从 local.properties 读，不进仓。
@@ -134,6 +135,10 @@ dependencies {
      * 由用户发现——那不该是用户的活。
      */
     testImplementation("org.robolectric:robolectric:4.13")
+    // 截图测试。渲染走 Robolectric 的图形栈，所以不需要设备
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.26.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.26.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-junit-rule:1.26.0")
     testImplementation("androidx.compose.ui:ui-test-junit4:1.7.3")
     debugImplementation("androidx.compose.ui:ui-test-manifest:1.6.8")
     // 安卓自带 org.json，但 JVM 单测里那是个**空壳桩**——每个方法都抛
