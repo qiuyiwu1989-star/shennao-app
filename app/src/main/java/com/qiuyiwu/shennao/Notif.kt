@@ -10,5 +10,6 @@ object Notif {
     const val BLE_IMPORT = 2         // 灵魂卡导入前台
     const val BLE_SYNC_DONE = 3      // 一批同步完的结果
     const val DAILY_REMIND = 10      // 每天 9 点到期提醒
+    const val LISTEN_NUDGE = 11      // 定时聆听：到点提醒开始 / 停止
     const val NEW_JUDGMENTS_BASE = 4000
 }

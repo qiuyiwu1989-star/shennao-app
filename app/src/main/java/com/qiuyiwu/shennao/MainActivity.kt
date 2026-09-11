@@ -60,6 +60,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // 夹具模式：只在调试包、只由 adb 带 --ez demo true 起。见 Demo.kt。
         if (BuildConfig.DEBUG && intent?.getBooleanExtra("demo", false) == true) Demo.install()
+        // 定时聆听：WorkManager 的任务可能被系统清过，每次开 App 重排一次
+        com.qiuyiwu.shennao.record.ListenSchedule.schedule(applicationContext)
         val client = Session.client(this)
         setContent { ShennaoTheme { App(client) } }
         receiveShare(intent)
@@ -69,6 +71,8 @@ class MainActivity : ComponentActivity() {
     /** 通知带来的「打开这场会」。singleTask 下 onNewIntent 也走这里。 */
     private fun receiveOpen(intent: android.content.Intent?) {
         intent?.getStringExtra(EXTRA_OPEN_TRANSCRIPT)?.let { pendingOpen = it; intent.removeExtra(EXTRA_OPEN_TRANSCRIPT) }
+        // 定时聆听的通知点进来：这一下是用户按的，系统才放行麦克风
+        com.qiuyiwu.shennao.record.ListenSchedule.handle(this, intent)
     }
 
     /** singleTask：App 已经在跑时，分享进来走这里而不是 onCreate。 */
@@ -331,6 +335,10 @@ private fun App(client: DeepBrainClient) {
                      * NavRenderTest 钉着这条。老实现里 RecordScreen 出现两次、
                      * 参数还不一样，就是从这里漏出去的。
                      */
+                    Column(Modifier.fillMaxSize()) {
+                    // 顶上那条「在不在录」。只在两个列表栏；详情和录音台各有各的主角。
+                    if (nav.current == Route.Today || nav.current == Route.Records) LiveBar(onClick = { go(nav.push(Route.Record)) })
+                    Box(Modifier.weight(1f)) {
                     when (val r = nav.current) {
                         is Route.Today -> {
                             val t = today
@@ -390,6 +398,9 @@ private fun App(client: DeepBrainClient) {
                         )
 
                         is Route.Ble -> BleScreen(onDone = { go(nav.select(Tab.RECORDS)) }, client = client)
+                        is Route.Schedule -> ScheduleScreen(onBack = { nav.pop()?.let { go(it) } })
+                        is Route.Agents -> AgentsScreen(onBack = { nav.pop()?.let { go(it) } },
+                                                        onOpenWeb = { path, title -> go(nav.push(Route.Web(path, title))) })
 
                         is Route.Ask -> AskScreen(client) { tid -> go(nav.push(Route.Meeting(tid))) }
 
@@ -406,6 +417,8 @@ private fun App(client: DeepBrainClient) {
                             http = (if (BuildConfig.DEBUG) Demo.http else null) ?: UrlHttp(),
                             onOpenWeb = { path, title -> go(nav.push(Route.Web(path, title))) },
                             onOpenCard = { go(nav.push(Route.Ble)) },
+                            onOpenSchedule = { go(nav.push(Route.Schedule)) },
+                            onOpenAgents = { go(nav.push(Route.Agents)) },
                             onOrgSwitched = {
                                 // 换组织和换账号一样：上一个组织的缓存、通知去重、提醒都不能带过来
                                 cache.clear()
@@ -451,6 +464,8 @@ private fun App(client: DeepBrainClient) {
                             // 返回去哪不再由调用方现算——弹栈弹出来的自然就是他刚才在的地方。
                             onBack = { nav.pop()?.let { go(it) } },
                         )
+                    }
+                    }
                     }
                 }
             }

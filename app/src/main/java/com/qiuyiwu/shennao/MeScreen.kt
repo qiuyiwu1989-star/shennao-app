@@ -2,6 +2,7 @@ package com.qiuyiwu.shennao
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -34,6 +35,8 @@ fun MeScreen(
     onOpenCard: () -> Unit = {},
     /** 切了组织：调用方清缓存、重取今天 */
     onOrgSwitched: () -> Unit = {},
+    onOpenSchedule: () -> Unit = {},
+    onOpenAgents: () -> Unit = {},
     // 可注入，默认才是真的联网。不然这一屏没法在测试里脱网跑。
     http: Http = UrlHttp(),
 ) {
@@ -104,16 +107,24 @@ fun MeScreen(
              modifier = Modifier.padding(top = DS.Rhythm.section, bottom = DS.Rhythm.inner))
 
         // ── 身份卡 ──
+        val email = client.signedInEmail() ?: "未登录"
         DsCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(DS.Pad.card)) {
-                Text(client.signedInEmail() ?: "未登录", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(DS.Rhythm.hair))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        currentName ?: currentOrg?.take(8) ?: "—",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
+                    // 头像：邮箱首字母。没有上传头像的地方，一个字母比一个灰人像更像「我」。
+                    Box(
+                        Modifier.size(DS.Size.hit).background(MaterialTheme.colorScheme.primary, DS.Radius.control),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(email.take(1).uppercase(), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
+                    }
+                    Spacer(Modifier.width(DS.Rhythm.element))
+                    Column(Modifier.weight(1f)) {
+                        Text(email, style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(DS.Rhythm.hair))
+                        Text(currentName ?: currentOrg?.take(8) ?: "—", style = MaterialTheme.typography.bodyMedium,
+                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     if (orgs.size > 1) LinkButton(onClick = { picking = true }, contentPadding = PaddingValues(horizontal = DS.Rhythm.tight)) { Text("切换组织") }
                 }
                 credits?.let { c ->
@@ -172,6 +183,14 @@ fun MeScreen(
                 },
             )
             RowDivider()
+            val sched = ListenScheduleState(ctx)
+            DsRow(
+                "定时聆听",
+                subtitle = if (sched.enabled) sched.summary else "设一次，到点提醒你开始和停止",
+                trailingContent = { if (sched.enabled) Pill("已设", Tone.OK) },
+                onClick = onOpenSchedule,
+            )
+            RowDivider()
             // 已允许就只剩一个词；没允许才解释要做什么。
             DsRow(
                 "后台一直录",
@@ -223,6 +242,8 @@ fun MeScreen(
             RowDivider()
             // 走 App 内 WebView（带登录态）。
             DsRow("深脑网页版", subtitle = "完整的转写、播放、认人、记忆库", onClick = { onOpenWeb("/zh", "深脑") })
+            RowDivider()
+            DsRow("接入 AI", subtitle = "让 Claude、ChatGPT、Cursor 用上你的记忆", onClick = onOpenAgents)
         }
 
         // ── 数据与条款 ──
@@ -359,3 +380,11 @@ internal fun roleLabel(role: String): String? = when (role) {
     "owner" -> "拥有者"; "admin" -> "管理员"; "member" -> "成员"; "viewer" -> "只读"
     "" -> null; else -> role
 }
+
+/** 定时聆听那一行要显示的。每次进「我的」读一次。 */
+@Composable
+private fun ListenScheduleState(ctx: android.content.Context): com.qiuyiwu.shennao.record.ListenSchedule.Config {
+    return remember { com.qiuyiwu.shennao.record.ListenSchedule.load(ctx) }
+}
+private val com.qiuyiwu.shennao.record.ListenSchedule.Config.summary: String
+    get() = com.qiuyiwu.shennao.record.ListenSchedule.summary(this)

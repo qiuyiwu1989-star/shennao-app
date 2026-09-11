@@ -82,6 +82,10 @@ sealed interface Route {
     /** 认人：这场会里还不知道是谁说的那几句。从详情的「原话」进。 */
     data class Speakers(val transcriptId: String) : Route { override val tab: Tab? = null }
     data class Person(val personId: String) : Route { override val tab: Tab? = null }
+    /** 定时聆听的设置。从「我的」进。 */
+    data object Schedule : Route { override val tab: Tab? = null }
+    /** 接入 AI（MCP）。从「我的」进。 */
+    data object Agents : Route { override val tab: Tab? = null }
 
     /**
      * 在 App 内打开网页版的某一页，带登录态。
