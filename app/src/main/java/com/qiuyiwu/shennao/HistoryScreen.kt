@@ -131,10 +131,11 @@ fun HistoryScreen(
             Text("每一场走到哪一站，都在这里。",
                  style = MaterialTheme.typography.bodyMedium,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(DS.Rhythm.inner))
             // 灵魂卡那一头。「有什么」和「进来了没有」是同一个问题的两面，
             // 卡的状态不放在这里，用户就得去另一栏对账。
-            CardBar(card, onOpenBle)
+            // 但没连过卡的人不该看见它（2026-09-11 用户反馈：「灵魂卡里面是空的」）——那一行对他只是噪音。
+            val hasCard = remember { com.qiuyiwu.shennao.ble.CardNames(ctx).known().isNotEmpty() }
+            if (hasCard || card.busy || card.attention) { Spacer(Modifier.height(DS.Rhythm.inner)); CardBar(card, onOpenBle) }
         }
         // 录音被系统杀掉过：说一句，点「知道了」就走（012 P1-7）
         orphan?.let { at -> item {

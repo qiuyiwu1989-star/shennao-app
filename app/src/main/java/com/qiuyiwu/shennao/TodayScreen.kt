@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
@@ -74,70 +75,85 @@ fun TodayScreen(
                 add(Channel("认人", "有几句还不知道是谁说的", today.counts.awaitingSpeaker))
         }
     }
-    val pager = androidx.compose.foundation.pager.rememberPagerState { channels.size }
-    val scope = rememberCoroutineScope()
+    /*
+     * 四段竖着叠，不再左右滑。
+     *
+     * 2026-09-11 用户反馈：分 Tab 的形式对，但「每个 Tab 下面能看到具体内容」才对——
+     * 藏在标签后面的栏目，人不点就不知道里面有没有东西，而这一屏的意义正是「一眼知道今天有什么」。
+     * 每段先铺三张，多的点「看全部」展开；空的段只留一行，不占地方。
+     */
+    var expanded by remember { mutableStateOf(setOf<String>()) }
+    val limit = 3
 
     val page = @Composable {
     Column(Modifier.fillMaxSize()) {
         staleLabel?.let { StaleBanner(it) }
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = DS.Pad.list(top = DS.Rhythm.hair),
+            verticalArrangement = Arrangement.spacedBy(DS.Rhythm.element),
+        ) {
+            item { Header(today) }
+            if (com.qiuyiwu.shennao.record.RecordingService.recording) item { RecordBar(onRecord) }
 
-        Header(today)
-        if (com.qiuyiwu.shennao.record.RecordingService.recording) {
-            Box(Modifier.padding(DS.Pad.screen).padding(bottom = DS.Rhythm.element)) { RecordBar(onRecord) }
-        }
-
-        // 频道条。数字直接标在标签上——不点进去就知道哪一栏有事。
-        DsTabs(
-            labels = channels.map { c -> if (c.count > 0) "${c.title} ${c.count}" else c.title },
-            selected = pager.currentPage,
-            onSelect = { i -> scope.launch { pager.animateScrollToPage(i) } },
-            scrollable = true,
-        )
-
-        androidx.compose.foundation.pager.HorizontalPager(
-                state = pager,
-                modifier = Modifier.fillMaxSize(),
-            ) { page ->
-                LazyColumn(
-                    Modifier.fillMaxSize(),
-                    contentPadding = DS.Pad.list(top = DS.Rhythm.inner),
-                    verticalArrangement = Arrangement.spacedBy(DS.Rhythm.element),
-                ) {
-                    item {
-                        Text(channels[page].hint, style = MaterialTheme.typography.bodyMedium,
-                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    when (page) {
-                        0 -> if (today.commitments.isEmpty()) item {
-                            Empty("没有要问的", "别人在会上答应过的事，到期了会出现在这里。")
-                        } else items(today.commitments, key = { it.id }) { c ->
-                            CommitmentCard(c, onSettle, resetKey, onOpenPerson = onOpenPerson) { c.transcriptId?.let(onOpenTranscript) }
+            fun <T> LazyListScope.section(c: Channel, all: List<T>, key: (T) -> String, empty: String, card: @Composable (T) -> Unit) {
+                val open = c.title in expanded
+                val shown = if (open) all else all.take(limit)
+                item(key = "h" + c.title) {
+                    Row(Modifier.fillMaxWidth().padding(top = DS.Rhythm.inner), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(if (c.count > 0) "${c.title} ${c.count}" else c.title, style = MaterialTheme.typography.titleLarge)
+                            Spacer(Modifier.height(DS.Rhythm.hair))
+                            Text(c.hint, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        1 -> if (today.predictions.isEmpty()) item {
-                            Empty("没有到期的预测", "写下的预测到期时会来这里要一个说法。")
-                        } else items(today.predictions, key = { it.id }) { PredictionCard(it, onSettlePrediction, resetKey) }
-                        2 -> if (today.insights.isEmpty()) item {
-                            Empty("还没有新判断", "录一场会，深脑会从里面读出判断。", "录一场", onRecord)
-                        } else items(today.insights, key = { it.id }) { i ->
-                            InsightCard(i, onOpen = { i.transcriptId?.let(onOpenTranscript) }, onFeedback = { v -> onFeedback(i.id, v) }, resetKey = resetKey)
-                        }
-                        else -> if (today.awaitingSpeakerTranscripts.isNotEmpty()) {
-                            // 能点进去了：按会列出来（012 P3-5）
-                            items(today.awaitingSpeakerTranscripts, key = { "w" + it.transcriptId }) { w ->
-                                DsCard(Modifier.fillMaxWidth()) {
-                                    DsRow(w.title, "${w.count} 句还不知道是谁说的", onClick = { onClaim(w.transcriptId) })
-                                }
-                            }
-                        } else item {
-                            // 老服务端没给列表：老实说清楚去哪认，而不是画一个点了没反应的按钮
-                            Empty(
-                                "有 ${today.counts.awaitingSpeaker} 句不知道是谁说的",
-                                "认出来之后，这个人在所有录音里的话会一起归位。" +
-                                    "关于他的判断、他答应过什么，都得先有这一步。\n" +
-                                    "到「记录」里打开那场会，在「原话」页点「认人」。",
-                            )
+                        if (all.size > limit) LinkButton(onClick = {
+                            expanded = if (open) expanded - c.title else expanded + c.title
+                        }, contentPadding = PaddingValues(horizontal = DS.Rhythm.tight)) {
+                            Text(if (open) "收起" else "看全部 ${all.size} 条")
                         }
                     }
+                }
+                if (all.isEmpty() && empty.isNotBlank()) item(key = "e" + c.title) {
+                    // 「没有」和「为什么没有」分两行：第一行是结论，第二行是下一步
+                    val (head, why) = empty.split("。", limit = 2).let { it[0] to it.getOrNull(1).orEmpty() }
+                    Column {
+                        Text(head, style = MaterialTheme.typography.bodyLarge)
+                        if (why.isNotBlank()) Text(why, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                items(shown, key = { key(it) }) { card(it) }
+            }
+
+            section(channels[0], today.commitments, { it.id }, "没有要问的。别人在会上答应过的事，到期了会出现在这里。") { c ->
+                CommitmentCard(c, onSettle, resetKey, onOpenPerson = onOpenPerson) { c.transcriptId?.let(onOpenTranscript) }
+            }
+            section(channels[1], today.predictions, { it.id }, "没有到期的预测。写下的预测到期时会来这里要一个说法。") { p ->
+                PredictionCard(p, onSettlePrediction, resetKey)
+            }
+            section(channels[2], today.insights, { it.id }, "还没有新判断。录一场会，深脑会从里面读出判断。") { i ->
+                InsightCard(i, onOpen = { i.transcriptId?.let(onOpenTranscript) }, onFeedback = { v -> onFeedback(i.id, v) }, resetKey = resetKey)
+            }
+            if (today.counts.awaitingSpeaker > 0) {
+                if (today.awaitingSpeakerTranscripts.isNotEmpty()) {
+                    section(channels[3], today.awaitingSpeakerTranscripts, { "w" + it.transcriptId }, "") { w ->
+                        DsCard(Modifier.fillMaxWidth()) {
+                            DsRow(w.title, "${w.count} 句还不知道是谁说的", onClick = { onClaim(w.transcriptId) })
+                        }
+                    }
+                } else item {
+                    // 老服务端没给列表：老实说清楚去哪认，而不是画一个点了没反应的按钮
+                    Column(Modifier.padding(top = DS.Rhythm.inner)) {
+                        Text("认人 ${today.counts.awaitingSpeaker}", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(DS.Rhythm.hair))
+                        Text("有 ${today.counts.awaitingSpeaker} 句不知道是谁说的", style = MaterialTheme.typography.bodyLarge)
+                        Text("到「记录」里打开那场会，在「原话」页点「认人」。",
+                             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            if (today.insights.isEmpty() && today.commitments.isEmpty() && today.predictions.isEmpty()) item {
+                Spacer(Modifier.height(DS.Rhythm.element))
+                TonalButton("录一场", onRecord)
             }
         }
     }
@@ -176,7 +192,7 @@ private fun Header(t: Today) {
         }.joinToString(" · ")
     }
     val urgent = lede != null && !t.notReady && !t.failed && t.counts.overdue > 0
-    Column(Modifier.padding(DS.Pad.screen).padding(top = DS.Rhythm.section, bottom = DS.Rhythm.inner)) {
+    Column(Modifier.padding(top = DS.Rhythm.section, bottom = DS.Rhythm.hair)) {
         Text("今天", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(DS.Rhythm.tight))
         Row(verticalAlignment = Alignment.CenterVertically) {

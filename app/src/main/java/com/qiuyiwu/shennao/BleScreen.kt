@@ -267,7 +267,9 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
          * 传输实验。摆在连上之后才出现——三个旋钮只在连接建立那一刻生效，
          * 改完要断开重连才算数，这句必须写在界面上，否则人会以为拨一下就变快了。
          */
-        if (conn == BleState.READY) item {
+        // 传输实验只给调试包、或已经拨过开关的人看（2026-09-11 用户反馈：普通用户不需要）。
+        val lab = LinkTuning.load(ctx)
+        if (conn == BleState.READY && (BuildConfig.DEBUG || lab.fastInterval || lab.bigMtu || lab.phy2m)) item {
             var knobs by remember { mutableStateOf(LinkTuning.load(ctx)) }
             fun set(k: LinkTuning.Knobs) { knobs = k; LinkTuning.save(ctx, k) }
             DsCard(Modifier.fillMaxWidth()) {
