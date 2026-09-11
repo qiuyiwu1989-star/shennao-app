@@ -32,6 +32,9 @@ class RecordingService : Service() {
     companion object {
         const val ACTION_START = "start"
         const val ACTION_STOP = "stop"
+        /** 全时聆听：开着麦克风等人说话，说了才录 */
+        const val ACTION_LISTEN = "listen"
+        const val ACTION_STOP_LISTEN = "stop-listen"
         private const val CHANNEL = "recording"
         private const val NOTIF_ID = com.qiuyiwu.shennao.Notif.RECORDING
 
@@ -88,6 +91,26 @@ class RecordingService : Service() {
         @Volatile var captions: List<String> = emptyList(); private set
         @Volatile var captionState: String? = null; private set
 
+        /**
+         * 全时聆听此刻在哪个相位：关着 / 听着 / 正录着。
+         *
+         * 界面照这个念，**不要自己维护一个「我以为开着」的布尔**——
+         * 麦克风被电话抢走时聆听是断的，而用户最需要知道的正是这件事。
+         */
+        @Volatile var listenPhase: AlwaysOn.Phase = AlwaysOn.Phase.OFF; private set
+        /** 全时聆听真正录进去的毫秒数。**不是聆听开着的时长** */
+        @Volatile var listenedSpeechMs: Long = 0L; private set
+        val listening: Boolean get() = listenPhase != AlwaysOn.Phase.OFF
+
+        fun listen(ctx: Context) {
+            ctx.startForegroundService(
+                Intent(ctx, RecordingService::class.java).setAction(ACTION_LISTEN))
+        }
+
+        fun stopListening(ctx: Context) {
+            ctx.startService(Intent(ctx, RecordingService::class.java).setAction(ACTION_STOP_LISTEN))
+        }
+
         fun start(ctx: Context, title: String, scene: String? = null) {
             val i = Intent(ctx, RecordingService::class.java)
                 .setAction(ACTION_START).putExtra("title", title).putExtra("scene", scene)
@@ -104,7 +127,9 @@ class RecordingService : Service() {
     private lateinit var uploader: Uploader
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pump: Job? = null
+    private var listenPump: Job? = null
     private var realtime: Realtime? = null
+    private var alwaysOn: AlwaysOn? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -157,6 +182,63 @@ class RecordingService : Service() {
                 micError = null
                 startPump()
             }
+            ACTION_LISTEN -> {
+                if (alwaysOn != null) return START_NOT_STICKY
+                // 没权限就明说没权限。让它照常起来、再由聆听线程报「麦克风被占着」，
+                // 是把「不许听」说成了「暂时听不到」——用户会一直等它自己好。
+                if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    micError = "还没允许深脑使用麦克风，全时聆听打不开。"
+                    return START_NOT_STICKY
+                }
+                try {
+                    startForeground(NOTIF_ID, notification("在听", "有人说话时才会录", canStop = false))
+                } catch (e: Exception) {
+                    micError = "系统不让在后台打开全时聆听——请先打开深脑，再打开它。"
+                    return START_NOT_STICKY
+                }
+                scope.launch { recorder.recoverOrphans()?.let { OrphanNotice.record(applicationContext, it) }; kick() }
+                val org = com.qiuyiwu.shennao.Session.client(applicationContext).orgId()
+                val gate = AlwaysOn(
+                    recorder = recorder,
+                    begin = { mic, preroll ->
+                        // 标题先按时刻起，分析完服务端会改成这一场真正在谈的事。
+                        // 全时聆听起的场没人给它取名字，不能让一天下来全是「手机录音」。
+                        val now = System.currentTimeMillis()
+                        val id = recorder.start("随手录 ${fmt2(now)}", now, null, org, adopt = mic, preroll = preroll)
+                        if (id != null) { recording = true; state = RecordState.RECORDING; micError = null; startPump() }
+                        id
+                    },
+                    end = {
+                        // 这里跑在聆听线程上。recorder.stop() 要 join 采集线程，
+                        // 所以**不能**放在采集线程的回调里做，那是自己 join 自己。
+                        lastLocalSession = recorder.currentSession
+                        recorder.stop()
+                        recording = false
+                        state = RecordState.IDLE
+                        serverSessionId = null
+                        pump?.cancel(); pump = null
+                        UploadWorker.kick(applicationContext)
+                        scope.launch { drainUntilEmpty() }
+                    },
+                )
+                alwaysOn = gate
+                gate.start()
+                startListenPump()
+            }
+            ACTION_STOP_LISTEN -> {
+                val gate = alwaysOn ?: return START_NOT_STICKY
+                alwaysOn = null
+                listenPump?.cancel(); listenPump = null
+                // stop() 里会把手上正录着的那一场收掉。不收就是一场永远不结束的录音，
+                // 而界面上聆听已经关了，用户不会再去找它。
+                scope.launch {
+                    gate.stop()
+                    listenPhase = AlwaysOn.Phase.OFF
+                    updateNotification("正在上传", "聆听已关闭，正在推送到深脑", canStop = false)
+                    drainUntilEmpty()
+                }
+            }
             ACTION_STOP -> {
                 // 收尾要等录音线程把最后一段编成 AAC（join 最长 5 秒），不能在主线程等——
                 // 以前按下「停止」界面会卡住一到几秒（012 P0-15）。
@@ -181,6 +263,36 @@ class RecordingService : Service() {
         }
         return START_NOT_STICKY
     }
+
+    /**
+     * 聆听相位的通知泵。和录音那个泵分开：录音泵每秒报「已录多久」，
+     * 而聆听时要报的是**另一件事**——现在是在听还是在录、今天录进去了多少。
+     * 两件事挤在一个泵里，通知栏会在两句话之间来回跳。
+     */
+    private fun startListenPump() {
+        listenPump?.cancel()
+        listenPump = scope.launch {
+            while (isActive) {
+                val gate = alwaysOn ?: break
+                listenPhase = gate.phase
+                listenedSpeechMs = gate.speechMs
+                val today = if (gate.speechMs >= 60_000) "，今天录下 ${fmt(gate.speechMs)}" else ""
+                when (gate.phase) {
+                    AlwaysOn.Phase.RECORDING -> updateNotification(
+                        "正在录", "听到有人在说话${today}", canStop = false)
+                    AlwaysOn.Phase.LISTENING -> updateNotification(
+                        "在听", (gate.problem ?: "有人说话时才会录") + today, canStop = false)
+                    AlwaysOn.Phase.OFF -> updateNotification(
+                        "聆听断了", gate.problem ?: "麦克风被占用了", canStop = false)
+                }
+                delay(2_000)
+            }
+        }
+    }
+
+    /** 「随手录」的名字：给全时聆听起的场用，一天下来不会全叫一个名字。 */
+    private fun fmt2(ms: Long): String =
+        java.text.SimpleDateFormat("M月d日 HH:mm", java.util.Locale.CHINA).format(java.util.Date(ms))
 
     private fun startPump() {
         pump?.cancel()
@@ -337,6 +449,12 @@ class RecordingService : Service() {
 
     override fun onDestroy() {
         stopCaptions()
+        // 先收聆听再停录音：反过来的话聆听线程会看见「没在录了」，
+        // 转头又开一场新的，而这个服务正在死。
+        alwaysOn?.let { runCatching { it.stop() } }
+        alwaysOn = null
+        listenPump?.cancel()
+        listenPhase = AlwaysOn.Phase.OFF
         recorder.stop()
         recording = false
         recorderRef = null

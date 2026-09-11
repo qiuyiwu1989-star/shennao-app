@@ -24,6 +24,15 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
      */
     @Volatile var realtime: Realtime? = null
 
+    /**
+     * 每读到一块音频就报一次：这块的音量、这块有多少毫秒。
+     *
+     * 给全时聆听用——它在录音期间没有麦克风（麦克风在这条循环手里），
+     * 靠这个回调才知道人还说不说话、该不该收尾。
+     * 必须**不阻塞**：它跑在采集线程上，这条线程一慢，丢的是音频本身。
+     */
+    @Volatile var onFrame: ((level: Float, ms: Int) -> Unit)? = null
+
     @Volatile private var session: String? = null
     private val running = AtomicBoolean(false)
     private var thread: Thread? = null
@@ -41,13 +50,27 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
      */
     @Volatile var level: Float = 0f; private set
     @Volatile private var diskFailed = false
+    /** 交接过来的前置缓冲，只在第一段的最前面写一次 */
+    @Volatile private var pendingPreroll: ByteArray? = null
     val currentSession: String? get() = session
     val isRecording: Boolean get() = running.get()
 
     /** 返回本地会话 id；返回 null 表示麦克风打不开（权限被拒、或被别的应用占着）。 */
-    fun start(title: String, now: Long, scene: String? = null, orgId: String? = null): String? {
+    /**
+     * [adopt]：接管一个**已经打开、已经在录**的麦克风。全时聆听用：
+     * 它在听的时候就占着麦克风，判定有人开口时直接把这台设备交过来。
+     * 先关再开会丢掉交接那一两百毫秒，而那正好落在一句话的开头。
+     *
+     * [preroll]：判定开口之前就已经缓存下来的 PCM，原样写在第一段的最前面。
+     * 不补这一段，转写出来每个人都从第二个字开始说话。
+     */
+    fun start(
+        title: String, now: Long, scene: String? = null, orgId: String? = null,
+        adopt: android.media.AudioRecord? = null, preroll: ByteArray? = null,
+    ): String? {
         if (running.get()) return session
-        val rec = Capture.open() ?: return null
+        val rec = adopt ?: Capture.open() ?: return null
+        pendingPreroll = preroll
         state = RecordState.RECORDING
         diskFailed = false
         val meta = SessionMeta(UUID.randomUUID().toString(), title, now, scene = scene, orgId = orgId)
@@ -133,7 +156,18 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
         var startMs = from
         var open = openSegment(s, seq, startMs)
         try {
-            rec.startRecording()
+            // 接管过来的设备已经在录了。对着已经在录的设备再调一次是白费，
+            // 某些机型还会抛——而这里一抛，整条录音就没了。
+            if (rec.recordingState != android.media.AudioRecord.RECORDSTATE_RECORDING) rec.startRecording()
+            // 前置缓冲写在最前面，**只写一次**：它属于第一段，
+            // 中断重开时再写一遍就是把同一句话录进去两次。
+            pendingPreroll?.let { pre ->
+                pendingPreroll = null
+                if (pre.isNotEmpty()) {
+                    open.write(pre, pre.size)
+                    elapsedMs = startMs + open.elapsedMs
+                }
+            }
             var sinceSync = 0L
             while (running.get()) {
                 val n = rec.read(buf, 0, buf.size)
@@ -148,6 +182,9 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
                 // 丢的是字幕，不是录音。这个顺序不能反：先落盘，再分流。
                 realtime?.feed(buf, n)
                 level = Level.of(buf, n)
+                // 全时聆听靠这一路判断「还说不说话」。放在落盘之后：
+                // 它再怎么样也不该影响音频本身。
+                onFrame?.invoke(level, Capture.durationMsOf(n.toLong()).toInt())
                 elapsedMs = startMs + open.elapsedMs
                 sinceSync += n
                 // 每 2 秒落一次盘。不是每次都 sync——那会让磁盘一直忙；

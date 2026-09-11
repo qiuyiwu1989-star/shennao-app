@@ -93,6 +93,15 @@ class VoiceGate(
     var speechMs: Long = 0L
         private set
 
+    /**
+     * 本段到此刻为止**真正发声**的毫秒数。
+     *
+     * 全时聆听要用它做一个 [feed] 的返回值答不了的决定：OPEN 只说明「像是有人开口」，
+     * 而是不是真的要为这一段起一次录音，得等它熬过 minSpeechMs 才知道。
+     * 等 CLOSE 再决定就太晚了——CLOSE 要到几十秒的静音之后才来。
+     */
+    val voicedMsSoFar: Int get() = voicedMs
+
     /** 上一段的时长，供调用方写日志 */
     var lastSegmentMs: Int = 0
         private set

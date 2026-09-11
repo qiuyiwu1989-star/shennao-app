@@ -90,6 +90,57 @@ fun MeScreen(
                 onClick = onOpenCard,
             )
             RowDivider()
+            /*
+             * 全时聆听。
+             *
+             * 这一条必须把代价说全，因为它要的授权比「录一场会」大得多：
+             * 麦克风一直开着、电量一直在掉、录下来的每一段都要花积分分析。
+             * 只写「打开」而不写这些，用户第一次看到账单才知道自己同意了什么。
+             *
+             * 相位照服务念，不自己维护——被电话抢走麦克风时它是断的，
+             * 而那恰恰是用户最需要知道的一刻。
+             */
+            var listenPhase by remember { mutableStateOf(com.qiuyiwu.shennao.record.RecordingService.listenPhase) }
+            var listened by remember { mutableStateOf(com.qiuyiwu.shennao.record.RecordingService.listenedSpeechMs) }
+            LaunchedEffect(Unit) {
+                while (true) {
+                    listenPhase = com.qiuyiwu.shennao.record.RecordingService.listenPhase
+                    listened = com.qiuyiwu.shennao.record.RecordingService.listenedSpeechMs
+                    kotlinx.coroutines.delay(1_000)
+                }
+            }
+            val on = listenPhase != com.qiuyiwu.shennao.record.AlwaysOn.Phase.OFF
+            DsRow(
+                "全时聆听",
+                subtitle = when (listenPhase) {
+                    // 「在听」和「正录着」是两件事，必须分开说：说成一句，
+                    // 用户就没法判断此刻到底有没有在把声音录进去。
+                    com.qiuyiwu.shennao.record.AlwaysOn.Phase.RECORDING ->
+                        "正在录 · 今天录下 " + minutesLabel(listened)
+                    com.qiuyiwu.shennao.record.AlwaysOn.Phase.LISTENING ->
+                        "在听，有人说话时才录 · 今天录下 " + minutesLabel(listened)
+                    else -> "麦克风一直开着，听到有人说话才录。费电，录下来的也要花积分分析。"
+                },
+                trailingContent = {
+                    // 没给麦克风权限就先要权限。不要一声不响地去开——
+                    // 开不起来的时候 AlwaysOn 只能说「麦克风被别的应用占着」，
+                    // 而真相是它压根没被允许听，这是两件完全不同的事。
+                    val ask = androidx.activity.compose.rememberLauncherForActivityResult(
+                        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+                    ) { granted ->
+                        if (granted) com.qiuyiwu.shennao.record.RecordingService.listen(ctx)
+                    }
+                    Switch(checked = on, onCheckedChange = { want ->
+                        if (!want) com.qiuyiwu.shennao.record.RecordingService.stopListening(ctx)
+                        else if (androidx.core.content.ContextCompat.checkSelfPermission(
+                                ctx, android.Manifest.permission.RECORD_AUDIO
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        ) com.qiuyiwu.shennao.record.RecordingService.listen(ctx)
+                        else ask.launch(android.Manifest.permission.RECORD_AUDIO)
+                    })
+                },
+            )
+            RowDivider()
             DsRow(
                 keepTitle, subtitle = keepBody,
                 trailingContent = { Pill(if (exempt) "已允许" else "未允许", if (exempt) Tone.OK else Tone.WARN) },
