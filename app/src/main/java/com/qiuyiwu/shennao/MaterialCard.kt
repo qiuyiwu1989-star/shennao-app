@@ -6,7 +6,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 
 /**
@@ -88,36 +87,35 @@ private fun MaterialCard(
             item.highlight?.let { h ->
                 val tone = highlightTone(h.kind)
                 val c = tone.colors()
+                // 参考妙记（2026-09-12 邱给的截图）：这块要**撑出一块色**，字用读文档，
+                // 一眼先看见内容再看见标题。短句也不许缩成一条，最小高度钉住。
                 Column(
-                    Modifier.fillMaxWidth().background(c.bg).padding(DS.Pad.tight),
-                    verticalArrangement = Arrangement.spacedBy(DS.Rhythm.hair),
+                    Modifier.fillMaxWidth().heightIn(min = DS.Size.highlightMin).background(c.bg).padding(DS.Pad.card),
+                    verticalArrangement = Arrangement.spacedBy(DS.Rhythm.tight),
                 ) {
                     Text(h.label, style = MaterialTheme.typography.labelMedium, color = c.fg)
                     Text(
-                        h.text,
-                        style = MaterialTheme.typography.bodyMedium,
+                        if (h.kind == "quote") "「${h.text}」" else h.text,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = cs.onSurface,
                         maxLines = 6,
                         overflow = TextOverflow.Ellipsis,
-                        // 原话用斜体，和「我们替你归纳的」区分开：卡片上这两种东西
-                        // 长得一样的话，模型的话会被当成当事人说过的话。
-                        fontStyle = if (h.kind == "quote") FontStyle.Italic else FontStyle.Normal,
                     )
                     // 署名只有服务端确认过说话人才会给。客户端不自己署——
                     // 把一句话安到没确认的人头上，比不署名严重得多。
                     h.speaker?.let {
-                        Text("—— $it", style = MaterialTheme.typography.labelMedium, color = c.fg)
+                        Text(it, style = MaterialTheme.typography.labelMedium, color = c.fg)
                     }
                 }
             }
 
             // 下半：这是哪一场、什么时候、走到哪了。
             Column(
-                Modifier.padding(DS.Pad.tight),
+                Modifier.padding(DS.Pad.card),
                 verticalArrangement = Arrangement.spacedBy(DS.Rhythm.hair),
             ) {
                 Text(
-                    item.title, style = MaterialTheme.typography.titleSmall, color = cs.onSurface,
+                    item.title, style = MaterialTheme.typography.titleMedium, color = cs.onSurface,
                     maxLines = 2, overflow = TextOverflow.Ellipsis,
                 )
                 Text(

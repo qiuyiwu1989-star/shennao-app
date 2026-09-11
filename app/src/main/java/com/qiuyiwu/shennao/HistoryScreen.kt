@@ -169,7 +169,8 @@ fun HistoryScreen(
         }
 
         if (served.isNotEmpty()) {
-            item { SectionLabel("已经送到深脑") }
+            // 紧接页头，不留分区大空：这一页的正文就是它们
+            item { SectionLabel("已经送到深脑", top = rows.isNotEmpty()) }
             // 按来源分段：灵魂卡 / 手机 / 分享来的。每个入口各占一格，不做主次视觉差——
             // 一个只用手机的人，界面上不该处处看见「你还没有灵魂卡」。
             if (SourceFilter.available(served)) item {

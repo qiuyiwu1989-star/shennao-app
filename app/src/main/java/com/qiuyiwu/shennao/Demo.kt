@@ -66,9 +66,10 @@ object Demo {
 
     private val SESSIONS = """
     {"sessions":[
-      {"sessionId":"s1","title":"Q3 复盘会","startedAt":"2026-09-05T06:00:00Z","durationMs":3120000,"stage":"analyzed","transcriptId":"t1","captureClient":"android","source":"card"},
-      {"sessionId":"s2","title":"技术对齐","startedAt":"2026-09-04T02:30:00Z","durationMs":1500000,"stage":"transcribed","transcriptId":"t2","captureClient":"android","source":"phone"},
-      {"sessionId":"s3","title":"飞书导出 · 客户访谈","startedAt":"2026-09-03T08:10:00Z","durationMs":2400000,"stage":"delivered","transcriptId":null,"captureClient":"android","source":"share"},
+      {"sessionId":"s1","title":"Q3 复盘会","startedAt":"2026-09-05T06:00:00Z","durationMs":3120000,"stage":"analyzed","transcriptId":"t1","captureClient":"android","source":"card","highlight":{"kind":"quote","text":"两周就够了，你们别把它想得太复杂。","speaker":"陈总","label":"金句"}},
+      {"sessionId":"s2","title":"技术对齐","startedAt":"2026-09-04T02:30:00Z","durationMs":1500000,"stage":"transcribed","transcriptId":"t2","captureClient":"android","source":"phone","highlight":{"kind":"decision","text":"接口文档周三前补齐，先按 v2 字段名对齐，旧字段保留一版。","speaker":null,"label":"定了"},"progress":{"stage":"analyzing","label":"分析中","ratio":null,"retriable":false}},
+      {"sessionId":"s3","title":"飞书导出 · 客户访谈","startedAt":"2026-09-03T08:10:00Z","durationMs":2400000,"stage":"delivered","transcriptId":null,"captureClient":"android","source":"share","highlight":{"kind":"contradiction","text":"客户说预算充足，但采购流程要走到 11 月。","speaker":null,"label":"有分歧"},"progress":{"stage":"uploading","label":"传了 62%","ratio":0.62,"retriable":false}},
+      {"sessionId":"s5","title":"艺术家周会","startedAt":"2026-09-02T05:51:00Z","durationMs":2900000,"stage":"analyzed","transcriptId":"t1","captureClient":"android","source":"card","highlight":{"kind":"summary","text":"围绕 AI 绘画工具迭代、主题画作评审、团队近期工作排布明确落地要求。","speaker":null,"label":"总结"}},
       {"sessionId":"s4","title":"手机录音","startedAt":"2026-09-01T01:00:00Z","durationMs":45000,"stage":"failed","problem":"不到 5 分钟，默认不分析。要分析可以在详情里点一下。","transcriptId":null,"captureClient":"android","source":"phone"}]}
     """.trimIndent()
 

@@ -79,6 +79,7 @@ object DS {
         val iconLarge = 32.dp
         val recordButton = 88.dp
         val progress = 18.dp
+        val highlightMin = 132.dp   // 记录页卡片顶上那块预览的最小高度：短句也要撑出一块色
         val hairline = 1.dp
         val rule = 2.dp
         val quoteBar = 3.dp

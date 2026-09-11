@@ -255,7 +255,8 @@ private fun App(client: DeepBrainClient) {
          */
         floatingActionButton = {
             val nav = ready?.nav ?: return@Scaffold
-            if (nav.current == Route.Today) {
+            // 记录页也要能直接录：那一屏就是「我录过什么」，最自然的下一步就是再录一场（妙记也这么摆）
+            if (nav.current == Route.Today || nav.current == Route.Records) {
                 FloatingActionButton(
                     onClick = { go(nav.push(Route.Record)) },
                     // 圆的。方圆角那个是 Material 的默认，而「录」这个动作全 App 只有一个形状：圆
