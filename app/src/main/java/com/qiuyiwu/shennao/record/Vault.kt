@@ -116,6 +116,8 @@ data class SessionMeta(
      * 人在传到一半时切了组织，这场会不该跟着跑到另一个组织去。null = 老版本录的，用当前的。
      */
     val orgId: String? = null,
+    /** 录的时候登录的是谁（邮箱）。换账号后这场只显示不传，登录回去才传（V5 2.1）。老版本录的是 null。 */
+    val owner: String? = null,
 ) {
     fun toJson(): String = org.json.JSONObject()
         .put("clientRequestId", clientRequestId)
@@ -126,6 +128,7 @@ data class SessionMeta(
         .put("scene", scene ?: org.json.JSONObject.NULL)
         .put("lastError", lastError ?: org.json.JSONObject.NULL)
         .put("orgId", orgId ?: org.json.JSONObject.NULL)
+        .put("owner", owner ?: org.json.JSONObject.NULL)
         .toString()
 
     companion object {
@@ -141,6 +144,7 @@ data class SessionMeta(
                 o.optString("scene").takeIf { it.isNotBlank() && it != "null" },
                 o.optString("lastError").takeIf { it.isNotBlank() && it != "null" },
                 o.optString("orgId").takeIf { it.isNotBlank() && it != "null" },
+                o.optString("owner").takeIf { it.isNotBlank() && it != "null" },
             )
         }.getOrNull()
     }

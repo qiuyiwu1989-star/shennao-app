@@ -139,6 +139,7 @@ class RecordingService : Service() {
         uploader = Uploader(
             UrlHttp(), vault, BuildConfig.API_BASE,
             auth = { force -> com.qiuyiwu.shennao.Session.authFor(applicationContext, force) },
+            currentUser = { com.qiuyiwu.shennao.Session.client(applicationContext).signedInEmail() },
         )
         createChannel()
     }
@@ -172,7 +173,8 @@ class RecordingService : Service() {
                 // 场合只认词表里的：intent 是公开面，别把任意字符串带到服务端去吃 400
                 val scene = intent.getStringExtra("scene")?.takeIf { Scenes.isKnown(it) }
                 val org = com.qiuyiwu.shennao.Session.client(applicationContext).orgId()
-                if (recorder.start(title, System.currentTimeMillis(), scene, org) == null) {
+                val who = com.qiuyiwu.shennao.Session.client(applicationContext).signedInEmail()
+                if (recorder.start(title, System.currentTimeMillis(), scene, org, owner = who) == null) {
                     micError = "麦克风打不开。检查权限，或者有别的应用正占着它。"
                     stopSelf()
                     return START_NOT_STICKY
@@ -199,13 +201,14 @@ class RecordingService : Service() {
                 }
                 scope.launch { recorder.recoverOrphans()?.let { OrphanNotice.record(applicationContext, it) }; kick() }
                 val org = com.qiuyiwu.shennao.Session.client(applicationContext).orgId()
+                val who = com.qiuyiwu.shennao.Session.client(applicationContext).signedInEmail()
                 val gate = AlwaysOn(
                     recorder = recorder,
                     begin = { mic, preroll ->
                         // 标题先按时刻起，分析完服务端会改成这一场真正在谈的事。
                         // 全时聆听起的场没人给它取名字，不能让一天下来全是「手机录音」。
                         val now = System.currentTimeMillis()
-                        val id = recorder.start("随手录 ${fmt2(now)}", now, null, org, adopt = mic, preroll = preroll)
+                        val id = recorder.start("随手录 ${fmt2(now)}", now, null, org, adopt = mic, preroll = preroll, owner = who)
                         if (id != null) { recording = true; state = RecordState.RECORDING; micError = null; startPump() }
                         id
                     },

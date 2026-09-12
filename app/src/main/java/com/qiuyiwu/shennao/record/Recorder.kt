@@ -66,14 +66,14 @@ class Recorder(private val vault: FileVault, private val onSegmentSealed: () -> 
      */
     fun start(
         title: String, now: Long, scene: String? = null, orgId: String? = null,
-        adopt: android.media.AudioRecord? = null, preroll: ByteArray? = null,
+        adopt: android.media.AudioRecord? = null, preroll: ByteArray? = null, owner: String? = null,
     ): String? {
         if (running.get()) return session
         val rec = adopt ?: Capture.open() ?: return null
         pendingPreroll = preroll
         state = RecordState.RECORDING
         diskFailed = false
-        val meta = SessionMeta(UUID.randomUUID().toString(), title, now, scene = scene, orgId = orgId)
+        val meta = SessionMeta(UUID.randomUUID().toString(), title, now, scene = scene, orgId = orgId, owner = owner)
         val s = vault.newSession(meta)
         session = s
         elapsedMs = 0

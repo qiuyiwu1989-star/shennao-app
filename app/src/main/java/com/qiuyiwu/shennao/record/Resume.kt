@@ -33,9 +33,9 @@ object Resume {
         // 正在录音时不碰孤儿回收：它会去动当前这场还开着的文件。
         // 但推送照常——录音期间也要边录边传。
         if (!RecordingService.recording) Recorder(vault) {}.recoverOrphans()?.let { OrphanNotice.record(ctx, it) }
-        Uploader(UrlHttp(), vault, com.qiuyiwu.shennao.BuildConfig.API_BASE) { force ->
-            Session.authFor(ctx, force)
-        }.drainAll()
+        Uploader(UrlHttp(), vault, com.qiuyiwu.shennao.BuildConfig.API_BASE,
+                 auth = { force -> Session.authFor(ctx, force) },
+                 currentUser = { Session.client(ctx).signedInEmail() }).drainAll()
     }
 
     /**

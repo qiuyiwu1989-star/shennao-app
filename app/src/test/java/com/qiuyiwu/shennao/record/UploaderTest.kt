@@ -266,6 +266,31 @@ class UploaderTest {
         }
     }
 
+    @Test fun `别人账号录的——这一轮不动它，也不报错`() {
+        // V5 2.1：换账号后，上一个账号没传完的只显示不传，更不能用现在的 token 传
+        val v = MemVault().apply {
+            metas["s"] = meta(finished = true).copy(owner = "a@x.com")
+            put("s", seg(0, Segment.State.SEALED))
+        }
+        val h = happyPath()
+        val r = Uploader(h, v, "https://api.test", auth = { "at" to "org-1" }, currentUser = { "b@x.com" }).drain("s")
+        assertTrue("$r", r is DrainResult.Idle)
+        assertTrue("一个请求都不该发", h.log.isEmpty())
+        assertNull(v.metas["s"]!!.lastError)
+    }
+
+    @Test fun `老版本录的没记 owner——照传`() {
+        val v = MemVault().apply { metas["s"] = meta(finished = true); put("s", seg(0, Segment.State.SEALED)) }
+        val r = Uploader(happyPath(), v, "https://api.test", auth = { "at" to "org-1" }, currentUser = { "b@x.com" }).drain("s")
+        assertTrue("$r", r is DrainResult.Done)
+    }
+
+    @Test fun `meta 的 owner 能落盘再读回`() {
+        val m = meta().copy(owner = "a@x.com")
+        assertEquals("a@x.com", SessionMeta.fromJson(m.toJson())!!.owner)
+        assertNull(SessionMeta.fromJson(meta().toJson())!!.owner)
+    }
+
     @Test fun `确认那一步网络没通——不许改名，留着下轮再试`() {
         val v = MemVault().apply { metas["s"] = meta(finished = true); put("s", seg(0, Segment.State.SEALED)) }
         val r = uploader(v, dropAt("/complete")).drain("s")

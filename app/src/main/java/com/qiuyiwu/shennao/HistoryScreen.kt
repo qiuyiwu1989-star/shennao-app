@@ -55,6 +55,7 @@ fun HistoryScreen(
     var stale by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     var rows by remember { mutableStateOf<List<LocalSession>>(emptyList()) }
+    val me = remember { client.signedInEmail() }
     var served by remember { mutableStateOf<List<SessionCard>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
     // 灵魂卡那一头的状态。它是 Service 上的 @Volatile 字段，和本地/服务端两份一起轮询：
@@ -90,7 +91,9 @@ fun HistoryScreen(
             if (!askServer) { delay(5000); continue }
             // 服务端那份查得慢一些，但它才知道转写和分析走到哪了。
             // 两份合起来才是完整的一条链：本地管「传没传出去」，服务端管「后面几站」。
+            val orgAtStart = client.orgId()
             val r = withContext(Dispatchers.IO) { client.sessionsWithRaw() }
+            if (client.orgId() != orgAtStart) { delay(1000); continue }   // 切组织了，这份是旧组织的（V5 2.3）
             if (r is ApiResult.Ok) {
                 val (rows2, raw) = r.value
                 served = rows2
@@ -148,9 +151,16 @@ fun HistoryScreen(
         } }
 
         // 还在这台手机上的排最前：它们是唯一可能丢的
-        if (rows.isNotEmpty()) {
+        // 换过账号：别人录的只说明，不传也不删（V5 2.1，邱未拍板前按最保守的做）
+        val (mine, others) = rows.partition { it.meta.owner == null || me == null || it.meta.owner == me }
+        if (others.isNotEmpty()) item {
+            val who = others.map { it.meta.owner }.distinct().joinToString("、")
+            NoticeBox("还有 ${others.size} 场是 $who 录的，登录回那个账号才会传。", Tone.NEUTRAL)
+            Spacer(Modifier.height(DS.Rhythm.element))
+        }
+        if (mine.isNotEmpty()) {
             item { SectionLabel("还在手机上") }
-            items(rows, key = { "l" + it.dir }) { s ->
+            items(mine, key = { "l" + it.dir }) { s ->
                 SessionRow(
                     s,
                     onRetry = {
@@ -174,7 +184,7 @@ fun HistoryScreen(
         if (served.isNotEmpty()) {
             // 紧接页头，不留分区大空：这一页的正文就是它们
             // 「已经送到深脑」只在上面有「还在手机上」时才需要分开说
-            if (rows.isNotEmpty()) item { SectionLabel("已经送到深脑") }
+            if (mine.isNotEmpty()) item { SectionLabel("已经送到深脑") }
             // 按来源分段：灵魂卡 / 手机 / 分享来的。每个入口各占一格，不做主次视觉差——
             // 一个只用手机的人，界面上不该处处看见「你还没有灵魂卡」。
             if (SourceFilter.available(served)) item {

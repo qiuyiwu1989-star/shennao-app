@@ -140,7 +140,10 @@ private fun App(client: DeepBrainClient) {
 
     /** 保住当前位置地取数：登录态还在的话，不要把人踢回「今天」。 */
     suspend fun load(keepNav: Boolean = true) {
+        val orgAtStart = client.orgId()
         val r = withContext(Dispatchers.IO) { client.todayWithRaw() }
+        // 请求飞着的时候切了组织：这份是上一个组织的，扔掉（V5 2.3）
+        if (client.orgId() != orgAtStart) return
         val nav = (st as? AppState.Ready)?.nav?.takeIf { keepNav } ?: NavState.initial()
         if (r is ApiResult.Ok) {
             stale = null
@@ -429,6 +432,9 @@ private fun App(client: DeepBrainClient) {
                                 scope.launch { load() }
                             },
                             onSignOut = {
+                                // 正在录的先停下、留在手机上；不停的话它会用下一个账号的 token 往上传
+                                if (com.qiuyiwu.shennao.record.RecordingService.listening) com.qiuyiwu.shennao.record.RecordingService.stopListening(ctx)
+                                if (com.qiuyiwu.shennao.record.RecordingService.recording) com.qiuyiwu.shennao.record.RecordingService.stop(ctx)
                                 client.signOut()
                                 // 网页版那页的 cookie 罐里是一整份登录态，退出必须一起倒掉：
                                 // 不然换个账号登进来，「网页版」打开的还是上一个人（2026-09-12 审计）

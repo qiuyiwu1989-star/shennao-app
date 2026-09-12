@@ -276,7 +276,7 @@ fun MeScreen(
         QuietButton("退出登录", onClick = { signOut = true }, modifier = Modifier.fillMaxWidth())
         if (signOut) ConfirmDialog(
             title = "退出登录？",
-            detail = "还没传完的录音会留在手机上，重新登录后接着传。",
+            detail = "正在录的会先停下。没传完的录音留在手机上，登录回这个账号后接着传。",
             confirmLabel = "退出",
             onConfirm = onSignOut,
             onDismiss = { signOut = false },

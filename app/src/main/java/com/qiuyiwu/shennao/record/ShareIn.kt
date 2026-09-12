@@ -94,6 +94,7 @@ object ShareIn {
             startedAtEpochMs = System.currentTimeMillis(),
             finished = true,
             orgId = com.qiuyiwu.shennao.Session.client(ctx).orgId(),
+            owner = com.qiuyiwu.shennao.Session.client(ctx).signedInEmail(),
         )
         val session = vault.newSession(meta)
         val seg = Segment(0, 0, durationMs, Segment.State.SEALED, ext = ext)

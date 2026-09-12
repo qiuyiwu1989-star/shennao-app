@@ -358,6 +358,7 @@ class BleImportService : Service() {
                     FileVault(File(filesDir, "recordings")),
                     s.bytes, entry.base, entry.time * 1000, started,
                     orgId = com.qiuyiwu.shennao.Session.client(this).orgId(),
+                    owner = com.qiuyiwu.shennao.Session.client(this).signedInEmail(),
                 )
             }.getOrNull()
             if (ok != null) {

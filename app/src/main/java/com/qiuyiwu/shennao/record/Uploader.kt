@@ -50,6 +50,8 @@ class Uploader(
      * 一场会开两小时，access token 只活一小时——不续期的话，从第 60 分钟起
      * 每一段都会静默传不上去，而界面上什么都看不出来。
      */
+    /** 现在登录的是谁（邮箱）。null = 不知道，不做账号判断。放在 auth 前面：auth 是尾 lambda。 */
+    private val currentUser: () -> String? = { null },
     private val auth: (force: Boolean) -> Pair<String, String>?,
 ) {
 
@@ -72,6 +74,9 @@ class Uploader(
 
     private fun attempt(session: String, forceAuth: Boolean): DrainResult {
         val meta = vault.readMeta(session) ?: return DrainResult.Failed("这场录音的信息读不出来", false)
+        // 别人账号录的：不用现在这个账号的 token 传，也不报错——记录页会说明它属于谁（V5 2.1）
+        val me = currentUser()
+        if (meta.owner != null && me != null && meta.owner != me) return DrainResult.Idle
         val segs = vault.segments(session)
         val sealed = segs.filter { it.state == Segment.State.SEALED }
         val recording = segs.filter { it.state == Segment.State.RECORDING }
