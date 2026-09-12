@@ -146,6 +146,7 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
         else denied = true
     }
 
+    var showAll by remember { mutableStateOf(false) }
     fun startScan() {
         denied = false
         recheck()
@@ -330,17 +331,25 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
                 }
             } }
 
-            if (devices.isNotEmpty()) item {
+            // 只列我们的设备；别人的收起来（邱 2026-09-12）。判据见 OurDevices。
+            val knownAddrs = known.map { it.first }.toSet()
+            val (ours, others) = com.qiuyiwu.shennao.ble.OurDevices.split(devices) {
+                com.qiuyiwu.shennao.ble.OurDevices.looksLikeOurs(it.name, it.advertisesOurService, knownAddrs, it.id)
+            }
+            if (conn == BleState.SCANNING && ours.isEmpty()) item {
                 Text(
-                    // 不按服务 UUID 过滤，所以列表里会有别的蓝牙设备。
-                    // 直说，别让用户以为「这些都是录音笔」。
-                    "附近所有蓝牙设备都列在这里，灵魂卡多半叫 CB08 或类似名字。" +
-                        "带「疑似灵魂卡」的排在最前。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (others.isEmpty()) "在找。把灵魂卡放近一点，等几秒。"
+                    else "附近还没找到灵魂卡。把它放近一点，等几秒。",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            items(devices, key = { it.id }) { d ->
+            val shown = if (showAll) devices else ours
+            if (others.isNotEmpty()) item {
+                LinkButton(onClick = { showAll = !showAll }) {
+                    Text(if (showAll) "只看灵魂卡" else "看全部附近设备（${others.size} 个别的）")
+                }
+            }
+            items(shown, key = { it.id }) { d ->
                 DsCard(Modifier.fillMaxWidth(), onClick = { BleImportService.connect(ctx, d.id) }) {
                     Row(Modifier.padding(DS.Pad.tight), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
