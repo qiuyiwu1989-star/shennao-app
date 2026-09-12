@@ -4,6 +4,7 @@ import java.io.FileInputStream
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
     id("io.github.takahirom.roborazzi")
 }
 
@@ -69,7 +70,6 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     // Robolectric 要读 merged manifest 和资源
     testOptions { unitTests { isIncludeAndroidResources = true } }
-    composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
         /*
@@ -92,7 +92,7 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.9.1")
     // 冷启动闪屏。API 31 以下没有系统闪屏 API，这个库把两边接成一份代码。
     implementation("androidx.core:core-splashscreen:1.0.1")
-    implementation(platform("androidx.compose:compose-bom:2024.09.03"))
+    implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
@@ -139,7 +139,7 @@ dependencies {
     testImplementation("io.github.takahirom.roborazzi:roborazzi:1.26.0")
     testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.26.0")
     testImplementation("io.github.takahirom.roborazzi:roborazzi-junit-rule:1.26.0")
-    testImplementation("androidx.compose.ui:ui-test-junit4:1.7.3")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest:1.6.8")
     // 安卓自带 org.json，但 JVM 单测里那是个**空壳桩**——每个方法都抛
     // "Stub!" 异常。不补这一条，解析测试会全部挂掉，而且报错完全看不出原因。
