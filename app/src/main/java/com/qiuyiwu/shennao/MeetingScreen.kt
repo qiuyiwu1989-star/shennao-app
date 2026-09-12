@@ -30,7 +30,6 @@ import kotlinx.coroutines.withContext
  * 逐句转写不在这里——那要滚很久，而网页那份有播放对齐和认说话人，
  * 在 App 里再实现一遍必然更旧。
  */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun MeetingScreen(
     client: DeepBrainClient,
@@ -43,10 +42,65 @@ fun MeetingScreen(
     onFeedback: (String, String) -> Unit = { _, _ -> },
     onOpenPerson: ((String) -> Unit)? = null,
 ) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
     var meeting by remember { mutableStateOf<Meeting?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var attempt by remember { mutableIntStateOf(0) }
+    LaunchedEffect(transcriptId, attempt) {
+        when (val r = withContext(Dispatchers.IO) { client.meeting(transcriptId) }) {
+            is ApiResult.Ok -> meeting = r.value
+            is ApiResult.Failed -> error = r.message
+            else -> error = "登录失效了"
+        }
+    }
+
+    // 取数和画面分开：取到之前这一屏只有「在取」或「没取到」两种样子，
+    // 取到之后交给 MeetingLoaded。截图测试直接喂 MeetingLoaded 一份解析好的会议，
+    // 不经过这里的 IO 协程——Robolectric 下 IO 回主线程的时机不定，拍出来的是半截页。
+    val m = meeting
+    if (m == null) {
+        DetailPage(
+            onBack = onBack,
+            actions = { IconAction(Icons.Outlined.Share, "分享", enabled = false, onClick = {}) },
+        ) {
+            // 取失败要能再试。人物页、网页页都有，这一屏之前漏了（012 P0-14）。
+            if (error != null) item { Broken(error!!) { error = null; attempt++ } }
+            else item { Loading() }
+        }
+    } else MeetingLoaded(
+        client, m, onBack, onOpenWeb, onClaimSpeakers, onFeedback, onOpenPerson,
+        // 重新取数：手动排上分析之后要能看到状态从「没有分析」变成「在跑」。
+        // 不刷新的话用户点完按钮屏幕一动不动，只能反复点，而每一次都会
+        // 撞上服务端的幂等闸——他看到的是「点了没用」。
+        reload = {
+            when (val r = withContext(Dispatchers.IO) { client.meeting(transcriptId) }) {
+                is ApiResult.Ok -> meeting = r.value
+                else -> Unit
+            }
+        },
+    )
+}
+
+/**
+ * 会议页的已加载态：拿到 [m] 之后画的全部东西。没有取数，只有画和点。
+ * 分享 / 分析 / 兑现这些动作仍然要打服务端，所以 [client] 还在；
+ * 但「这一屏长什么样」完全由 [m] 决定——这就是截图能稳的原因。
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun MeetingLoaded(
+    client: DeepBrainClient,
+    m: Meeting,
+    onBack: () -> Unit,
+    onOpenWeb: ((path: String, title: String) -> Unit)? = null,
+    onClaimSpeakers: (() -> Unit)? = null,
+    onFeedback: (String, String) -> Unit = { _, _ -> },
+    onOpenPerson: ((String) -> Unit)? = null,
+    /** 排上分析 / 兑现没记上之后再取一次。截图测试传空 */
+    reload: suspend () -> Unit = {},
+) {
+    val transcriptId = m.transcriptId
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     var sharing by remember { mutableStateOf(false) }
     var shareNote by remember { mutableStateOf<String?>(null) }
     var analyzing by remember { mutableStateOf(false) }
@@ -72,7 +126,6 @@ fun MeetingScreen(
      * 逐句是服务端 2026-09-05 才给的；没有逐句时退回被引用的片段列表，不跳。
      */
     fun jumpToQuote(quote: String) {
-        val m = meeting ?: return
         val idx = MeetingTabs.lineIndexFor(m.segments, quote) ?: run { tab = MeetingTab.QUOTES; return }
         tab = MeetingTab.QUOTES; highlight = idx
         // 逐句前面的条目数不是常量：分享提示、认人卡、在场行都是有条件才画的（012 P0-13）
@@ -81,26 +134,7 @@ fun MeetingScreen(
             shareNote != null, unnamed > 0 && onClaimSpeakers != null, m.speakers.isNotEmpty())
         scope.launch { listState.animateScrollToItem(head + idx) }
     }
-
-    // 重新取数：手动排上分析之后要能看到状态从「没有分析」变成「在跑」。
-    // 不刷新的话用户点完按钮屏幕一动不动，只能反复点，而每一次都会
-    // 撞上服务端的幂等闸——他看到的是「点了没用」。
-    suspend fun reload() {
-        when (val r = withContext(Dispatchers.IO) { client.meeting(transcriptId) }) {
-            is ApiResult.Ok -> meeting = r.value
-            else -> Unit
-        }
-    }
-
-    var attempt by remember { mutableIntStateOf(0) }
     var resetKey by remember { mutableIntStateOf(0) }
-    LaunchedEffect(transcriptId, attempt) {
-        when (val r = withContext(Dispatchers.IO) { client.meeting(transcriptId) }) {
-            is ApiResult.Ok -> meeting = r.value
-            is ApiResult.Failed -> error = r.message
-            else -> error = "登录失效了"
-        }
-    }
 
     DetailPage(
         onBack = onBack,
@@ -111,7 +145,7 @@ fun MeetingScreen(
             if (sharing) CircularProgressIndicator(Modifier.size(DS.Size.icon), strokeWidth = DS.Size.rule)
             else IconAction(
                 Icons.Outlined.Share, "分享",
-                enabled = meeting != null,
+                enabled = true,
                 onClick = {
                     sharing = true; shareNote = null
                     scope.launch {
@@ -122,7 +156,7 @@ fun MeetingScreen(
                                 val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                     type = "text/plain"
                                     putExtra(android.content.Intent.EXTRA_TEXT,
-                                             "${meeting?.title ?: "一场会"}\n${r.value}")
+                                             "${m.title}\n${r.value}")
                                 }
                                 ctx.startActivity(android.content.Intent.createChooser(send, "分享给"))
                             }
@@ -136,241 +170,233 @@ fun MeetingScreen(
     ) {
         shareNote?.let { n -> item { NoticeBox(n, Tone.RISK) } }
 
-        val m = meeting
-        when {
-            // 取失败要能再试。人物页、网页页都有，这一屏之前漏了（012 P0-14）。
-            error != null -> item { Broken(error!!) { error = null; attempt++ } }
-            m == null -> item { Loading() }
-            else -> {
-                item {
-                    Text(m.title, style = MaterialTheme.typography.headlineSmall)
+        item {
+            Text(m.title, style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(DS.Rhythm.tight))
+            Text(
+                listOfNotNull(
+                    m.durationSec?.let { "${it / 60} 分钟" },
+                    m.speakers.size.takeIf { it > 0 }?.let { "$it 人在场" },
+                ).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(DS.Rhythm.inner))
+        }
+
+        item {
+            val t = MeetingTabs.of(m)
+            DsTabs(
+                labels = MeetingTab.entries.map { it.label(t) },
+                selected = tab.ordinal,
+                onSelect = { tab = MeetingTab.entries[it] },
+            )
+            Spacer(Modifier.height(DS.Rhythm.tight))
+        }
+        if (tab == MeetingTab.JUDGMENTS) item {
+            DsCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(DS.Pad.card)) {
+                    Text("这场会", style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.sp),
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(DS.Rhythm.tight))
-                    Text(
-                        listOfNotNull(
-                            m.durationSec?.let { "${it / 60} 分钟" },
-                            m.speakers.size.takeIf { it > 0 }?.let { "$it 人在场" },
-                        ).joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
+                    // 摘要是 Markdown。当纯文本显示的话，屏幕上就是一堆 ## 和 **，
+                    // 用户看到的是「这个 App 坏了」。
+                    if (m.summary != null) MarkdownText(m.summary)
+                    else Text(
+                        // 没有摘要 = 分析还没跑完。说清楚，不要显示一片空白——
+                        // 空白会被理解成「这场会什么都没讲」。
+                        "分析还没跑完，等一会儿再来看。",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(DS.Rhythm.inner))
                 }
+            }
+        }
 
-                item {
-                    val t = MeetingTabs.of(m)
-                    DsTabs(
-                        labels = MeetingTab.entries.map { it.label(t) },
-                        selected = tab.ordinal,
-                        onSelect = { tab = MeetingTab.entries[it] },
-                    )
-                    Spacer(Modifier.height(DS.Rhythm.tight))
-                }
-                if (tab == MeetingTab.JUDGMENTS) item {
-                    DsCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(DS.Pad.card)) {
-                            Text("这场会", style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.sp),
-                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.height(DS.Rhythm.tight))
-                            // 摘要是 Markdown。当纯文本显示的话，屏幕上就是一堆 ## 和 **，
-                            // 用户看到的是「这个 App 坏了」。
-                            if (m.summary != null) MarkdownText(m.summary)
-                            else Text(
-                                // 没有摘要 = 分析还没跑完。说清楚，不要显示一片空白——
-                                // 空白会被理解成「这场会什么都没讲」。
-                                "分析还没跑完，等一会儿再来看。",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+        // 分析正文。这才是「深脑读出了什么」的主体——
+        // 之前只给了一段摘要，等于把大半藏起来了。
+        if (tab == MeetingTab.JUDGMENTS) m.analysis?.let { a ->
+            if (a.markdown != null) item {
+                SectionHead("分析", "深脑读出来的")
+                if (a.methods.isNotEmpty()) {
+                    // 一场分析常常是好几个方法合出来的。只显示一个，
+                    // 用户会以为深脑只用了一种看法。
+                    androidx.compose.foundation.layout.FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.tight),
+                        verticalArrangement = Arrangement.spacedBy(DS.Rhythm.tight),
+                    ) { a.methods.forEach { m2 -> Pill(m2, Tone.ACCENT) } }
+                    a.routingReason?.let { r ->
+                        Spacer(Modifier.height(DS.Rhythm.tight))
+                        Text("为什么选这几个方法：$r",
+                             style = MaterialTheme.typography.bodyMedium,
+                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    Spacer(Modifier.height(DS.Rhythm.element))
                 }
+                DsCard(Modifier.fillMaxWidth()) {
+                    MarkdownText(a.markdown, Modifier.padding(DS.Pad.default))
+                }
+            } else item {
+                // 「在跑」和「跑挂了」必须分开说。
+                // 枚举见 0001_init.sql：queued / routing / analyzing /
+                // self_check / persisting / done / failed。
+                SectionHead("分析")
+                if (a.status == "failed") NoticeBox("这场分析失败了。可以重跑一次。", Tone.RISK)
+                else NoticeBox("分析还在跑", Tone.INFO)
+            }
+        }
 
-                // 分析正文。这才是「深脑读出了什么」的主体——
-                // 之前只给了一段摘要，等于把大半藏起来了。
-                if (tab == MeetingTab.JUDGMENTS) m.analysis?.let { a ->
-                    if (a.markdown != null) item {
-                        SectionHead("分析", "深脑读出来的")
-                        if (a.methods.isNotEmpty()) {
-                            // 一场分析常常是好几个方法合出来的。只显示一个，
-                            // 用户会以为深脑只用了一种看法。
-                            androidx.compose.foundation.layout.FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.tight),
-                                verticalArrangement = Arrangement.spacedBy(DS.Rhythm.tight),
-                            ) { a.methods.forEach { m2 -> Pill(m2, Tone.ACCENT) } }
-                            a.routingReason?.let { r ->
-                                Spacer(Modifier.height(DS.Rhythm.tight))
-                                Text("为什么选这几个方法：$r",
-                                     style = MaterialTheme.typography.bodyMedium,
-                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Spacer(Modifier.height(DS.Rhythm.element))
-                        }
-                        DsCard(Modifier.fillMaxWidth()) {
-                            MarkdownText(a.markdown, Modifier.padding(DS.Pad.default))
-                        }
-                    } else item {
-                        // 「在跑」和「跑挂了」必须分开说。
-                        // 枚举见 0001_init.sql：queued / routing / analyzing /
-                        // self_check / persisting / done / failed。
-                        SectionHead("分析")
-                        if (a.status == "failed") NoticeBox("这场分析失败了。可以重跑一次。", Tone.RISK)
-                        else NoticeBox("分析还在跑", Tone.INFO)
-                    }
-                }
-
-                // **没有分析时也要说话。**
-                // 分析为 null 时屏幕上一个字都没有——一条 60 秒的录音传上来、转写好了、
-                // 详情页却什么都不显示，用户唯一能得出的结论是「这东西坏了」。
-                // 实际上是按「不到 5 分钟不自动分析」跳过的。
-                if (tab == MeetingTab.JUDGMENTS && m.analysis == null) item {
-                    SectionHead("分析", "这条为什么没有")
-                    DsCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(DS.Pad.tight)) {
-                            Text(m.analysisAbsentReason ?: "这条还没有分析。",
-                                 style = MaterialTheme.typography.bodyLarge,
-                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.height(DS.Rhythm.element))
-                            // 门槛的意思是「默认不花这个钱」，不是「不许分析」。
-                            // 所以出口必须在这里——用户正是在这一刻想要它。
-                            // 按钮上写明要花积分：花钱的动作不该让人点完才知道。
-                            PrimaryButton(
-                                if (analyzing) "排队中…" else "还是分析这条（消耗积分）",
-                                busy = analyzing,
-                                onClick = {
-                                    analyzing = true
-                                    scope.launch {
-                                        val r = withContext(Dispatchers.IO) { client.analyze(m.transcriptId) }
-                                        analyzing = false
-                                        when (r) {
-                                            is ApiResult.Ok -> { notice("排上了，分析在跑"); reload() }
-                                            is ApiResult.Failed -> notice(r.message)
-                                            else -> notice("登录失效了")
-                                        }
-                                    }
-                                },
-                            )
-                        }
-                    }
-                }
-
-                // ── 判断 tab ──
-                if (tab == MeetingTab.JUDGMENTS) {
-                    if (m.atoms.isNotEmpty()) {
-                        item { SectionHead("读出来的判断", "决定、信号、矛盾") }
-                        items(m.atoms, key = { "a" + it.id }) { a -> AtomCard(a, onJump = { jumpToQuote(a.quote) }, onFeedback = { v -> onFeedback(a.id, v) }) }
-                    } else if (m.analysis != null) item {
-                        Empty("这场没读出判断", "有时候一场会就是没有决定、没有分歧。那也是一个结论。")
-                    }
-                }
-
-                // ── 承诺 tab ──
-                if (tab == MeetingTab.COMMITMENTS) {
-                    if (m.commitments.isEmpty()) item {
-                        Empty("这场会里没人答应什么", "有人说出口「下周给你」这类话时，会出现在这里。")
-                    } else {
-                        item { SectionHead("这场会里的承诺", "别人说出口、还没有下文的。在这里也能记兑现了没。") }
-                        items(m.commitments, key = { "c" + it.id }) { c ->
-                            MeetingCommitmentCard(c, resetKey) { action ->
-                                scope.launch {
-                                    val r = withContext(Dispatchers.IO) { client.settleCommitment(c.id, action) }
-                                    // 失败要说出来。乐观更新用起来顺手，但失败必须收回，否则账上没这一笔而用户以为记过了。
-                                    if (r !is ApiResult.Ok) {
-                                        resetKey++
-                                        notice(when (r) {
-                                            is ApiResult.Failed -> "没记上：${r.message}"
-                                            is ApiResult.Unauthorized -> "没记上：登录失效了"
-                                            else -> "没记上，请再点一次"
-                                        })
-                                        reload()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // ── 原话 tab ──
-                if (tab == MeetingTab.QUOTES) {
-                    // 还有「说话人N」这种没认的标签就给认人入口。判据只看标签形状，不另发请求。
-                    val unnamed = m.speakers.count { it.matches(Regex("""说话人\s*\d+""")) }
-                    if (unnamed > 0 && onClaimSpeakers != null) item {
-                        DsCard(Modifier.fillMaxWidth(), tone = CardTone.ACCENT) {
-                            DsRow("有 $unnamed 个说话人还不知道是谁", "认了之后，关于他的判断和承诺才能归到人头上",
-                                  onClick = onClaimSpeakers)
-                        }
-                    }
-                    if (m.speakers.isNotEmpty()) item {
-                        // 对得上档案的人名可点进人物页（012 P1-1）
-                        androidx.compose.foundation.layout.FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.element),
-                            verticalArrangement = Arrangement.spacedBy(DS.Rhythm.tight),
-                        ) {
-                            Text("在场", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            m.speakers.forEach { name ->
-                                val pid = m.people[name]
-                                val linked = pid != null && onOpenPerson != null
-                                Text(name, style = MaterialTheme.typography.bodyMedium,
-                                     fontWeight = FontWeight.Medium,
-                                     color = if (linked) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface,
-                                     modifier = if (linked) Modifier.clickable { onOpenPerson!!(pid!!) } else Modifier)
-                            }
-                        }
-                    }
-                    val quotes = MeetingTabs.quotesOf(m)
-                    if (m.segments.isNotEmpty()) {
-                        item { SectionHead("逐句 · ${m.segments.size} 句", "从判断的「依据」跳过来的那句会亮着。逐句校对在网页版。") }
-                        itemsIndexed(m.segments, key = { i, _ -> "l$i" }) { i, l ->
-                            val hot = highlight == i
-                            Column(
-                                Modifier.fillMaxWidth()
-                                    .background(if (hot) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent, DS.Radius.control)
-                                    .padding(horizontal = if (hot) DS.Rhythm.element else 0.dp, vertical = DS.Rhythm.tight),
-                            ) {
-                                Text(listOfNotNull(l.startMs?.let { fmtClock(it) }, l.speaker).joinToString(" · "),
-                                     style = MaterialTheme.typography.labelMedium,
-                                     color = if (hot) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.height(2.dp))
-                                Text(l.text, style = MaterialTheme.typography.bodyLarge,
-                                     color = if (hot) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
-                            }
-                        }
-                    } else if (quotes.isEmpty()) item {
-                        Empty("这场会还没有被引用的原话", "分析跑完之后，每条判断和承诺依据的那句话会列在这里。")
-                    } else {
-                        item { SectionHead("被引用的原话 · ${quotes.size} 处", "每条判断和承诺凭的就是这些。逐句转写在网页版。") }
-                        items(quotes, key = { "q" + it.key }) { q ->
-                            DsCard(Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(DS.Pad.tight)) {
-                                    Text(q.who, style = MaterialTheme.typography.labelMedium,
-                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Spacer(Modifier.height(DS.Rhythm.tight))
-                                    Text("「${q.text}」", style = MaterialTheme.typography.bodyLarge)
-                                    Spacer(Modifier.height(DS.Rhythm.tight))
-                                    Text(q.supports, style = MaterialTheme.typography.bodySmall,
-                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                item {
-                    Spacer(Modifier.height(DS.Rhythm.inner))
-                    TonalButton(
-                        "在网页版看逐句转写 ↗",
-                        modifier = Modifier.fillMaxWidth(),
+        // **没有分析时也要说话。**
+        // 分析为 null 时屏幕上一个字都没有——一条 60 秒的录音传上来、转写好了、
+        // 详情页却什么都不显示，用户唯一能得出的结论是「这东西坏了」。
+        // 实际上是按「不到 5 分钟不自动分析」跳过的。
+        if (tab == MeetingTab.JUDGMENTS && m.analysis == null) item {
+            SectionHead("分析", "这条为什么没有")
+            DsCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(DS.Pad.tight)) {
+                    Text(m.analysisAbsentReason ?: "这条还没有分析。",
+                         style = MaterialTheme.typography.bodyLarge,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(DS.Rhythm.element))
+                    // 门槛的意思是「默认不花这个钱」，不是「不许分析」。
+                    // 所以出口必须在这里——用户正是在这一刻想要它。
+                    // 按钮上写明要花积分：花钱的动作不该让人点完才知道。
+                    PrimaryButton(
+                        if (analyzing) "排队中…" else "还是分析这条（消耗积分）",
+                        busy = analyzing,
                         onClick = {
-                            val path = "/zh/transcript/${m.transcriptId}"
-                            // 在 App 里开（带登录态）。原来是甩给系统浏览器一个裸链接，
-                            // 用户在 Chrome 里多半没登录，看到的是登录页。
-                            if (onOpenWeb != null) onOpenWeb(path, m.title)
-                            else ctx.startActivity(android.content.Intent(
-                                android.content.Intent.ACTION_VIEW,
-                                android.net.Uri.parse("${BuildConfig.API_BASE}$path")))
+                            analyzing = true
+                            scope.launch {
+                                val r = withContext(Dispatchers.IO) { client.analyze(m.transcriptId) }
+                                analyzing = false
+                                when (r) {
+                                    is ApiResult.Ok -> { notice("排上了，分析在跑"); reload() }
+                                    is ApiResult.Failed -> notice(r.message)
+                                    else -> notice("登录失效了")
+                                }
+                            }
                         },
                     )
                 }
             }
+        }
+
+        // ── 判断 tab ──
+        if (tab == MeetingTab.JUDGMENTS) {
+            if (m.atoms.isNotEmpty()) {
+                item { SectionHead("读出来的判断", "决定、信号、矛盾") }
+                items(m.atoms, key = { "a" + it.id }) { a -> AtomCard(a, onJump = { jumpToQuote(a.quote) }, onFeedback = { v -> onFeedback(a.id, v) }) }
+            } else if (m.analysis != null) item {
+                Empty("这场没读出判断", "有时候一场会就是没有决定、没有分歧。那也是一个结论。")
+            }
+        }
+
+        // ── 承诺 tab ──
+        if (tab == MeetingTab.COMMITMENTS) {
+            if (m.commitments.isEmpty()) item {
+                Empty("这场会里没人答应什么", "有人说出口「下周给你」这类话时，会出现在这里。")
+            } else {
+                item { SectionHead("这场会里的承诺", "别人说出口、还没有下文的。在这里也能记兑现了没。") }
+                items(m.commitments, key = { "c" + it.id }) { c ->
+                    MeetingCommitmentCard(c, resetKey) { action ->
+                        scope.launch {
+                            val r = withContext(Dispatchers.IO) { client.settleCommitment(c.id, action) }
+                            // 失败要说出来。乐观更新用起来顺手，但失败必须收回，否则账上没这一笔而用户以为记过了。
+                            if (r !is ApiResult.Ok) {
+                                resetKey++
+                                notice(when (r) {
+                                    is ApiResult.Failed -> "没记上：${r.message}"
+                                    is ApiResult.Unauthorized -> "没记上：登录失效了"
+                                    else -> "没记上，请再点一次"
+                                })
+                                reload()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── 原话 tab ──
+        if (tab == MeetingTab.QUOTES) {
+            // 还有「说话人N」这种没认的标签就给认人入口。判据只看标签形状，不另发请求。
+            val unnamed = m.speakers.count { it.matches(Regex("""说话人\s*\d+""")) }
+            if (unnamed > 0 && onClaimSpeakers != null) item {
+                DsCard(Modifier.fillMaxWidth(), tone = CardTone.ACCENT) {
+                    DsRow("有 $unnamed 个说话人还不知道是谁", "认了之后，关于他的判断和承诺才能归到人头上",
+                          onClick = onClaimSpeakers)
+                }
+            }
+            if (m.speakers.isNotEmpty()) item {
+                // 对得上档案的人名可点进人物页（012 P1-1）
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.element),
+                    verticalArrangement = Arrangement.spacedBy(DS.Rhythm.tight),
+                ) {
+                    Text("在场", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    m.speakers.forEach { name ->
+                        val pid = m.people[name]
+                        val linked = pid != null && onOpenPerson != null
+                        Text(name, style = MaterialTheme.typography.bodyMedium,
+                             fontWeight = FontWeight.Medium,
+                             color = if (linked) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface,
+                             modifier = if (linked) Modifier.clickable { onOpenPerson!!(pid!!) } else Modifier)
+                    }
+                }
+            }
+            val quotes = MeetingTabs.quotesOf(m)
+            if (m.segments.isNotEmpty()) {
+                item { SectionHead("逐句 · ${m.segments.size} 句", "从判断的「依据」跳过来的那句会亮着。逐句校对在网页版。") }
+                itemsIndexed(m.segments, key = { i, _ -> "l$i" }) { i, l ->
+                    val hot = highlight == i
+                    Column(
+                        Modifier.fillMaxWidth()
+                            .background(if (hot) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent, DS.Radius.control)
+                            .padding(horizontal = if (hot) DS.Rhythm.element else 0.dp, vertical = DS.Rhythm.tight),
+                    ) {
+                        Text(listOfNotNull(l.startMs?.let { fmtClock(it) }, l.speaker).joinToString(" · "),
+                             style = MaterialTheme.typography.labelMedium,
+                             color = if (hot) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(2.dp))
+                        Text(l.text, style = MaterialTheme.typography.bodyLarge,
+                             color = if (hot) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+            } else if (quotes.isEmpty()) item {
+                Empty("这场会还没有被引用的原话", "分析跑完之后，每条判断和承诺依据的那句话会列在这里。")
+            } else {
+                item { SectionHead("被引用的原话 · ${quotes.size} 处", "每条判断和承诺凭的就是这些。逐句转写在网页版。") }
+                items(quotes, key = { "q" + it.key }) { q ->
+                    DsCard(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(DS.Pad.tight)) {
+                            Text(q.who, style = MaterialTheme.typography.labelMedium,
+                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(DS.Rhythm.tight))
+                            Text("「${q.text}」", style = MaterialTheme.typography.bodyLarge)
+                            Spacer(Modifier.height(DS.Rhythm.tight))
+                            Text(q.supports, style = MaterialTheme.typography.bodySmall,
+                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Spacer(Modifier.height(DS.Rhythm.inner))
+            TonalButton(
+                "在网页版看逐句转写 ↗",
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    val path = "/zh/transcript/${m.transcriptId}"
+                    // 在 App 里开（带登录态）。原来是甩给系统浏览器一个裸链接，
+                    // 用户在 Chrome 里多半没登录，看到的是登录页。
+                    if (onOpenWeb != null) onOpenWeb(path, m.title)
+                    else ctx.startActivity(android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("${BuildConfig.API_BASE}$path")))
+                },
+            )
         }
     }
 }

@@ -40,10 +40,26 @@ fun PersonScreen(
         }
     }
 
-    val p = person
+    PersonPage(person, error, onBack = onBack, onRetry = { error = null; attempt++ }, onOpen = onOpen, onRecord = onRecord)
+}
+
+/**
+ * 人物页的画面：取数在 [PersonScreen]，这里只认三种输入——
+ * [error] 有值是「没取到」，[p] 还是 null 是骨架，有 [p] 就画账本。
+ * 截图测试直接传这三种，不跑取数的协程。
+ */
+@Composable
+fun PersonPage(
+    p: Person?,
+    error: String?,
+    onBack: () -> Unit,
+    onRetry: () -> Unit,
+    onOpen: (String) -> Unit,
+    onRecord: () -> Unit,
+) {
     DetailPage(onBack = onBack, title = p?.name) {
         when {
-            error != null -> item { Broken(error!!) { error = null; attempt++ } }
+            error != null -> item { Broken(error) { onRetry() } }
             p == null -> item { SkeletonList(2) }
             else -> {
                 p.role?.let { r -> item {

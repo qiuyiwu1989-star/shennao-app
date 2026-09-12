@@ -85,7 +85,13 @@ class EdgeShotTest {
         return DeepBrainClient(NoNet, store, "https://api.test", "https://sb.test", "k")
     }
 
-    @Test fun `记录 空`() = shoot("records-empty") { HistoryScreen(offlineClient(), {}, {}) }
+    // 记录页 / 我的 / 会议 / 人物：不组合会自己取数的屏，直接喂「已加载态」（为什么见 ScreenshotTest）
+    private val fixedNow = 1757073600000L   // 2026-09-05T12:00:00Z，周带钉在这一周
+    @Composable private fun records(client: DeepBrainClient, rows: List<LocalSession>) = HistoryLoaded(
+        client, rows = rows, served = emptyList(), loaded = true, stale = null,
+        card = CardStatus.read(), onRecord = {}, onOpen = {}, nowMs = { fixedNow },
+    )
+    @Test fun `记录 空`() = shoot("records-empty") { records(offlineClient(), emptyList()) }
     @Test fun `记录 卡住一条`() {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         val vault = com.qiuyiwu.shennao.record.FileVault(File(ctx.filesDir, "recordings"))
@@ -93,17 +99,29 @@ class EdgeShotTest {
             lastError = "第 0 段传不上去（分片大小超出范围）"))
         vault.writeMeta(s, vault.readMeta(s)!!)
         File(vault.segmentFile(s, com.qiuyiwu.shennao.record.Segment(0, 0, 796560, com.qiuyiwu.shennao.record.Segment.State.SEALED, ext = "opus")).path).writeBytes(ByteArray(10))
-        shoot("records-stuck") { HistoryScreen(offlineClient(), {}, {}) }
+        val rows = scanLocal(File(ctx.filesDir, "recordings"))
+        shoot("records-stuck") { records(offlineClient(), rows) }
         vault.deleteSession(s)
     }
-    @Test fun `我的 没网 长邮箱 大字号`() = shoot("me-offline-bigfont", fontScale = 1.3f) { MeScreen(offlineClient(), { _, _ -> }, {}, http = NoNet, versionName = "x.y.z") }
+    @Test fun `我的 没网 长邮箱 大字号`() {
+        val update = Update.check(NoNet, BuildConfig.VERSION_CODE)
+        shoot("me-offline-bigfont", fontScale = 1.3f) {
+            MeContent(offlineClient(), state = update, checking = false, onCheckUpdate = {}, credits = null, orgs = emptyList(),
+                      onOpenWeb = { _, _ -> }, onSignOut = {}, versionName = "x.y.z")
+        }
+    }
     @Test fun `问 大字号 暗色`() = shoot("ask-bigfont-dark", dark = true, fontScale = 1.3f) { AskScreen(demoClient()) {} }
     @Test fun `搜索 空`() = shoot("search-empty") { SearchScreen(offlineClient()) {} }
     @Test fun `坏了和空`() = shoot("broken-empty") {
         Column { Broken("网络不通") {}; Empty("还没有录过", "录一场会，它会自己走完转写和分析。", "录一场") {} ; SkeletonList(2) }
     }
-    @Test fun `会议 大字号`() = shoot("meeting-bigfont", fontScale = 1.3f) { MeetingScreen(demoClient(), "t1", {}) }
+    @Test fun `会议 大字号`() {
+        val client = demoClient()
+        val m = (client.meeting("t1") as ApiResult.Ok).value
+        shoot("meeting-bigfont", fontScale = 1.3f) { MeetingLoaded(client, m, onBack = {}) }
+    }
     @Test fun `录音台 大字号 暗色`() = shoot("record-bigfont-dark", dark = true, fontScale = 1.3f) { RecordScreen(onBack = {}) }
     @Test fun `灵魂卡页`() = shoot("ble") { BleScreen(onDone = {}) }
-    @Test fun `人物页 骨架`() = shoot("person-skeleton") { PersonScreen(offlineClient(), "p1", {}, {}, {}) }
+    // 以前组合 PersonScreen 配没网的客户端，拍到的其实是「没取到」而不是骨架——取数立刻失败，画面看运气
+    @Test fun `人物页 骨架`() = shoot("person-skeleton") { PersonPage(null, null, {}, {}, {}, {}) }
 }

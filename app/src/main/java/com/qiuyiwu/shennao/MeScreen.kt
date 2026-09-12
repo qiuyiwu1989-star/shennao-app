@@ -42,8 +42,6 @@ fun MeScreen(
     // 可注入，默认才是真的联网。不然这一屏没法在测试里脱网跑。
     http: Http = UrlHttp(),
 ) {
-    val ctx = LocalContext.current
-    val notice = LocalNotice.current
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<UpdateState?>(null) }
     var checking by remember { mutableStateOf(false) }
@@ -69,6 +67,39 @@ fun MeScreen(
     LaunchedEffect(Unit) {
         orgs = (withContext(Dispatchers.IO) { runCatching { client.orgs() }.getOrNull() } as? ApiResult.Ok)?.value ?: emptyList()
     }
+
+    // 三样要联网的（更新、积分、组织）在上面取，画面在 MeContent。截图测试直接把解析好的三样
+    // 喂给 MeContent，不跑这里的协程——Robolectric 下 IO 回主线程的时机不定，拍出来的是半截页。
+    MeContent(
+        client, state, checking, onCheckUpdate = { check() }, credits = credits, orgs = orgs,
+        onOpenWeb = onOpenWeb, onSignOut = onSignOut, onOpenCard = onOpenCard, onOrgSwitched = onOrgSwitched,
+        onOpenSchedule = onOpenSchedule, onOpenAgents = onOpenAgents, versionName = versionName,
+    )
+}
+
+/**
+ * 「我的」的画面。要联网才知道的三样——有没有新版 [state]、积分 [credits]、组织 [orgs]——都由外面给；
+ * 这里只读本机的事实（豁免、灵魂卡、聆听相位）和画。
+ */
+@Composable
+fun MeContent(
+    client: DeepBrainClient,
+    state: UpdateState?,
+    checking: Boolean,
+    onCheckUpdate: () -> Unit,
+    credits: Credits?,
+    orgs: List<Org>,
+    onOpenWeb: (path: String, title: String) -> Unit,
+    onSignOut: () -> Unit,
+    onOpenCard: () -> Unit = {},
+    onOrgSwitched: () -> Unit = {},
+    onOpenSchedule: () -> Unit = {},
+    onOpenAgents: () -> Unit = {},
+    versionName: String = BuildConfig.VERSION_NAME,
+) {
+    val ctx = LocalContext.current
+    val notice = LocalNotice.current
+    val scope = rememberCoroutineScope()
     var picking by remember { mutableStateOf(false) }
     val currentOrg = client.orgId()
     val currentName = orgs.firstOrNull { it.id == currentOrg }?.name
@@ -222,7 +253,7 @@ fun MeScreen(
                 },
                 trailingContent = {
                     if (checking) CircularProgressIndicator(Modifier.size(DS.Size.icon), strokeWidth = DS.Size.rule)
-                    else LinkButton(onClick = { check() }) { Text("检查更新") }
+                    else LinkButton(onClick = onCheckUpdate) { Text("检查更新") }
                 },
             )
             (state as? UpdateState.Available)?.let { s -> UpdateBlock(s.release) }

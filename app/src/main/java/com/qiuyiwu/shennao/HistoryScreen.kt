@@ -55,22 +55,12 @@ fun HistoryScreen(
     var stale by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     var rows by remember { mutableStateOf<List<LocalSession>>(emptyList()) }
-    val me = remember { client.signedInEmail() }
     var served by remember { mutableStateOf<List<SessionCard>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
     // 灵魂卡那一头的状态。它是 Service 上的 @Volatile 字段，和本地/服务端两份一起轮询：
     // 三份合起来才是完整的一条链——卡里还没导出来的、手机上还没传出去的、服务端后几站。
     var card by remember { mutableStateOf(CardStatus.read()) }
-    /** 来源分段。null = 全部。服务端没给 source 时分段行不显示，列表照常。 */
-    var sourceFilter by remember { mutableStateOf<String?>(null) }
-    /** 时间线 / 内容卡。记在本机（V5 3.2）。 */
-    var view by remember { mutableStateOf(RecordsViewPref.load(ctx)) }
-    /** 周带选中的那一天（yyyy-MM-dd）。null = 不按天筛（V5 3.3）。 */
-    var day by remember { mutableStateOf<String?>(null) }
-    var showFailed by remember { mutableStateOf(false) }
-    val zone = remember { java.util.TimeZone.getDefault() }
     val notice = LocalNotice.current
-    var orphan by remember { mutableStateOf(com.qiuyiwu.shennao.record.OrphanNotice.peek(ctx)) }
 
     val onDelete: (String) -> Unit = { id ->
         scope.launch {
@@ -121,13 +111,59 @@ fun HistoryScreen(
         }
     }
 
+    // 取数在上面，画在 HistoryLoaded。截图测试直接把扫好的本地条目和解析好的服务端列表
+    // 喂给 HistoryLoaded，不跑这个轮询——Robolectric 下 IO 回主线程的时机不定，拍出来的是半截页。
+    HistoryLoaded(
+        client, rows, served, loaded, stale, card,
+        onRecord = onRecord, onOpen = onOpen, onOpenBle = onOpenBle,
+        onRows = { rows = it }, onServed = { served = it }, onDeleteServed = onDelete,
+        onRefresh = {
+            rows = withContext(Dispatchers.IO) { scanLocal(File(ctx.filesDir, "recordings")) }
+            val r = withContext(Dispatchers.IO) { client.sessions() }
+            if (r is ApiResult.Ok) { served = r.value; stale = null }
+        },
+    )
+}
+
+/**
+ * 记录页的画面。三份账（[rows] 手机上的、[served] 服务端的、[card] 灵魂卡的）都由外面给，
+ * 这里不轮询、不取数；点了「再试」「删掉」这类要改账的动作，改完通过 [onRows] / [onServed] 交回去。
+ * [nowMs] 决定周带画哪一周——截图测试要传一个固定的时刻，不然基准图每周都变。
+ */
+@Composable
+fun HistoryLoaded(
+    client: DeepBrainClient,
+    rows: List<LocalSession>,
+    served: List<SessionCard>,
+    loaded: Boolean,
+    stale: String?,
+    card: CardStatus,
+    onRecord: () -> Unit,
+    onOpen: (String) -> Unit,
+    onOpenBle: () -> Unit = {},
+    onRows: (List<LocalSession>) -> Unit = {},
+    onServed: (List<SessionCard>) -> Unit = {},
+    onDeleteServed: ((String) -> Unit)? = null,
+    onRefresh: suspend () -> Unit = {},
+    nowMs: () -> Long = { System.currentTimeMillis() },
+) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val me = remember { client.signedInEmail() }
+    /** 来源分段。null = 全部。服务端没给 source 时分段行不显示，列表照常。 */
+    var sourceFilter by remember { mutableStateOf<String?>(null) }
+    /** 时间线 / 内容卡。记在本机（V5 3.2）。 */
+    var view by remember { mutableStateOf(RecordsViewPref.load(ctx)) }
+    /** 周带选中的那一天（yyyy-MM-dd）。null = 不按天筛（V5 3.3）。 */
+    var day by remember { mutableStateOf<String?>(null) }
+    var showFailed by remember { mutableStateOf(false) }
+    val zone = remember { java.util.TimeZone.getDefault() }
+    val notice = LocalNotice.current
+    var orphan by remember { mutableStateOf(com.qiuyiwu.shennao.record.OrphanNotice.peek(ctx)) }
+
     Column(Modifier.fillMaxSize()) {
     stale?.let { StaleBanner(it) }
-    Refreshable(onRefresh = {
-        rows = withContext(Dispatchers.IO) { scanLocal(File(ctx.filesDir, "recordings")) }
-        val r = withContext(Dispatchers.IO) { client.sessions() }
-        if (r is ApiResult.Ok) { served = r.value; stale = null }
-    }) {
+    Refreshable(onRefresh = onRefresh) {
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = DS.Pad.list(top = DS.Rhythm.inner),
@@ -151,7 +187,7 @@ fun HistoryScreen(
         }
         // 周带：本周哪天录过，点一天只看那天。有内容才画（V5 3.3）
         if (loaded && (rows.isNotEmpty() || served.isNotEmpty())) item {
-            val now = System.currentTimeMillis()
+            val now = nowMs()
             val marked = (rows.map { Week.key(it.meta.startedAtEpochMs, zone) } +
                           served.mapNotNull { Week.keyOfIso(it.startedAt, zone) }).toSet()
             WeekStrip(Week.dayStarts(now, zone), marked, day, zone, Week.key(now, zone)) { day = it }
@@ -181,7 +217,7 @@ fun HistoryScreen(
                         // 立刻推一轮，不等 15 秒轮询。推完重扫，让「卡住了」变回「上传中」或消失。
                         scope.launch {
                             withContext(Dispatchers.IO) { runCatching { Resume.kick(ctx) } }
-                            rows = withContext(Dispatchers.IO) { scanLocal(File(ctx.filesDir, "recordings")) }
+                            onRows(withContext(Dispatchers.IO) { scanLocal(File(ctx.filesDir, "recordings")) })
                         }
                     },
                 ) {
@@ -189,7 +225,7 @@ fun HistoryScreen(
                         withContext(Dispatchers.IO) {
                             FileVault(File(ctx.filesDir, "recordings")).deleteSession(s.dir)
                         }
-                        rows = withContext(Dispatchers.IO) { scanLocal(File(ctx.filesDir, "recordings")) }
+                        onRows(withContext(Dispatchers.IO) { scanLocal(File(ctx.filesDir, "recordings")) })
                     }
                 }
             }
@@ -234,7 +270,7 @@ fun HistoryScreen(
                     QuietButton(if (showFailed) "收起" else "看看", onClick = { showFailed = !showFailed })
                 }
             }
-            if (showFailed) items(bad, key = { "s" + it.sessionId }) { s -> ServedRow(s, onOpen, onDelete) }
+            if (showFailed) items(bad, key = { "s" + it.sessionId }) { s -> ServedRow(s, onOpen, onDeleteServed) }
             if (fine.isNotEmpty()) item(key = "view-toggle") {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                     DsChip(selected = view == RecordsView.TIMELINE, label = "时间线",
@@ -261,7 +297,7 @@ fun HistoryScreen(
                             notice(if (r is ApiResult.Ok) "已经重新排上队了" else "没排上：" +
                                 ((r as? ApiResult.Failed)?.message ?: "登录失效了"))
                             val s2 = withContext(Dispatchers.IO) { client.sessions() }
-                            if (s2 is ApiResult.Ok) served = s2.value
+                            if (s2 is ApiResult.Ok) onServed(s2.value)
                         }
                     },
                 )

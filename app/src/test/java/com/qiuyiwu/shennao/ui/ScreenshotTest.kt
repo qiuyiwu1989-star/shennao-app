@@ -66,16 +66,20 @@ class ScreenshotTest {
     @Test fun `素材卡片 暗色`() = shoot("cards", dark = true) { SampleCards() }
 
     // ---- 真实的屏，用夹具数据（Demo.kt 那套，和 adb --ez demo true 看到的一样）----
+    //
+    // 取数一律在测试线程里同步做完（DemoHttp 是同步的），再把解析好的数据喂给各屏的「已加载态」
+    // composable（MeetingLoaded / HistoryLoaded / MeContent…）。以前直接组合 MeetingScreen 这类会自己
+    // 取数的屏，取数走 LaunchedEffect + Dispatchers.IO，Robolectric 下回主线程的时机不定，
+    // 同一份代码偶发拍到半截页——门禁红得毫无信息量。
 
     private fun demoClient(): com.qiuyiwu.shennao.DeepBrainClient {
         com.qiuyiwu.shennao.Demo.install()
         return com.qiuyiwu.shennao.Session.client(androidx.test.core.app.ApplicationProvider.getApplicationContext())
     }
-    private fun demoToday(): com.qiuyiwu.shennao.Today =
-        (demoClient().today() as com.qiuyiwu.shennao.ApiResult.Ok).value
+    private fun <T> ok(r: com.qiuyiwu.shennao.ApiResult<T>): T = (r as com.qiuyiwu.shennao.ApiResult.Ok).value
+    private fun demoToday(): com.qiuyiwu.shennao.Today = ok(demoClient().today())
 
     private fun screens(dark: Boolean) {
-        val client = demoClient()
         val today = demoToday()
         shoot("today", dark) {
             androidx.compose.foundation.layout.Column {
@@ -87,16 +91,50 @@ class ScreenshotTest {
     @Test fun `今天 亮色`() = screens(false)
     @Test fun `今天 暗色`() = screens(true)
 
-    @Test fun `记录 亮色`() = shoot("records", false) { com.qiuyiwu.shennao.HistoryScreen(demoClient(), {}, {}) }
-    @Test fun `记录 暗色`() = shoot("records", true) { com.qiuyiwu.shennao.HistoryScreen(demoClient(), {}, {}) }
-    @Test fun `我的 亮色`() = shoot("me", false) { com.qiuyiwu.shennao.MeScreen(demoClient(), { _, _ -> }, {}, http = com.qiuyiwu.shennao.Demo.http!!, versionName = "x.y.z") }
-    @Test fun `我的 暗色`() = shoot("me", true) { com.qiuyiwu.shennao.MeScreen(demoClient(), { _, _ -> }, {}, http = com.qiuyiwu.shennao.Demo.http!!, versionName = "x.y.z") }
+    /** 周带画的是「现在」所在的那一周；钉死在夹具数据的那一周，不然基准图每周都变 */
+    private val fixedNow = 1757073600000L   // 2026-09-05T12:00:00Z
+
+    private fun records(dark: Boolean) {
+        val client = demoClient()
+        val served = ok(client.sessions())
+        shoot("records", dark) {
+            com.qiuyiwu.shennao.HistoryLoaded(
+                client, rows = emptyList(), served = served, loaded = true, stale = null,
+                card = com.qiuyiwu.shennao.CardStatus.read(), onRecord = {}, onOpen = {}, nowMs = { fixedNow },
+            )
+        }
+    }
+    @Test fun `记录 亮色`() = records(false)
+    @Test fun `记录 暗色`() = records(true)
+
+    private fun me(dark: Boolean) {
+        val client = demoClient()
+        val update = com.qiuyiwu.shennao.Update.check(com.qiuyiwu.shennao.Demo.http!!, com.qiuyiwu.shennao.BuildConfig.VERSION_CODE)
+        val credits = ok(client.credits())
+        val orgs = ok(client.orgs())
+        shoot("me", dark) {
+            com.qiuyiwu.shennao.MeContent(
+                client, state = update, checking = false, onCheckUpdate = {}, credits = credits, orgs = orgs,
+                onOpenWeb = { _, _ -> }, onSignOut = {}, versionName = "x.y.z",
+            )
+        }
+    }
+    @Test fun `我的 亮色`() = me(false)
+    @Test fun `我的 暗色`() = me(true)
+
+    private fun meeting(dark: Boolean) {
+        val client = demoClient()
+        val m = ok(client.meeting("t1"))
+        shoot("meeting", dark) { com.qiuyiwu.shennao.MeetingLoaded(client, m, onBack = {}) }
+    }
+    @Test fun `会议 亮色`() = meeting(false)
+    @Test fun `会议 暗色`() = meeting(true)
+
+    // 下面这些屏进来不取数（问答等你输入，录音台/定时/接入 AI 只读本机），直接组合就是确定的
     @Test fun `问 亮色`() = shoot("ask", false) { com.qiuyiwu.shennao.AskScreen(demoClient()) {} }
     @Test fun `问 暗色`() = shoot("ask", true) { com.qiuyiwu.shennao.AskScreen(demoClient()) {} }
     @Test fun `录音台 亮色`() = shoot("record", false) { com.qiuyiwu.shennao.RecordScreen(onBack = {}) }
     @Test fun `录音台 暗色`() = shoot("record", true) { com.qiuyiwu.shennao.RecordScreen(onBack = {}) }
-    @Test fun `会议 亮色`() = shoot("meeting", false) { com.qiuyiwu.shennao.MeetingScreen(demoClient(), "t1", {}) }
-    @Test fun `会议 暗色`() = shoot("meeting", true) { com.qiuyiwu.shennao.MeetingScreen(demoClient(), "t1", {}) }
     @Test fun `定时 亮色`() = shoot("schedule", false) { com.qiuyiwu.shennao.ScheduleScreen(onBack = {}) }
     @Test fun `接入AI 暗色`() = shoot("agents", true) { com.qiuyiwu.shennao.AgentsScreen(onBack = {}) { _, _ -> } }
 
