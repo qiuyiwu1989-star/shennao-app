@@ -65,14 +65,14 @@
 | 1.10 | 密度审计：「我的」7 块合成 4 卡 + 退出；其余屏本就在 5 内 | — | ✅ 09-05 |
 | 1.11 | 通知四类：录音中常驻 ✓ 已有、同步 → 完成转结果、到期提醒 ✓ 已有、**有新判断**（新建 15 分钟巡查 + 上传后 2 分钟补查，只推真有判断的，带最狠一条，点开直达那场会） | S24 | ✅ 09-05 |
 
-### Phase 2 · 服务端 6 个 mobile 端点 ——**需要你部署**
+### Phase 2 · 服务端 6 个 mobile 端点 ——✅ 2026-09-12 已部署（buildSha 4380b35c，分支 agent/phase2-on-prod）
 
 > ⚠️ **09-05 发现：主仓库的 `agent/ble-and-mac-client` 分支领先 main 562 个提交，且从未推到远端。**
 > 整套 `api/mobile/*` 只存在于这条本地分支——一块硬盘坏掉，安卓端的服务端就没了。
 > 这是必须你处理的事：把它推上去（`git push -u origin agent/ble-and-mac-client`）。
 > Phase 2 分支 `agent/mobile-bff-phase2` 从它开出，工作树 `/tmp/deepbrain-mobile-bff`。
 
-能力 web 侧都有，缺的是 Bearer 鉴权的 mobile 面。分支 `agent/mobile-bff-phase2`（已推远端），**未部署**：
+能力 web 侧都有，缺的是 Bearer 鉴权的 mobile 面。分支 `agent/mobile-bff-phase2`（已推远端）→ 2026-09-12 在生产提交 791d3235 上重新集成为 `agent/phase2-on-prod` 并部署，两份迁移已上（先备份 pre-phase2-20260912.dump）：
 
 | 项 | 状态 |
 | --- | --- |
@@ -141,6 +141,7 @@
 
 | 日期 | 事 |
 | --- | --- |
+| 09-12 | **服务端 Phase 2 上线**（邱明确放权后）。生产跑在另一会话本地分支 fix/login-redirect（791d3235，领先 phase2 分支 266 提交），phase2 直接发会被祖先护栏拦，所以从生产提交开 `agent/phase2-on-prod`，挑上 11 个手机端提交 + 3 个修补（绑卡撞 one_open_per_user 不 500；schema.ts 镜像 scene / insight_feedback；tokens.ts 加 night 两档给安卓暗色出处）。typecheck / vitest 4251 / build 全绿。先 pg_dump 全库备份（311 MB），再跑两份只加不改的迁移，再 deploy-122.sh 原子发布（current=4380b35c）。冒烟：/api/mobile/credits、card、speakers 从 404 变 401；健康页 buildSha 对。附带发现：recording-finalizer 有一场录音 stage_failed 23514 重试近 300 次（部署前就在），待查。分支已推远端。 |
 | 09-12 | **4.10.1 (68)**：开 R8（minify + shrinkResources），正式包 11 MB → 3.9 MB。先用 `installDebug -PsmokeMinify` 装混淆的调试包，夹具模式走了今天 / 记录 / 会议 / 问 / 我的 / 录音台，并真录了一段：封段、传（夹具 200）、收尾、清本地都正常，logcat 无崩溃。每版 mapping 存 dist/mapping-<版本>.txt（不进仓）。真机真实账号的回归（登录 / 蓝牙 / 网页版）仍由邱做，出问题先看 mapping 还原栈。 |
 | 09-12 | **4.10.0 (67)**：邱点头后的三件——① 拉丁字体与网页对齐：标题 Outfit、正文 Plus Jakarta Sans（OFL，可变字重单文件共 470 KB，app/FONTS.md）。中文回退的字重踩了坑：三档都钉 wght 轴 → 中文标题全变常规；都不钉 → Outfit 默认实例是 Thin，数字发虚；最后是声明 400/500 两档钉轴、粗体不声明留给合成，中英字重才都对（Theme.kt 注释）。② 装 platform 35，compileSdk/targetSdk 34 → 35（edge-to-edge 早已自己处理）；Robolectric 4.13 最高认 34，单测用 robolectric.properties 钉在 34。③ Compose BOM 2024.12.01 → 2025.06.01（Compose 1.8.3）。438 单测，verify 连跑 2 次绿，21 张基准图重录。 |
 | 09-12 | **4.9.0 (66)**：三个并行子任务合并。① 截图门禁做稳：会议 / 记录 / 我的 / 人物四屏拆成「取数」+「已加载态」composable，截图测试直接喂夹具数据不再跑取数协程，周带的「今天」提成参数；verify 连跑 3+5 次全绿，1.7 的债还清。② 无障碍：命中区补到 48dp（周带、人名、聊天人名）、可点节点加 role 与 contentDescription、Switch 改 DsSwitch 带标签、SectionLabel 标成标题、四处对比度不达标的色值改掉（浅色 outline、暗色分割线 / 次要文字、NEUTRAL 提示字）；新增 AccessibilityTest 8 条、ContrastTest 6 条。③ 工具链：Gradle 8.10.2、AGP 8.7.3、Kotlin 2.0.21 + compose 插件、Compose BOM 2024.12.01，零产品代码改动；再往上要 compileSdk 35。438 单测，lint 只剩依赖版本提示。 |
