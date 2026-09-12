@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
  * 所以 `empty` 是必填参数，不是可选的。
  */
 @Composable
+@android.annotation.SuppressLint("ModifierParameter")
 fun ListPage(
     title: String,
     subtitle: String? = null,
@@ -66,6 +67,7 @@ fun ListPage(
  * 那正是网页 §4.8 刚治过的病（返回件散落在各页正文顶部，位置每页不同）。
  */
 @Composable
+@android.annotation.SuppressLint("ModifierParameter")
 fun DetailPage(
     onBack: () -> Unit,
     title: String? = null,

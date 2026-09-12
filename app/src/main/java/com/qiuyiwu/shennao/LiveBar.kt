@@ -21,7 +21,7 @@ import kotlinx.coroutines.delay
 fun LiveBar(onClick: () -> Unit) {
     var recording by remember { mutableStateOf(RecordingService.recording) }
     var phase by remember { mutableStateOf(RecordingService.listenPhase) }
-    var elapsed by remember { mutableStateOf(RecordingService.elapsedMs) }
+    var elapsed by remember { mutableLongStateOf(RecordingService.elapsedMs) }
     LaunchedEffect(Unit) {
         while (true) {
             recording = RecordingService.recording

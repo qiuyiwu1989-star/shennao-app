@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 安卓 12 起的备份规则：什么都不备份。凭证在 keystore 里备份了也解不开，录音目录备份出去是泄露。 -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" /><exclude domain="file" /><exclude domain="database" />
+        <exclude domain="sharedpref" /><exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" /><exclude domain="file" /><exclude domain="database" />
+        <exclude domain="sharedpref" /><exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

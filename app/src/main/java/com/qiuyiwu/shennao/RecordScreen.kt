@@ -45,13 +45,13 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
     var recording by remember { mutableStateOf(RecordingService.recording) }
     var stopping by remember { mutableStateOf(false) }
     var state by remember { mutableStateOf(com.qiuyiwu.shennao.record.RecordState.IDLE) }
-    var elapsed by remember { mutableStateOf(0L) }
-    var pending by remember { mutableStateOf(0) }
+    var elapsed by remember { mutableLongStateOf(0L) }
+    var pending by remember { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
     var uploadProblem by remember { mutableStateOf<String?>(null) }
     var denied by remember { mutableStateOf(false) }
     var sessionId by remember { mutableStateOf<String?>(null) }
-    var level by remember { mutableStateOf(0f) }
+    var level by remember { mutableFloatStateOf(0f) }
     var captions by remember { mutableStateOf<List<String>>(emptyList()) }
     var captionState by remember { mutableStateOf<String?>(null) }
     // 声波保留最近这些格。数量按一屏能画下的柱子数定，多了会挤成一片灰。
@@ -78,7 +78,7 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
      * 只是不再默认给。想看的人点一下，那是他自己的决定。
      */
     var showCaptions by remember { mutableStateOf(false) }
-    var noticeIndex by remember { mutableStateOf(0) }
+    var noticeIndex by remember { mutableIntStateOf(0) }
     /** 录前选的场合。开录后不再显示、不再改——那是这一场的属性，不是开关。 */
     var scene by remember { mutableStateOf<String?>(null) }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
@@ -625,7 +625,7 @@ private fun renameJustFinished(ctx: android.content.Context, title: String) {
 private fun CaptureBoard(pending: Int, onOpenSchedule: (() -> Unit)?) {
     val ctx = LocalContext.current
     var phase by remember { mutableStateOf(RecordingService.listenPhase) }
-    var listened by remember { mutableStateOf(RecordingService.listenedSpeechMs) }
+    var listened by remember { mutableLongStateOf(RecordingService.listenedSpeechMs) }
     LaunchedEffect(Unit) {
         while (true) { phase = RecordingService.listenPhase; listened = RecordingService.listenedSpeechMs; delay(1_000) }
     }

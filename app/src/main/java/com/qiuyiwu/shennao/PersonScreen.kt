@@ -30,7 +30,7 @@ fun PersonScreen(
     var error by remember { mutableStateOf<String?>(null) }
     // 「再试一次」必须真的再取一次。之前只把 error 清空，LaunchedEffect 只认 personId，
     // 于是落进骨架屏永远转——一个点了没反应的重试比没有重试更糟。
-    var attempt by remember { mutableStateOf(0) }
+    var attempt by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(personId, attempt) {
         when (val r = withContext(Dispatchers.IO) { client.person(personId) }) {

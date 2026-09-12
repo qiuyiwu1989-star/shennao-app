@@ -31,7 +31,7 @@ fun SpeakerClaimScreen(
     val notice = LocalNotice.current
     var page by remember { mutableStateOf<SpeakersPage?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var attempt by remember { mutableStateOf(0) }
+    var attempt by remember { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf(false) }
     var custom by remember { mutableStateOf("") }
     /** 已处理的（认了或跳过），本地记，不等重取 */

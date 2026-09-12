@@ -484,7 +484,6 @@ class RecordingService : Service() {
     // ---- 通知 ----
 
     private fun createChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val ch = NotificationChannel(CHANNEL, "录音", NotificationManager.IMPORTANCE_LOW).apply {
             description = "录音进行中的常驻提示"
             setShowBadge(false)

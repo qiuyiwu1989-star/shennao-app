@@ -34,7 +34,7 @@ fun MeetingWebScreen(client: DeepBrainClient, path: String, title: String, onBac
     var url by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
-    var attempt by remember { mutableStateOf(0) }
+    var attempt by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(path, attempt) {
         when (val r = withContext(Dispatchers.IO) { client.webTicket() }) {

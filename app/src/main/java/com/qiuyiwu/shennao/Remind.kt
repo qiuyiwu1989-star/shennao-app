@@ -72,7 +72,6 @@ object Remind {
     }
 
     fun ensureChannel(ctx: Context) {
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) return
         val ch = NotificationChannel(CHANNEL, "到期提醒", NotificationManager.IMPORTANCE_DEFAULT).apply {
             description = "承诺到期、预测该给说法时提醒一次"
         }

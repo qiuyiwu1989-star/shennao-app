@@ -25,6 +25,7 @@ object KeepAlive {
     }.getOrDefault(false)
 
     /** 弹系统的「允许后台一直运行？」对话框。 */
+    @android.annotation.SuppressLint("BatteryLife")   // 不上 Play；录音是用户明确交代的长活（spec 011）
     fun requestIntent(ctx: Context): Intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
         .setData(Uri.parse("package:" + ctx.packageName))
 

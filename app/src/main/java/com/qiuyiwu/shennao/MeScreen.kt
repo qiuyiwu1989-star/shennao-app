@@ -88,7 +88,7 @@ fun MeScreen(
 
     // 全时聆听的相位照服务念，不自己维护。
     var listenPhase by remember { mutableStateOf(com.qiuyiwu.shennao.record.RecordingService.listenPhase) }
-    var listened by remember { mutableStateOf(com.qiuyiwu.shennao.record.RecordingService.listenedSpeechMs) }
+    var listened by remember { mutableLongStateOf(com.qiuyiwu.shennao.record.RecordingService.listenedSpeechMs) }
     LaunchedEffect(Unit) {
         while (true) {
             listenPhase = com.qiuyiwu.shennao.record.RecordingService.listenPhase
@@ -185,7 +185,7 @@ fun MeScreen(
                 },
             )
             RowDivider()
-            val sched = ListenScheduleState(ctx)
+            val sched = rememberListenSchedule(ctx)
             DsRow(
                 "定时聆听",
                 subtitle = if (sched.enabled) sched.summary else "设一次，到点提醒你开始和停止",
@@ -385,7 +385,7 @@ internal fun roleLabel(role: String): String? = when (role) {
 
 /** 定时聆听那一行要显示的。每次进「我的」读一次。 */
 @Composable
-private fun ListenScheduleState(ctx: android.content.Context): com.qiuyiwu.shennao.record.ListenSchedule.Config {
+private fun rememberListenSchedule(ctx: android.content.Context): com.qiuyiwu.shennao.record.ListenSchedule.Config {
     return remember { com.qiuyiwu.shennao.record.ListenSchedule.load(ctx) }
 }
 private val com.qiuyiwu.shennao.record.ListenSchedule.Config.summary: String

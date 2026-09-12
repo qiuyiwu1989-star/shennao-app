@@ -132,7 +132,7 @@ private fun App(client: DeepBrainClient) {
     var today by remember { mutableStateOf<Today?>(null) }
     var stale by remember { mutableStateOf<String?>(null) }
     /** 落账失败次数。传给今天页当键，卡片上的乐观「已记」失败时收回来（012 P0-12）。 */
-    var settleReset by remember { mutableStateOf(0) }
+    var settleReset by remember { mutableIntStateOf(0) }
 
     val scope = rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current

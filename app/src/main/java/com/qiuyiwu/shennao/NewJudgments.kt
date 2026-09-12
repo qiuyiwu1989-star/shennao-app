@@ -83,7 +83,7 @@ object NewJudgments {
     }
 
     fun post(ctx: Context, transcriptId: String, title: String, text: String) {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+        run {   // minSdk 29：通知渠道一定有
             ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(
                 NotificationChannel(CHANNEL, "有新判断", NotificationManager.IMPORTANCE_DEFAULT).apply {
                     description = "一场会分析完、读出判断时通知一次"

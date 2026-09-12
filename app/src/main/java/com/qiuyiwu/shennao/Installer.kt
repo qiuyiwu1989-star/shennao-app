@@ -109,11 +109,10 @@ object Installer {
 
     /** 系统允不允许这个 App 装包。Android 8 以前没有这道门。 */
     fun canInstall(ctx: Context): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ctx.packageManager.canRequestPackageInstalls()
+        ctx.packageManager.canRequestPackageInstalls()
 
     /** 把人送到「允许安装未知应用」那扇门前。 */
     fun askPermission(ctx: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         runCatching {
             ctx.startActivity(
                 Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}"))

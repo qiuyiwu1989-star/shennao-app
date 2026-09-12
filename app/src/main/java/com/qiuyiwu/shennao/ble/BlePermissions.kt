@@ -16,6 +16,7 @@ import android.os.Build
  * 抽成纯函数是为了能测——这段判断一旦写错，只有拿一台旧手机才能发现。
  */
 object BlePermissions {
+    @android.annotation.SuppressLint("InlinedApi")   // 常量是编译期字符串，且按 sdk 分支过了
     fun required(sdk: Int = Build.VERSION.SDK_INT): List<String> =
         if (sdk >= 31) listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
         else listOf(Manifest.permission.ACCESS_FINE_LOCATION)

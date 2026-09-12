@@ -28,8 +28,8 @@ android {
         minSdk = 29
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         targetSdk = 34
-        versionCode = 64
-        versionName = "4.8.0"
+        versionCode = 65
+        versionName = "4.8.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "API_BASE", "\"${cfg("deepbrain.apiBase")}\"")
@@ -104,7 +104,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     // refresh token 现在是明文躺在 SharedPreferences 里。它能换 access token，
     // 等于长期钥匙——落盘必须加密。
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.security:security-crypto:1.1.0")
     // 实时字幕要 WebSocket。安卓没有内置的 WS 客户端（java.net.http 不在 SDK 里），
     // 手写 RFC 6455 的握手与掩码帧不是不能做，但今天已经在协议细节上栽过两次，
     // 这里用成熟实现更划算。

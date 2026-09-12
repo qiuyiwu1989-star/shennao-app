@@ -120,7 +120,6 @@ object ListenSchedule {
     }
 
     fun ensureChannel(ctx: Context) {
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) return
         val ch = NotificationChannel(CHANNEL, "定时聆听", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "到了设定的时段提醒你开始、结束时提醒你停止"
         }

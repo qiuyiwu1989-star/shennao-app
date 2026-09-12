@@ -92,8 +92,8 @@ fun MeetingScreen(
         }
     }
 
-    var attempt by remember { mutableStateOf(0) }
-    var resetKey by remember { mutableStateOf(0) }
+    var attempt by remember { mutableIntStateOf(0) }
+    var resetKey by remember { mutableIntStateOf(0) }
     LaunchedEffect(transcriptId, attempt) {
         when (val r = withContext(Dispatchers.IO) { client.meeting(transcriptId) }) {
             is ApiResult.Ok -> meeting = r.value

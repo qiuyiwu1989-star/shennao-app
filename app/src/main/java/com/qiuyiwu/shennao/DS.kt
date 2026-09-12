@@ -247,6 +247,7 @@ fun CardFooter(content: @Composable RowScope.() -> Unit) {
  * 语义靠 [Tone]，但文字必须自己说清——阳光下和色觉障碍面前颜色都不可靠。
  */
 @Composable
+@android.annotation.SuppressLint("ModifierParameter")   // 调用处按「内容、语气」的顺序读，modifier 很少传
 fun Pill(text: String, tone: Tone = Tone.NEUTRAL, modifier: Modifier = Modifier) {
     val c = tone.colors()
     Text(
@@ -257,6 +258,7 @@ fun Pill(text: String, tone: Tone = Tone.NEUTRAL, modifier: Modifier = Modifier)
 
 /** 一条提示块：底色 + 一段话。「录音被系统停过」「这条为什么没有分析」。 */
 @Composable
+@android.annotation.SuppressLint("ModifierParameter")
 fun NoticeBox(text: String, tone: Tone = Tone.NEUTRAL, modifier: Modifier = Modifier,
               action: (@Composable () -> Unit)? = null) {
     val c = tone.colors()

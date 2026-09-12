@@ -84,8 +84,8 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
     var denied by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
     var ready by remember { mutableStateOf(Readiness.READY) }
-    var syncTotal by remember { mutableStateOf(0) }
-    var syncDone by remember { mutableStateOf(0) }
+    var syncTotal by remember { mutableIntStateOf(0) }
+    var syncDone by remember { mutableIntStateOf(0) }
     val names = remember { com.qiuyiwu.shennao.ble.CardNames(ctx) }
     var known by remember { mutableStateOf(names.known()) }
     var info by remember { mutableStateOf(BleImportService.info) }
