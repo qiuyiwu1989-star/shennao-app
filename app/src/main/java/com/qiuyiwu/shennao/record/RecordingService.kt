@@ -323,7 +323,7 @@ class RecordingService : Service() {
                 }
                 // 推送 15 秒一轮就够了（网络往返不必更勤），
                 // 但通知栏的计时要每秒走——它是用户判断「还在录吗」的唯一依据。
-                if (tick % 15 == 0L) drainOnce()
+                if (tick % 15 == 0L) drainAsync()   // 不在泵里同步跑：一段传几分钟，计时就停几分钟（V5 1.1）
                 tick++
                 delay(1_000)
             }
@@ -402,6 +402,13 @@ class RecordingService : Service() {
         realtime = null
         captions = emptyList()
         captionState = null
+    }
+
+    /** 有没有一轮正在跑。跑着就不再排：多排的那一轮只会在 Resume.lock 上排队占一条 IO 线程。 */
+    private val draining = java.util.concurrent.atomic.AtomicBoolean(false)
+    private fun drainAsync() {
+        if (!draining.compareAndSet(false, true)) return
+        scope.launch { try { drainOnce() } finally { draining.set(false) } }
     }
 
     private fun drainOnce() {

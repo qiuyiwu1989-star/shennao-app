@@ -56,8 +56,11 @@ class FileVault(private val root: File) : Vault {
     override fun readSegment(session: String, seg: Segment): ByteArray? =
         segmentFile(session, seg).takeIf { it.isFile }?.readBytes()
 
-    override fun rename(session: String, from: Segment, to: Segment): Boolean =
-        segmentFile(session, from).renameTo(segmentFile(session, to))
+    override fun rename(session: String, from: Segment, to: Segment): Boolean {
+        val ok = segmentFile(session, from).renameTo(segmentFile(session, to))
+        if (!ok) android.util.Log.w("shennao", "改名失败 $session ${from.fileName()} → ${to.fileName()}")
+        return ok
+    }
 
     override fun deleteSegment(session: String, seg: Segment): Boolean = segmentFile(session, seg).delete()
     override fun deleteSession(session: String) { dir(session).deleteRecursively() }

@@ -66,6 +66,7 @@ class MainActivity : ComponentActivity() {
         setContent { ShennaoTheme { App(client) } }
         receiveShare(intent)
         receiveOpen(intent)
+        Thread { runCatching { Installer.prune(applicationContext, BuildConfig.VERSION_NAME) } }.start()
     }
 
     /** 通知带来的「打开这场会」。singleTask 下 onNewIntent 也走这里。 */

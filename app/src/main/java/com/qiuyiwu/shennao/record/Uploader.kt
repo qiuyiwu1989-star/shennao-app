@@ -374,7 +374,9 @@ class Uploader(
             return StepResult.Err("第 ${seg.sequence} 段传完了但没确认上（${ok.status}）", ok.status >= 500)
         }
         // 确认之后才改名。反过来的话，一旦确认失败，这一片会被当成传好了而永远丢掉。
-        vault.rename(session, seg, seg.withState(Segment.State.UPLOADED))
+        // 改名失败（同目录内几乎不会，但会）要报出来：下一轮 ticket 会拿回 409 已验证再改一次（V5 1.4）
+        if (!vault.rename(session, seg, seg.withState(Segment.State.UPLOADED)))
+            return StepResult.Err("第 ${seg.sequence} 段送到了，但手机上改不了它的名字", true)
         return StepResult.Ok
     }
 

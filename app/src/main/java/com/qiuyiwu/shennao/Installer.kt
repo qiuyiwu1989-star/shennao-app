@@ -79,6 +79,34 @@ object Installer {
         }
     }
 
+    /**
+     * 清掉已经过时的包：版本不高于当前装着的这一版的都删（V5 1.5）。
+     * 比当前新的留着——那是下好了还没装的。开 App 时调一次。纯逻辑部分在 [staleVersions]。
+     */
+    fun prune(ctx: Context, currentVersionName: String) {
+        val dir = File(ctx.cacheDir, "apk").takeIf { it.isDirectory } ?: return
+        val names = dir.listFiles().orEmpty().map { it.name }
+        staleVersions(names, currentVersionName).forEach { File(dir, it).delete() }
+    }
+
+    /** 文件名 shennao-<版本>.apk 里版本不高于 current 的那些。认不出版本的也删。 */
+    fun staleVersions(fileNames: List<String>, currentVersionName: String): List<String> {
+        val cur = parseVersion(currentVersionName) ?: return emptyList()
+        return fileNames.filter { n ->
+            val v = Regex("""^shennao-(.+)\.apk$""").find(n)?.groupValues?.get(1)?.let(::parseVersion)
+            v == null || compareVersion(v, cur) <= 0
+        }
+    }
+    private fun parseVersion(s: String): List<Int>? =
+        s.split('.').map { it.toIntOrNull() ?: return null }.takeIf { it.isNotEmpty() }
+    private fun compareVersion(a: List<Int>, b: List<Int>): Int {
+        for (i in 0 until maxOf(a.size, b.size)) {
+            val d = (a.getOrNull(i) ?: 0) - (b.getOrNull(i) ?: 0)
+            if (d != 0) return d
+        }
+        return 0
+    }
+
     /** 系统允不允许这个 App 装包。Android 8 以前没有这道门。 */
     fun canInstall(ctx: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ctx.packageManager.canRequestPackageInstalls()

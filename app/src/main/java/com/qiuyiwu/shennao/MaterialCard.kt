@@ -143,7 +143,7 @@ private fun ProgressLine(p: Progress, onRetry: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val tone = when (p.stage) {
         "failed", "empty" -> cs.error
-        "done" -> cs.onSurfaceVariant
+        "done", "skipped" -> cs.onSurfaceVariant   // 没分析不是出错，不染红
         else -> cs.primary
     }
     Column(verticalArrangement = Arrangement.spacedBy(DS.Rhythm.hair)) {
@@ -162,7 +162,7 @@ private fun ProgressLine(p: Progress, onRetry: () -> Unit) {
         )
         // 重试是「再跑一次」，不是跳走，所以用安静按钮而不是链接蓝。
         if (p.retriable) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            QuietButton("重试", onClick = onRetry)
+            QuietButton(if (p.stage == "skipped") "还是分析这条" else "重试", onClick = onRetry)
         }
     }
 }

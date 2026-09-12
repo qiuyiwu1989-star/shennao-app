@@ -318,8 +318,20 @@ internal fun toCardItem(s: SessionCard): MaterialCardItem = MaterialCardItem(
     // 手机、灵魂卡、工牌录的都算「录音」；只有上传进来的算「导入」。
     fromRecording = s.source != "share",
     highlight = s.highlight,
-    progress = s.progress,
+    progress = s.progress ?: skippedShort(s),
 )
+
+/**
+ * 不到 5 分钟的录音深脑默认不分析（邱 2026-08-31 定）。服务端把它报成 transcribed、没有 problem，
+ * 老服务端也不带 progress——不补这一句，它会一直像「分析中」。
+ * 服务端带了 progress 就用服务端的（V5 1.6）。纯逻辑，JVM 可测。
+ */
+internal fun skippedShort(s: SessionCard): Progress? {
+    val d = s.durationMs ?: return null
+    if (s.stage != Stage.TRANSCRIBED || s.transcriptId == null || d <= 0 || d >= SHORT_MS) return null
+    return Progress(stage = "skipped", label = "不到 5 分钟，默认没分析。要的话点一下，会用积分。", ratio = null, retriable = true)
+}
+internal const val SHORT_MS = 5 * 60_000L
 
 /** 「0 分钟」是句假话：不到一分钟就说不到一分钟。纯逻辑，JVM 可测。 */
 internal fun minutesLabel(ms: Long): String = if (ms < 60_000) "不到 1 分钟" else "${ms / 60_000} 分钟"

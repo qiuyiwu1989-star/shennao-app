@@ -112,5 +112,13 @@ internal fun sameOrigin(target: String, base: String = BuildConfig.API_BASE): Bo
     val b = runCatching { java.net.URI(base) }.getOrNull() ?: return false
     val t = runCatching { java.net.URI(target) }.getOrNull() ?: return false
     // 前缀匹配会把 https://shennao.zaowuyun.com.evil.com 判成同源。
-    return t.scheme == b.scheme && t.host == b.host && t.port == b.port
+    return t.scheme == b.scheme && t.host == b.host && portOf(t) == portOf(b)
+}
+
+/** 没写端口按 scheme 的默认算：https://x 和 https://x:443 是同一个源（V5 1.3）。 */
+private fun portOf(u: java.net.URI): Int = when {
+    u.port != -1 -> u.port
+    u.scheme == "https" -> 443
+    u.scheme == "http" -> 80
+    else -> -1
 }

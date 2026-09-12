@@ -78,4 +78,27 @@ class DesignSystemTest {
         val blocks = Markdown.parse("方法 #008-mckinsey-strategy")
         assertTrue(blocks.single() is MdBlock.Paragraph)
     }
+
+    // ── 太短没分析（V5 1.6）──
+    private fun card(stage: Stage, ms: Long?, tid: String? = "t") =
+        SessionCard("s", "x", null, ms, stage, null, tid)
+
+    @Test fun `不到 5 分钟、转写完没分析——补一句说明并给「还是分析」`() {
+        val p = skippedShort(card(Stage.TRANSCRIBED, 45_000))!!
+        assertEquals("skipped", p.stage); assertTrue(p.retriable)
+    }
+    @Test fun `正好 5 分钟归「够长」——服务端会分析，别乱说`() {
+        assertNull(skippedShort(card(Stage.TRANSCRIBED, SHORT_MS)))
+    }
+    @Test fun `时长未知不当太短`() {
+        assertNull(skippedShort(card(Stage.TRANSCRIBED, null)))
+        assertNull(skippedShort(card(Stage.TRANSCRIBED, 0)))
+    }
+    @Test fun `没有 transcriptId 就没法分析——不给按钮`() {
+        assertNull(skippedShort(card(Stage.TRANSCRIBED, 45_000, tid = null)))
+    }
+    @Test fun `分析中、分析完的都不碰`() {
+        assertNull(skippedShort(card(Stage.ANALYZED, 45_000)))
+        assertNull(skippedShort(card(Stage.DELIVERED, 45_000)))
+    }
 }

@@ -23,4 +23,10 @@ class InstallerTest {
         assertEquals("下载中 50% · 5.0 MB", Installer.progressLine(5 * 1048576L, 10 * 1048576L))
         assertEquals("下载中 · 1.0 MB", Installer.progressLine(1048576L, 0))
     }
+
+    @Test fun `清旧包：不高于当前版本的删，更新的留，认不出的删`() {
+        val names = listOf("shennao-4.6.2.apk", "shennao-4.6.3.apk", "shennao-4.7.0.apk", "shennao-4.10.0.apk", "junk.apk")
+        val stale = Installer.staleVersions(names, "4.6.3")
+        assertEquals(listOf("shennao-4.6.2.apk", "shennao-4.6.3.apk", "junk.apk"), stale)
+    }
 }

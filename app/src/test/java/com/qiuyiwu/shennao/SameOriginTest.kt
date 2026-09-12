@@ -15,6 +15,12 @@ class SameOriginTest {
         assertTrue(sameOrigin("$base/api/mobile/web-open?t=x", base))
     }
 
+    @Test fun `没写端口和写了默认端口是同一个源`() {
+        assertTrue(sameOrigin("https://shennao.zaowuyun.com:443/zh/x", base))
+        assertTrue(sameOrigin("$base/zh/x", "https://shennao.zaowuyun.com:443"))
+        assertFalse(sameOrigin("https://shennao.zaowuyun.com:8443/zh/x", base))
+    }
+
     @Test fun `前缀匹配挡不住的那一类`() {
         // 转写里会有别人贴的链接。用 startsWith 判同源的话，
         // 这个域名会被判成自己家，然后带着 cookie 打开。

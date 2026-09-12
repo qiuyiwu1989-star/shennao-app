@@ -273,6 +273,23 @@ class UploaderTest {
         assertEquals(Segment.State.SEALED, v.segments("s").single().state)
     }
 
+    @Test fun `确认成功但改名失败——报出来留下轮，不能当传好了`() {
+        val v = object : Vault {
+            val inner = MemVault().apply { metas["s"] = meta(finished = true); put("s", seg(0, Segment.State.SEALED)) }
+            override fun sessions() = inner.sessions()
+            override fun readMeta(session: String) = inner.readMeta(session)
+            override fun writeMeta(session: String, meta: SessionMeta) = inner.writeMeta(session, meta)
+            override fun updateMeta(session: String, f: (SessionMeta) -> SessionMeta) = inner.updateMeta(session, f)
+            override fun segments(session: String) = inner.segments(session)
+            override fun readSegment(session: String, seg: Segment) = inner.readSegment(session, seg)
+            override fun rename(session: String, from: Segment, to: Segment) = false
+            override fun deleteSession(session: String) = inner.deleteSession(session)
+        }
+        val r = uploader(v, happyPath()).drain("s")
+        assertTrue("$r", r is DrainResult.Failed && r.retryable)
+        assertEquals(Segment.State.SEALED, v.segments("s").single().state)
+    }
+
     @Test fun `stop 那一步网络没通——不能接着 finalize、更不能删本地`() {
         val v = MemVault().apply { metas["s"] = meta(finished = true); put("s", seg(0, Segment.State.SEALED)) }
         val h = dropAt("/stop")

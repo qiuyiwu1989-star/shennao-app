@@ -132,8 +132,9 @@ class DeepBrainClient(
      * refresh token 是轮换的——两个线程拿同一个旧 token 去续，第二个会把第一个换回来的作废，
      * 表现是「用着用着突然要重新登录」（2026-09-12 审计）。先到的续，后到的直接用它续好的。
      */
-    @Synchronized
-    private fun refresh(stale: String? = null): Boolean {
+    private val refreshLock = Any()
+    private fun refresh(stale: String? = null): Boolean = synchronized(refreshLock) {
+        // 锁只包「续期」这一件事：读 token 的人不等网络（V5 1.2）
         val c = store.load() ?: return false
         val cur = accessToken
         if (cur != null && cur != stale) return true
@@ -537,7 +538,6 @@ class DeepBrainClient(
      * 给录音上传器用。它跑在服务里、跟界面不共享调用栈，但必须共享同一份
      * token 缓存——各续各的会让 refresh token 轮换互相作废。
      */
-    @Synchronized
     fun validAccessToken(force: Boolean = false): String? {
         // force=true 是「刚才那个被服务端拒了」。必须先丢掉旧的再续——
         // 不丢的话下面那个判空会直接把已经作废的 token 又还回去。
