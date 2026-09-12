@@ -54,6 +54,19 @@ object Week {
         return key(d.time, zone)
     }
 
+    /** 分组标题：今天 / 昨天 / 9月5日 周五。纯逻辑。 */
+    fun dayLabel(key: String, todayKey: String, zone: TimeZone): String {
+        if (key == todayKey) return "今天"
+        val c = Calendar.getInstance(zone)
+        val parts = key.split('-').map { it.toInt() }
+        c.clear(); c.set(parts[0], parts[1] - 1, parts[2])
+        val t = Calendar.getInstance(zone).apply { val p = todayKey.split('-').map { it.toInt() }; clear(); set(p[0], p[1] - 1, p[2]) }
+        val diffDays = ((t.timeInMillis - c.timeInMillis) / 86_400_000L).toInt()
+        if (diffDays == 1) return "昨天"
+        val w = names[(c.get(Calendar.DAY_OF_WEEK) + 5) % 7]
+        return "${c.get(Calendar.MONTH) + 1}月${c.get(Calendar.DAY_OF_MONTH)}日 周$w"
+    }
+
     fun dayOfMonth(ms: Long, zone: TimeZone): Int = Calendar.getInstance(zone).apply { timeInMillis = ms }.get(Calendar.DAY_OF_MONTH)
     private val names = listOf("一", "二", "三", "四", "五", "六", "日")
     fun weekdayLabel(index: Int): String = names[index]
@@ -153,7 +166,7 @@ object LatestLine {
         val busy = local.firstOrNull { it.recording > 0 || it.done < it.total }
         if (busy != null) {
             val title = SessionTitles.display(busy.meta.title, stamp(busy.meta.startedAtEpochMs))
-            return if (busy.recording > 0) "$title · 正在录" else "$title · 还在手机上，送到了 ${busy.done}/${busy.total} 段"
+            return if (busy.recording > 0) "$title · 正在录" else "$title · 还在手机上，${busy.bytesLeftLabel}"
         }
         val s = served.maxByOrNull { it.startedAt ?: "" } ?: return null
         val title = SessionTitles.display(s.title, s.startedAt?.let(::dayOf))

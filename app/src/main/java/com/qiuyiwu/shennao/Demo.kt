@@ -37,6 +37,9 @@ object Demo {
                 path.startsWith("/api/mobile/transcript/") -> ok(MEETING)
                 path.startsWith("/api/mobile/people/") -> ok(PERSON)
                 path.startsWith("/api/mobile/search") -> ok(SEARCH)
+                path == "/api/mobile/api-keys" && method == "GET" -> ok("""{"keys":[{"id":"k1","name":"Claude 桌面","prefix":"lj_live_a1b2","scopes":["*"],"last_used_at":"2026-09-11T02:00:00Z","created_at":"2026-09-01T00:00:00Z","revoked_at":null},{"id":"k2","name":"旧的","prefix":"lj_live_zz99","scopes":["brain.ask"],"last_used_at":null,"created_at":"2026-08-01T00:00:00Z","revoked_at":"2026-08-20T00:00:00Z"}]}""")
+                path == "/api/mobile/api-keys" && method == "POST" -> ok("""{"id":"k3","name":"新的","prefix":"lj_live_n3w0","secret":"lj_live_n3w0demo1234567890abcdefghijklmn"}""")
+                path.startsWith("/api/mobile/api-keys") && method == "DELETE" -> ok("""{"revoked":true}""")
                 path == "/api/mobile/credits" -> ok("""{"balance":126,"month":{"deep":3,"quick":11,"credits":19}}""")
                 path == "/api/mobile/card" -> ok("""{"cards":[{"deviceNo":"CB08-AA:BB:CC:DD:EE:01","boundAt":"2026-08-30T10:00:00Z","granted":0,"monthly":30}],"monthly":30}""")
                 // 故意报一个更新的版本、且清单没有校验值：截图审「有新版」那一块，且校验那道门要看得见

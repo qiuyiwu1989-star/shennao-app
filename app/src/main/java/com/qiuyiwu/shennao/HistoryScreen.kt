@@ -39,7 +39,8 @@ data class LocalSession(
     val done: Int,
     val recording: Int,
 ) {
-    val bytesLeftLabel: String get() = "$done/$total 段已送达"
+    /** 用户不在意分几段（邱 2026-09-12），只说传了多少 */
+    val bytesLeftLabel: String get() = if (total == 0) "还没开始传" else if (done >= total) "已送到" else "传了 ${done * 100 / total}%"
 }
 
 @Composable
@@ -281,8 +282,17 @@ fun HistoryLoaded(
                 }
             }
             val byId = fine.associateBy { it.sessionId }
-            if (view == RecordsView.TIMELINE) items(fine, key = { "t" + it.sessionId }) { s ->
-                TimelineRow(s, s.startedAt?.let { day(it) }, onOpen)
+            if (view == RecordsView.TIMELINE) {
+                // 按天分组：像日历一样一天一段，今天在最上（邱 2026-09-12）
+                val todayKey = Week.key(nowMs(), zone)
+                fine.groupBy { Week.keyOfIso(it.startedAt, zone) ?: "" }.entries
+                    .sortedByDescending { it.key }
+                    .forEach { (k, rows) ->
+                        item(key = "day-$k") {
+                            SectionLabel(if (k.isEmpty()) "没有时间的" else Week.dayLabel(k, todayKey, zone))
+                        }
+                        items(rows, key = { "t" + it.sessionId }) { s -> TimelineRow(s, s.startedAt?.let { day(it) }, onOpen) }
+                    }
             }
             else items(materialCardPairs(fine.map(::toCardItem)), key = { it.first().id }) { pair ->
                 MaterialCardRow(

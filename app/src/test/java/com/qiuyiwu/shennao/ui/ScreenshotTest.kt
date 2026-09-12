@@ -136,6 +136,6 @@ class ScreenshotTest {
     @Test fun `录音台 亮色`() = shoot("record", false) { com.qiuyiwu.shennao.RecordScreen(onBack = {}) }
     @Test fun `录音台 暗色`() = shoot("record", true) { com.qiuyiwu.shennao.RecordScreen(onBack = {}) }
     @Test fun `定时 亮色`() = shoot("schedule", false) { com.qiuyiwu.shennao.ScheduleScreen(onBack = {}) }
-    @Test fun `接入AI 暗色`() = shoot("agents", true) { com.qiuyiwu.shennao.AgentsScreen(onBack = {}) { _, _ -> } }
+    @Test fun `接入AI 暗色`() = shoot("agents", true) { run { val c = demoClient(); com.qiuyiwu.shennao.AgentsScreen(c, onBack = {}, initialKeys = (c.apiKeys() as com.qiuyiwu.shennao.ApiResult.Ok).value) } }
 
 }

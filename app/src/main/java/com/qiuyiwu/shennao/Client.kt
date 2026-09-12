@@ -448,6 +448,27 @@ class DeepBrainClient(
      * 给「救不回来」的那些用：一条永远失败的录音挂在列表上，
      * 用户每次打开都要重新判断一次「这个要不要管」。
      */
+    // ── 接入 AI 的 key，手机上直接管（邱 2026-09-12：不要先打开一个网页）──
+    fun apiKeys(): ApiResult<List<ApiKey>> = get("/api/mobile/api-keys") { ApiKeyParser.parseList(it) }
+    /** 新建一把。完整 secret 只在这一次的应答里，界面必须立刻给用户复制。 */
+    fun createApiKey(name: String): ApiResult<ApiKey> =
+        when (val r = postJson("/api/mobile/api-keys", JSONObject().put("name", name).toString())) {
+            is ApiResult.Ok -> ApiKeyParser.parseCreated(r.value)?.let { ApiResult.Ok(it) } ?: ApiResult.Failed("深脑的回复看不懂")
+            is ApiResult.Failed -> r
+            else -> ApiResult.Unauthorized
+        }
+    fun revokeApiKey(id: String): ApiResult<Unit> {
+        val c = store.load() ?: return ApiResult.Unauthorized
+        if (accessToken == null && !refresh()) return ApiResult.Unauthorized
+        fun once() = http.request(
+            "DELETE", "$apiBase/api/mobile/api-keys?id=" + java.net.URLEncoder.encode(id, "UTF-8"),
+            mapOf("Authorization" to "Bearer ${accessToken ?: ""}", "x-deepbrain-org-id" to c.orgId),
+        )
+        var r = once()
+        if (r.status == 401) { if (!refresh(stale = accessToken)) return ApiResult.Unauthorized; r = once() }
+        return if (r.status < 400) ApiResult.Ok(Unit) else ApiResult.Failed("没停掉（${r.status}）")
+    }
+
     fun deleteRecording(sessionId: String): ApiResult<Unit> {
         val c = store.load() ?: return ApiResult.Unauthorized
         if (accessToken == null && !refresh()) return ApiResult.Unauthorized
@@ -636,5 +657,27 @@ class UrlHttp(private val timeoutMs: Int = 30_000) : Http {
         } catch (e: Exception) {
             HttpResponse(0, e.message ?: "网络错误")
         }
+    }
+}
+
+/** 一把接入 AI 的 key。secret 只有刚建好那一刻有。 */
+data class ApiKey(val id: String, val name: String, val prefix: String, val createdAt: String?, val lastUsedAt: String?, val revoked: Boolean, val secret: String? = null)
+
+/** api-keys 应答 → 列表。纯逻辑，JVM 可测。 */
+object ApiKeyParser {
+    fun parseList(body: String): List<ApiKey> {
+        val arr = JSONObject(body).optJSONArray("keys") ?: return emptyList()
+        return (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let(::one) }
+    }
+    fun parseCreated(body: String): ApiKey? = runCatching {
+        val o = JSONObject(body)
+        ApiKey(o.getString("id"), o.optString("name"), o.optString("prefix"), null, null, false, secret = o.optString("secret").takeIf { it.isNotBlank() })
+    }.getOrNull()
+    private fun one(o: JSONObject): ApiKey? {
+        val id = o.optString("id").takeIf { it.isNotBlank() } ?: return null
+        return ApiKey(id, o.optString("name"), o.optString("prefix"),
+                      o.optString("created_at").takeIf { it.isNotBlank() && it != "null" },
+                      o.optString("last_used_at").takeIf { it.isNotBlank() && it != "null" },
+                      revoked = o.optString("revoked_at").let { it.isNotBlank() && it != "null" })
     }
 }

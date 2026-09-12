@@ -63,7 +63,14 @@ class MainActivity : ComponentActivity() {
         // 定时聆听：WorkManager 的任务可能被系统清过，每次开 App 重排一次
         com.qiuyiwu.shennao.record.ListenSchedule.schedule(applicationContext)
         val client = Session.client(this)
-        setContent { ShennaoTheme { App(client) } }
+        Appearance.load(this)
+        setContent {
+            val system = androidx.compose.foundation.isSystemInDarkTheme()
+            val dark = when (Appearance.mode.value) {
+                Appearance.Mode.SYSTEM -> system; Appearance.Mode.LIGHT -> false; Appearance.Mode.DARK -> true
+            }
+            ShennaoTheme(dark = dark) { App(client) }
+        }
         receiveShare(intent)
         receiveOpen(intent)
         Thread { runCatching { Installer.prune(applicationContext, BuildConfig.VERSION_NAME) } }.start()
@@ -269,21 +276,8 @@ private fun App(client: DeepBrainClient) {
          * 有意义——而且老实现正因为它既是栏又是屏，RecordScreen 被渲染在两个地方。
          * 只在「今天」栈底显示：别的屏各有各的主动作，再叠一个会抢。
          */
-        floatingActionButton = {
-            val nav = ready?.nav ?: return@Scaffold
-            // 记录页也要能直接录：那一屏就是「我录过什么」，最自然的下一步就是再录一场（妙记也这么摆）
-            if (nav.current == Route.Today || nav.current == Route.Records) {
-                FloatingActionButton(
-                    onClick = { go(nav.push(Route.Record)) },
-                    // 圆的。方圆角那个是 Material 的默认，而「录」这个动作全 App 只有一个形状：圆
-                    shape = androidx.compose.foundation.shape.CircleShape,
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                ) {
-                    androidx.compose.material3.Icon(MicOutlined, contentDescription = "录音")
-                }
-            }
-        },
+        // 录音入口只留顶上那条 LiveBar（邱 2026-09-12：两个入口有歧义）。以前这里还有个右下角圆钮。
+        floatingActionButton = {},
         // 内容区自己让开状态栏；底栏由 NavigationBar 让开手势条（它自带 inset）。
         // 两处都交给系统算，不写死 dp——不同机型的刘海和手势条高度不一样。
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets.safeDrawing
@@ -414,8 +408,7 @@ private fun App(client: DeepBrainClient) {
 
                         is Route.Ble -> BleScreen(onDone = { go(nav.select(Tab.RECORDS)) }, client = client)
                         is Route.Schedule -> ScheduleScreen(onBack = { nav.pop()?.let { go(it) } })
-                        is Route.Agents -> AgentsScreen(onBack = { nav.pop()?.let { go(it) } },
-                                                        onOpenWeb = { path, title -> go(nav.push(Route.Web(path, title))) })
+                        is Route.Agents -> AgentsScreen(client, onBack = { nav.pop()?.let { go(it) } })
 
                         is Route.Ask -> AskScreen(client) { tid -> go(nav.push(Route.Meeting(tid))) }
 

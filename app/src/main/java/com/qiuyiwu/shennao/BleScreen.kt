@@ -385,8 +385,9 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
                     Column(Modifier.padding(DS.Pad.tight)) {
                         val finished = syncDone >= syncTotal
                         Text(
-                            if (finished) "同步完成 · 共 $syncTotal 份"
-                            else "正在自动同步 · 第 ${syncDone + 1} / $syncTotal 份",
+                            // 用户不在意分几份（邱 2026-09-12），只要知道在传、传完了
+                            if (finished) "都传到深脑了"
+                            else "正在从灵魂卡取，${(syncDone * 100 / syncTotal)}%",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -451,15 +452,15 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
                             else LinearProgressIndicator(Modifier.fillMaxWidth())
                             Spacer(Modifier.height(DS.Rhythm.element))
                             Text(
-                                // 字节数要给出来。一个只有百分比的进度条停住时，
-                                // 用户分不清「慢」和「卡死」。
-                                if (s.total > 0) "${s.got / 1024} / ${s.total / 1024} KB"
-                                else "${s.got / 1024} KB（总长还没报过来）",
+                                // 数字要给出来。一个只有百分比的进度条停住时，用户分不清「慢」和「卡死」。
+                                // 但说的是「还剩多久」，不是字节。
+                                if (s.total > 0) "还剩大约 ${((s.total - s.got) / 27_000 / 60).coerceAtLeast(0) + 1} 分钟，别关蓝牙"
+                                else "刚开始取，别关蓝牙",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Spacer(Modifier.height(DS.Rhythm.tight))
-                            Text("蓝牙传输大约 27 KB 每秒，一小时的录音要四分半。",
+                            Text("可以切走做别的，取完会自己传到深脑。",
                                  style = MaterialTheme.typography.bodySmall,
                                  color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }

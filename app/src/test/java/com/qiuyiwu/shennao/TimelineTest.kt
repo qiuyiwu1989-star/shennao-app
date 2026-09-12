@@ -21,6 +21,12 @@ class TimelineTest {
     @Test fun `周日也算这一周的最后一天，不是下一周的第一天`() {
         assertEquals(at(2026, 9, 14), Week.dayStarts(at(2026, 9, 20, 23, 0), sh).first())
     }
+    @Test fun `分组标题：今天、昨天、再往前是日期加星期`() {
+        assertEquals("今天", Week.dayLabel("2026-09-12", "2026-09-12", sh))
+        assertEquals("昨天", Week.dayLabel("2026-09-11", "2026-09-12", sh))
+        assertEquals("9月5日 周六", Week.dayLabel("2026-09-05", "2026-09-12", sh))
+    }
+
     @Test fun `服务端 UTC 时刻落到本地那一天——北京凌晨一点是前一天的 UTC`() {
         assertEquals("2026-09-05", Week.keyOfIso("2026-09-04T17:30:00Z", sh))
         assertNull(Week.keyOfIso("garbage", sh)); assertNull(Week.keyOfIso(null, sh))
@@ -33,7 +39,7 @@ class TimelineTest {
 
     @Test fun `还在手机上传的排最前——它是唯一可能丢的`() {
         val line = LatestLine.of(listOf(local(1, 3)), listOf(card(Stage.ANALYZED)))!!
-        assertTrue(line, line.contains("还在手机上") && line.contains("1/3"))
+        assertTrue(line, line.contains("还在手机上") && line.contains("33%"))
     }
     @Test fun `正在录就说正在录`() {
         assertTrue(LatestLine.of(listOf(local(0, 1, recording = 1)), emptyList())!!.endsWith("正在录"))

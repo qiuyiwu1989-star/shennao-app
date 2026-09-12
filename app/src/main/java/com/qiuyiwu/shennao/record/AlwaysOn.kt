@@ -43,13 +43,24 @@ class AlwaysOn(
     private val begin: (adopt: AudioRecord, preroll: ByteArray) -> String?,
     /** 收一场录音。由调用方去走停止、上传那一路 */
     private val end: () -> Unit,
-    /** 静多久算这一段说完了。默认 40 秒 */
-    hangoverMs: Int = 40_000,
+    /** 静多久算这一场结束。邱 2026-09-12：「一分钟一分钟地录没意义，切得太碎」——从 40 秒改成 10 分钟 */
+    hangoverMs: Int = HANGOVER_MS,
+    /** 连续说满多久才起一场。咳嗽、关门、单句应答不再开场 */
+    private val minSpeechMs: Int = MIN_SPEECH_MS,
+    /** 一场最长多久，到点自动切下一场（接着录，不丢话头） */
+    private val maxSessionMs: Long = MAX_SESSION_MS,
 ) {
+    companion object {
+        const val HANGOVER_MS = 10 * 60_000
+        const val MIN_SPEECH_MS = 20_000
+        const val MAX_SESSION_MS = 60 * 60_000L
+    }
     /** 听着的时候多久读一次。100 毫秒：前置缓冲的颗粒度，也是判开口的颗粒度 */
     private val frameMs = 100
 
-    private val gate = VoiceGate(frameMs = frameMs, hangoverMs = hangoverMs, minSpeechMs = 600)
+    private val gate = VoiceGate(frameMs = frameMs, hangoverMs = hangoverMs, minSpeechMs = minSpeechMs)
+    /** 上一场是到 60 分钟切掉的，不是说完了：下一场一开口就起，不再等 20 秒 */
+    @Volatile private var rollover = false
     private val running = AtomicBoolean(false)
     private var thread: Thread? = null
 
@@ -118,7 +129,8 @@ class AlwaysOn(
         val buf = ByteArray(bytesPerFrame)
         // 压住「判定开口之前的 preroll」+「熬最短语音段期间的全部」。
         // 多压一点无所谓（一秒的 16k PCM 只有 32 KB），少压一点就是把话头切掉。
-        val ring = PcmRing(bytesPerFrame * ((gate.prerollMs + 1_500) / frameMs))
+        // 要压住「判定开口之前的 preroll」+「熬最短语音段期间的全部」：20 秒的 16k PCM 是 640 KB，可以接受
+        val ring = PcmRing(bytesPerFrame * ((gate.prerollMs + minSpeechMs + 500) / frameMs))
         phase = Phase.LISTENING
         try {
             mic.startRecording()
@@ -133,7 +145,8 @@ class AlwaysOn(
                 val e = gate.feed(level)
                 if (e == VoiceGate.Event.DISCARD) ring.clear()   // 一声咳嗽，忘掉它
                 // 起录的条件不是「开口了」，是「开口了并且说够了」。
-                if (gate.state == VoiceGate.State.SPEAKING && gate.voicedMsSoFar >= 600) {
+                if (gate.state == VoiceGate.State.SPEAKING && (gate.voicedMsSoFar >= minSpeechMs || rollover)) {
+                    rollover = false
                     handedOver = handOver(mic, ring)
                     return
                 }
@@ -187,9 +200,13 @@ class AlwaysOn(
     /** 录着的时候聆听线程在这里等：等它说完，或者等用户关掉全时聆听。 */
     private fun waitWhileRecording() {
         phase = Phase.RECORDING
-        while (running.get() && recorder.isRecording && !shouldEnd) sleepInterruptibly(200)
+        while (running.get() && recorder.isRecording && !shouldEnd) {
+            // 到 60 分钟切一场：太长的一场分析起来也慢；切完接着录，下一场不再等 20 秒
+            if (recorder.elapsedMs >= maxSessionMs) { rollover = true; break }
+            sleepInterruptibly(200)
+        }
         recorder.onFrame = null
-        if (recorder.isRecording) end()      // 静够了：收这一场，它自己会传上去
+        if (recorder.isRecording) end()      // 静够了（或到点了）：收这一场，它自己会传上去
         shouldEnd = false
         phase = Phase.LISTENING
     }

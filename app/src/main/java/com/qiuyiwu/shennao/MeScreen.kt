@@ -242,6 +242,14 @@ fun MeContent(
         // ── 应用 ──
         SectionLabel("应用")
         DsGroup {
+            DsRow("外观", trailingContent = {
+                Row(horizontalArrangement = Arrangement.spacedBy(DS.Rhythm.hair)) {
+                    Appearance.Mode.entries.forEach { m ->
+                        DsChip(selected = Appearance.mode.value == m, label = m.label, onClick = { Appearance.save(ctx, m) })
+                    }
+                }
+            })
+            RowDivider()
             // 「查不到」和「已是最新」必须分开说：网络不通不等于没有新版。
             DsRow(
                 "版本 v$versionName",

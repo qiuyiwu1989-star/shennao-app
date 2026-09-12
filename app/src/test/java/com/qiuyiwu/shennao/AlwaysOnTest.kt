@@ -1,6 +1,7 @@
 package com.qiuyiwu.shennao
 
 import com.qiuyiwu.shennao.record.PcmRing
+import com.qiuyiwu.shennao.record.AlwaysOn
 import com.qiuyiwu.shennao.record.VoiceGate
 import org.junit.Assert.*
 import org.junit.Test
@@ -48,27 +49,27 @@ class AlwaysOnTest {
 
     // ── 起录与收尾的判据 ──────────────────────────────────────
 
-    /** 全时聆听用的那套参数：100 毫秒一帧、静 40 秒算说完 */
-    private fun gate() = VoiceGate(frameMs = 100, hangoverMs = 40_000, minSpeechMs = 600)
+    /** 全时聆听用的那套参数：100 毫秒一帧、说满 20 秒才起、静 10 分钟算说完（邱 2026-09-12：别切太碎） */
+    private fun gate() = VoiceGate(frameMs = 100, hangoverMs = AlwaysOn.HANGOVER_MS, minSpeechMs = AlwaysOn.MIN_SPEECH_MS)
 
     private fun feed(g: VoiceGate, level: Float, ms: Int) {
         repeat(ms / 100) { g.feed(level) }
     }
 
-    @Test fun `一声咳嗽不起录`() {
+    @Test fun `一声咳嗽、一句「好的」都不起录`() {
         val g = gate()
         feed(g, 0.02f, 2_000)        // 先让地板落在安静上
-        feed(g, 0.6f, 300)           // 咳嗽
-        // 起录的条件是「开口了并且说够了」。300 毫秒没说够
-        assertTrue(g.voicedMsSoFar < 600)
+        feed(g, 0.6f, 3_000)         // 三秒的应答
+        // 起录的条件是「开口了并且说够了」。20 秒才算说够
+        assertTrue(g.voicedMsSoFar < AlwaysOn.MIN_SPEECH_MS)
     }
 
-    @Test fun `说够六百毫秒就起录，不等它说完`() {
+    @Test fun `说满二十秒就起录，不等它说完`() {
         val g = gate()
         feed(g, 0.02f, 2_000)
-        feed(g, 0.6f, 800)
+        feed(g, 0.6f, 21_000)
         assertEquals(VoiceGate.State.SPEAKING, g.state)
-        assertTrue("说了 800 毫秒就该起录了", g.voicedMsSoFar >= 600)
+        assertTrue("说了 21 秒就该起录了", g.voicedMsSoFar >= AlwaysOn.MIN_SPEECH_MS)
     }
 
     @Test fun `说话中间停两秒不收尾`() {
@@ -80,42 +81,42 @@ class AlwaysOnTest {
         assertFalse("两秒的停顿是句子内部的停顿，不是说完了", ended)
     }
 
-    @Test fun `静够四十秒才收尾`() {
+    @Test fun `静够十分钟才收尾——中间去倒杯水不算说完`() {
         val g = gate()
         feed(g, 0.02f, 2_000)
-        feed(g, 0.6f, 1_000)
+        feed(g, 0.6f, 30_000)
         var closedAt = -1
-        for (i in 1..500) {
+        for (i in 1..7_000) {
             if (g.feed(0.02f) == VoiceGate.Event.CLOSE) { closedAt = i * 100; break }
         }
-        assertEquals("应该正好在静 40 秒时收尾", 40_000, closedAt)
+        assertEquals("应该正好在静 10 分钟时收尾", AlwaysOn.HANGOVER_MS, closedAt)
     }
 
     @Test fun `收尾之后能再起一场，不是一次性的`() {
         val g = gate()
         feed(g, 0.02f, 2_000)
-        feed(g, 0.6f, 1_000)
-        repeat(400) { g.feed(0.02f) }            // 静 40 秒，收尾
+        feed(g, 0.6f, 30_000)
+        repeat(6_000) { g.feed(0.02f) }          // 静 10 分钟，收尾
         assertEquals(VoiceGate.State.SILENT, g.state)
-        feed(g, 0.6f, 800)                        // 又有人说话
+        feed(g, 0.6f, 21_000)                     // 又有人说话
         assertEquals(VoiceGate.State.SPEAKING, g.state)
-        assertTrue(g.voicedMsSoFar >= 600)
+        assertTrue(g.voicedMsSoFar >= AlwaysOn.MIN_SPEECH_MS)
     }
 
     @Test fun `计的是真正出声的时间，不是聆听开着的时间`() {
         val g = gate()
         feed(g, 0.02f, 2_000)                     // 安静两秒：不计
-        feed(g, 0.6f, 1_000)                      // 说一秒
-        repeat(400) { g.feed(0.02f) }             // 静 40 秒收尾：静音不计
+        feed(g, 0.6f, 30_000)                     // 说 30 秒
+        repeat(6_000) { g.feed(0.02f) }           // 静 10 分钟收尾：静音不计
         // 计的是「出声 + 前置缓冲」，前置缓冲那段音频确实留下并转写了
-        assertTrue("应该在 1 秒上下，不是 43 秒", g.speechMs in 1_000..1_600)
+        assertTrue("应该在 30 秒上下，不是 10 分半", g.speechMs in 30_000..31_000)
     }
 
     @Test fun `咳嗽不计费`() {
         val g = gate()
         feed(g, 0.02f, 2_000)
-        feed(g, 0.6f, 300)
-        repeat(400) { g.feed(0.02f) }             // 静够，这一段判为噪声
+        feed(g, 0.6f, 3_000)
+        repeat(6_000) { g.feed(0.02f) }           // 静够，这一段判为噪声
         assertEquals("一声咳嗽不该收钱", 0L, g.speechMs)
     }
 
