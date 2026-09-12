@@ -95,6 +95,10 @@ fun TodayScreen(
         ) {
             item { Header(today) }
             if (com.qiuyiwu.shennao.record.RecordingService.recording) item { RecordBar(onRecord) }
+            // 取不到 / 还在升级：下面三段「没有要问的」会被读成「真的没有」（边角截图 2026-09-12）。
+            // 这时只给一条路，不铺空段。
+            if (today.failed) { item { Broken("没取到，不是没有内容。", onRefresh) }; return@LazyColumn }
+            if (today.notReady) { item { NoticeBox("深脑还在升级，这一栏稍后再来。", Tone.INFO) }; return@LazyColumn }
 
             fun <T> LazyListScope.section(c: Channel, all: List<T>, key: (T) -> String, empty: String, card: @Composable (T) -> Unit) {
                 val open = c.title in expanded

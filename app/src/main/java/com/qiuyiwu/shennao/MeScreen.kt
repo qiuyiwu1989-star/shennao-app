@@ -124,8 +124,8 @@ fun MeScreen(
                     Column(Modifier.weight(1f)) {
                         Text(email, style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(DS.Rhythm.hair))
-                        Text(currentName ?: currentOrg?.take(8) ?: "—", style = MaterialTheme.typography.bodyMedium,
-                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        // 组织名取不到（没网）就不显示，不要露出 id 前八位那种谁都看不懂的东西
+                        currentName?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
                     if (orgs.size > 1) LinkButton(onClick = { picking = true }, contentPadding = PaddingValues(horizontal = DS.Rhythm.tight)) { Text("切换组织") }
                 }

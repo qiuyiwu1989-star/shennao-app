@@ -233,7 +233,7 @@ fun HistoryScreen(
 
         // 这本账的边界必须写出来。9-03 那次事故：换了账号，旧账本说「导过了」，
         // 用户把「台账里没有」读成「没导过」。不写这一句，同一个坑再来一次。
-        if (loaded) item {
+        if (loaded && (rows.isNotEmpty() || served.isNotEmpty())) item {
             Spacer(Modifier.height(DS.Rhythm.inner))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(DS.Rhythm.element))
