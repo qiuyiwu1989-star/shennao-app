@@ -1,5 +1,8 @@
 package com.qiuyiwu.shennao
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
 import com.qiuyiwu.shennao.record.Scenes
@@ -37,7 +40,7 @@ import kotlinx.coroutines.withContext
  */
 
 @androidx.compose.runtime.Composable
-fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (() -> Unit)? = null) {
+fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (() -> Unit)? = null, onOpenSchedule: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     var recording by remember { mutableStateOf(RecordingService.recording) }
     var stopping by remember { mutableStateOf(false) }
@@ -122,11 +125,12 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
             if (!recording) LinkButton(onClick = onImport, contentPadding = PaddingValues(horizontal = DS.Rhythm.element)) { Text("从灵魂卡导入") }
         })
 
+        // 采集面加进来之后一屏放不下了：改成可滚，顶端对齐（V5 3.1）
         Column(
-            Modifier.weight(1f).fillMaxWidth().padding(DS.Pad.screen),
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(DS.Pad.screen),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(DS.Rhythm.section))
 
         val idle = state == com.qiuyiwu.shennao.record.RecordState.IDLE && !recording
         if (idle) {
@@ -228,6 +232,13 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
          * 这不是合规成本，是显性录音的卖点——念那句话的时机正好是按下之前，
          * 所以它就放在按钮旁边，而不是藏在设置里。
          */
+        // 采集控制面：本次录音之外的另一种模式（持续聆听）、定时、待传数——都在录音台可达，
+        // 不用去「我的」里拼（V5 3.1，对方审计第一轮）。录着的时候不显示：那时主角是计时。
+        if (!recording) {
+            Spacer(Modifier.height(DS.Rhythm.block))
+            CaptureBoard(pending = pending, onOpenSchedule = onOpenSchedule)
+        }
+
         if (!recording && justFinished == null) {
             Spacer(Modifier.height(DS.Rhythm.block))
             DsCard(Modifier.fillMaxWidth(), tone = CardTone.INSET) {
@@ -272,7 +283,7 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
             NoticeBox(it, Tone.WARN)
         }
 
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(DS.Rhythm.block))
         }
 
         // 底部那段说明只给头三次进来的人看；老用户已经知道了（012 P1-17）。
@@ -604,4 +615,52 @@ private fun renameJustFinished(ctx: android.content.Context, title: String) {
             }
         }
     }.start()
+}
+
+/**
+ * 采集控制面。三行：持续聆听（开关）、定时聆听（去设）、待传。
+ * 「本次录音」就是上面那个大按钮，这里不重复。
+ */
+@Composable
+private fun CaptureBoard(pending: Int, onOpenSchedule: (() -> Unit)?) {
+    val ctx = LocalContext.current
+    var phase by remember { mutableStateOf(RecordingService.listenPhase) }
+    var listened by remember { mutableStateOf(RecordingService.listenedSpeechMs) }
+    LaunchedEffect(Unit) {
+        while (true) { phase = RecordingService.listenPhase; listened = RecordingService.listenedSpeechMs; delay(1_000) }
+    }
+    val sched = remember { com.qiuyiwu.shennao.record.ListenSchedule.load(ctx) }
+    val on = phase != com.qiuyiwu.shennao.record.AlwaysOn.Phase.OFF
+    DsGroup {
+        DsRow(
+            "持续聆听",
+            subtitle = when (phase) {
+                com.qiuyiwu.shennao.record.AlwaysOn.Phase.RECORDING -> "正在录 · 今天录下 " + minutesLabel(listened)
+                com.qiuyiwu.shennao.record.AlwaysOn.Phase.LISTENING -> "在听，有人说话时才录 · 今天录下 " + minutesLabel(listened)
+                else -> "麦克风常开，有人说话才录"
+            },
+            trailingContent = {
+                val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+                    if (granted) RecordingService.listen(ctx)
+                }
+                androidx.compose.material3.Switch(checked = on, onCheckedChange = { want ->
+                    if (!want) RecordingService.stopListening(ctx)
+                    else if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+                        RecordingService.listen(ctx)
+                    else ask.launch(Manifest.permission.RECORD_AUDIO)
+                })
+            },
+        )
+        if (onOpenSchedule != null) {
+            RowDivider()
+            DsRow("定时聆听",
+                  subtitle = if (sched.enabled) com.qiuyiwu.shennao.record.ListenSchedule.summary(sched) else "设一次，到点提醒你开始和停止",
+                  trailingContent = { if (sched.enabled) Pill("已设", Tone.OK) },
+                  onClick = onOpenSchedule)
+        }
+        if (pending > 0) {
+            RowDivider()
+            DsRow("在传", subtitle = "还有 $pending 段没送到深脑", trailingContent = { Pill("在传", Tone.INFO) })
+        }
+    }
 }

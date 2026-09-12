@@ -63,6 +63,12 @@ fun HistoryScreen(
     var card by remember { mutableStateOf(CardStatus.read()) }
     /** 来源分段。null = 全部。服务端没给 source 时分段行不显示，列表照常。 */
     var sourceFilter by remember { mutableStateOf<String?>(null) }
+    /** 时间线 / 内容卡。记在本机（V5 3.2）。 */
+    var view by remember { mutableStateOf(RecordsViewPref.load(ctx)) }
+    /** 周带选中的那一天（yyyy-MM-dd）。null = 不按天筛（V5 3.3）。 */
+    var day by remember { mutableStateOf<String?>(null) }
+    var showFailed by remember { mutableStateOf(false) }
+    val zone = remember { java.util.TimeZone.getDefault() }
     val notice = LocalNotice.current
     var orphan by remember { mutableStateOf(com.qiuyiwu.shennao.record.OrphanNotice.peek(ctx)) }
 
@@ -81,7 +87,7 @@ fun HistoryScreen(
         var tick = 0
         var lastPendingLocal = -1
         while (true) {
-            rows = withContext(Dispatchers.IO) { scan(File(ctx.filesDir, "recordings")) }
+            rows = withContext(Dispatchers.IO) { scanLocal(File(ctx.filesDir, "recordings")) }
             card = CardStatus.read()
             val pendingLocal = rows.sumOf { it.total - it.done }
             val justDelivered = lastPendingLocal >= 0 && pendingLocal < lastPendingLocal
@@ -118,7 +124,7 @@ fun HistoryScreen(
     Column(Modifier.fillMaxSize()) {
     stale?.let { StaleBanner(it) }
     Refreshable(onRefresh = {
-        rows = withContext(Dispatchers.IO) { scan(File(ctx.filesDir, "recordings")) }
+        rows = withContext(Dispatchers.IO) { scanLocal(File(ctx.filesDir, "recordings")) }
         val r = withContext(Dispatchers.IO) { client.sessions() }
         if (r is ApiResult.Ok) { served = r.value; stale = null }
     }) {
@@ -143,6 +149,13 @@ fun HistoryScreen(
             val hasCard = remember { com.qiuyiwu.shennao.ble.CardNames(ctx).known().isNotEmpty() }
             if (hasCard || card.busy || card.attention) { Spacer(Modifier.height(DS.Rhythm.inner)); CardBar(card, onOpenBle) }
         }
+        // 周带：本周哪天录过，点一天只看那天。有内容才画（V5 3.3）
+        if (loaded && (rows.isNotEmpty() || served.isNotEmpty())) item {
+            val now = System.currentTimeMillis()
+            val marked = (rows.map { Week.key(it.meta.startedAtEpochMs, zone) } +
+                          served.mapNotNull { Week.keyOfIso(it.startedAt, zone) }).toSet()
+            WeekStrip(Week.dayStarts(now, zone), marked, day, zone, Week.key(now, zone)) { day = it }
+        }
         // 录音被系统杀掉过：说一句，点「知道了」就走（012 P1-7）
         orphan?.let { at -> item {
             NoticeBox(com.qiuyiwu.shennao.record.OrphanNotice.line(at), Tone.WARN) {
@@ -152,7 +165,8 @@ fun HistoryScreen(
 
         // 还在这台手机上的排最前：它们是唯一可能丢的
         // 换过账号：别人录的只说明，不传也不删（V5 2.1，邱未拍板前按最保守的做）
-        val (mine, others) = rows.partition { it.meta.owner == null || me == null || it.meta.owner == me }
+        val (mine, others) = rows.filter { day == null || Week.key(it.meta.startedAtEpochMs, zone) == day }
+            .partition { it.meta.owner == null || me == null || it.meta.owner == me }
         if (others.isNotEmpty()) item {
             val who = others.map { it.meta.owner }.distinct().joinToString("、")
             NoticeBox("还有 ${others.size} 场是 $who 录的，登录回那个账号才会传。", Tone.NEUTRAL)
@@ -167,7 +181,7 @@ fun HistoryScreen(
                         // 立刻推一轮，不等 15 秒轮询。推完重扫，让「卡住了」变回「上传中」或消失。
                         scope.launch {
                             withContext(Dispatchers.IO) { runCatching { Resume.kick(ctx) } }
-                            rows = withContext(Dispatchers.IO) { scan(File(ctx.filesDir, "recordings")) }
+                            rows = withContext(Dispatchers.IO) { scanLocal(File(ctx.filesDir, "recordings")) }
                         }
                     },
                 ) {
@@ -175,7 +189,7 @@ fun HistoryScreen(
                         withContext(Dispatchers.IO) {
                             FileVault(File(ctx.filesDir, "recordings")).deleteSession(s.dir)
                         }
-                        rows = withContext(Dispatchers.IO) { scan(File(ctx.filesDir, "recordings")) }
+                        rows = withContext(Dispatchers.IO) { scanLocal(File(ctx.filesDir, "recordings")) }
                     }
                 }
             }
@@ -195,7 +209,7 @@ fun HistoryScreen(
                     }
                 }
             }
-            val shown = SourceFilter.apply(served, sourceFilter)
+            val shown = SourceFilter.apply(served, sourceFilter).filter { day == null || Week.keyOfIso(it.startedAt, zone) == day }
             if (shown.isEmpty()) item {
                 Text("这个来源还没有送到深脑的。", style = MaterialTheme.typography.bodyMedium,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -214,9 +228,27 @@ fun HistoryScreen(
              * 一行标题加一个日期，答不了「哪一场值得看」。
              */
             val (bad, fine) = shown.partition { it.stage == Stage.FAILED }
-            items(bad, key = { "s" + it.sessionId }) { s -> ServedRow(s, onOpen, onDelete) }
+            // 失败的收成一条汇总，点开才铺开：它们不该长期霸着首屏（V5 3.2）
+            if (bad.isNotEmpty()) item(key = "bad-summary") {
+                NoticeBox("${bad.size} 场没成，点开看原因。", Tone.RISK) {
+                    QuietButton(if (showFailed) "收起" else "看看", onClick = { showFailed = !showFailed })
+                }
+            }
+            if (showFailed) items(bad, key = { "s" + it.sessionId }) { s -> ServedRow(s, onOpen, onDelete) }
+            if (fine.isNotEmpty()) item(key = "view-toggle") {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    DsChip(selected = view == RecordsView.TIMELINE, label = "时间线",
+                           onClick = { view = RecordsView.TIMELINE; RecordsViewPref.save(ctx, view) })
+                    Spacer(Modifier.width(DS.Rhythm.tight))
+                    DsChip(selected = view == RecordsView.CARDS, label = "内容",
+                           onClick = { view = RecordsView.CARDS; RecordsViewPref.save(ctx, view) })
+                }
+            }
             val byId = fine.associateBy { it.sessionId }
-            items(materialCardPairs(fine.map(::toCardItem)), key = { it.first().id }) { pair ->
+            if (view == RecordsView.TIMELINE) items(fine, key = { "t" + it.sessionId }) { s ->
+                TimelineRow(s, s.startedAt?.let { day(it) }, onOpen)
+            }
+            else items(materialCardPairs(fine.map(::toCardItem)), key = { it.first().id }) { pair ->
                 MaterialCardRow(
                     pair,
                     onOpen = { item -> byId[item.id]?.transcriptId?.let(onOpen) },
@@ -351,7 +383,7 @@ internal fun stagePill(stage: Stage): Pair<String, Tone>? = when (stage) {
     Stage.RECORDED -> "等转写" to Tone.NEUTRAL
     Stage.DELIVERED -> "转写中" to Tone.INFO
     Stage.TRANSCRIBED -> "分析中" to Tone.INFO
-    Stage.FAILED -> "没成功" to Tone.RISK
+    Stage.FAILED -> "失败" to Tone.RISK
     Stage.ANALYZED, Stage.UNKNOWN -> null
 }
 
@@ -420,7 +452,7 @@ fun SessionRow(s: LocalSession, onRetry: (() -> Unit)? = null, onDelete: () -> U
     }
 }
 
-private fun scan(root: File): List<LocalSession> {
+internal fun scanLocal(root: File): List<LocalSession> {
     val vault = FileVault(root)
     return vault.sessions().mapNotNull { d ->
         val meta = vault.readMeta(d) ?: return@mapNotNull null
@@ -433,7 +465,7 @@ private fun scan(root: File): List<LocalSession> {
     }.sortedByDescending { it.meta.startedAtEpochMs }
 }
 
-private fun stamp(ms: Long): String =
+internal fun stamp(ms: Long): String =
     java.text.SimpleDateFormat("M月d日 HH:mm", java.util.Locale.CHINA).format(java.util.Date(ms))
 
 /**
@@ -503,6 +535,8 @@ internal object SourceFilter {
     /** 服务端没派生 source（还没部署）就不显示分段行——不画点了没反应的东西。 */
     fun available(rows: List<SessionCard>): Boolean = rows.any { it.source != null }
 
+    /** 来源一个词，给时间线那行用。不认识的不显示。 */
+    fun label(source: String?): String? = options.firstOrNull { it.first != null && it.first == source }?.second
     fun apply(rows: List<SessionCard>, filter: String?): List<SessionCard> =
         if (filter == null) rows else rows.filter { it.source == filter }
 }

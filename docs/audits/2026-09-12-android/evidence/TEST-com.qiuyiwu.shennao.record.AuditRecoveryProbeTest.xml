@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.qiuyiwu.shennao.record.AuditRecoveryProbeTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-12T02:42:18" hostname="qiudeMacBook-Air.local" time="0.027">
+  <properties/>
+  <testcase name="transportFailureAfterTicketDeletesLocalAudio" classname="com.qiuyiwu.shennao.record.AuditRecoveryProbeTest" time="0.022"/>
+  <testcase name="stopFailureDisappearsFromPendingCount" classname="com.qiuyiwu.shennao.record.AuditRecoveryProbeTest" time="0.003"/>
+  <testcase name="finalizeFailureDisappearsFromPendingCount" classname="com.qiuyiwu.shennao.record.AuditRecoveryProbeTest" time="0.002"/>
+  <system-out><![CDATA[CONFIRMED disconnect after ticket -> PUT/complete/stop/finalize status=0 -> Done -> LOCAL AUDIO DELETED
+CONFIRMED /stop 503 -> retryable failure + retained session + pending=0 (worker success predicate)
+CONFIRMED /finalize 503 -> retryable failure + retained session + pending=0 (worker success predicate)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

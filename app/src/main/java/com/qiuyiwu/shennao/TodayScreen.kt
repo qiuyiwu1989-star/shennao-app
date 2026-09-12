@@ -56,6 +56,9 @@ fun TodayScreen(
     onPullRefresh: (suspend () -> Unit)? = null,
     /** 落账/裁定/反馈失败时调用方把它 +1，卡片上的「已记」就收回来（012 P0-12）。 */
     resetKey: Int = 0,
+    /** 「最近一次录音去哪了」那一句（LatestLine.of）。null = 还没录过，不画（V5 3.4）。 */
+    latestLine: String? = null,
+    onOpenRecords: () -> Unit = {},
 ) {
     /*
      * 三个频道，左右滑。
@@ -95,6 +98,8 @@ fun TodayScreen(
         ) {
             item { Header(today) }
             if (com.qiuyiwu.shennao.record.RecordingService.recording) item { RecordBar(onRecord) }
+            // 先来录音、找纪要的人，打开后第一件事是确认刚才那场去哪了（对方审计第三轮）
+            latestLine?.let { line -> item { DsGroup { DsRow("最近一次录音", subtitle = line, onClick = onOpenRecords) } } }
             // 取不到 / 还在升级：下面三段「没有要问的」会被读成「真的没有」（边角截图 2026-09-12）。
             // 这时只给一条路，不铺空段。
             if (today.failed) { item { Broken("没取到，不是没有内容。", onRefresh) }; return@LazyColumn }

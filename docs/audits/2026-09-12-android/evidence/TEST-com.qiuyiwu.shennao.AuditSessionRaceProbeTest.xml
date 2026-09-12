@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.qiuyiwu.shennao.AuditSessionRaceProbeTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-12T02:42:18" hostname="qiudeMacBook-Air.local" time="0.008">
+  <properties/>
+  <testcase name="refreshInFlightRestoresSignedOutCredentials" classname="com.qiuyiwu.shennao.AuditSessionRaceProbeTest" time="0.008"/>
+  <system-out><![CDATA[CONFIRMED refresh in flight + signOut -> refresh response restores old account credentials
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

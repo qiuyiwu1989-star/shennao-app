@@ -40,7 +40,7 @@ class DesignSystemTest {
         assertNull(stagePill(Stage.UNKNOWN))
         assertEquals("转写中" to Tone.INFO, stagePill(Stage.DELIVERED))
         assertEquals("分析中" to Tone.INFO, stagePill(Stage.TRANSCRIBED))
-        assertEquals("没成功" to Tone.RISK, stagePill(Stage.FAILED))
+        assertEquals("失败" to Tone.RISK, stagePill(Stage.FAILED))
     }
 
     @Test fun `不到一分钟不说 0 分钟`() {

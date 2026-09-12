@@ -137,6 +137,7 @@ private fun App(client: DeepBrainClient) {
     val scope = rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val cache = remember { Cache(java.io.File(ctx.cacheDir, "mobile")) }
+    var latestLine by remember { mutableStateOf<String?>(null) }
 
     /** 保住当前位置地取数：登录态还在的话，不要把人踢回「今天」。 */
     suspend fun load(keepNav: Boolean = true) {
@@ -152,6 +153,13 @@ private fun App(client: DeepBrainClient) {
             val (parsed, raw) = r.value
             withContext(Dispatchers.IO) { cache.save(Cache.TODAY, raw) }
             today = parsed
+            // 最近一次录音去哪了：本地目录 + 记录页上次存的那份（不多打一次网络）
+            latestLine = withContext(Dispatchers.IO) {
+                runCatching {
+                    val servedCached = cache.load(Cache.SESSIONS)?.let { SessionsParser.parse(it.body) } ?: emptyList()
+                    LatestLine.of(scanLocal(java.io.File(ctx.filesDir, "recordings")), servedCached)
+                }.getOrNull()
+            }
             st = AppState.Ready(nav)
             return
         }
@@ -358,6 +366,8 @@ private fun App(client: DeepBrainClient) {
                                 // 看到的是深脑的登录页，而他刚刚明明就在 App 里登着。
                                 onOpenTranscript = { tid -> go(nav.push(Route.Meeting(tid))) },
                                 onRecord = { go(nav.push(Route.Record)) },
+                                latestLine = latestLine,
+                                onOpenRecords = { go(nav.select(Tab.RECORDS)) },
                                 onRefresh = { scope.launch { load() } },
                                 staleLabel = stale,
                                 resetKey = settleReset,
@@ -399,6 +409,7 @@ private fun App(client: DeepBrainClient) {
                             onBack = { nav.pop()?.let { go(it) }; scope.launch { load() } },
                             onImport = { go(nav.push(Route.Ble)) },
                             onOpenHistory = { go(nav.select(Tab.RECORDS)) },
+                            onOpenSchedule = { go(nav.push(Route.Schedule)) },
                         )
 
                         is Route.Ble -> BleScreen(onDone = { go(nav.select(Tab.RECORDS)) }, client = client)
