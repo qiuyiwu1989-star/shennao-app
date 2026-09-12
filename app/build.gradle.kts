@@ -19,7 +19,7 @@ fun cfg(key: String, fallback: String = "") = localProps.getProperty(key) ?: fal
 
 android {
     namespace = "com.qiuyiwu.shennao"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.qiuyiwu.shennao"
@@ -28,9 +28,9 @@ android {
         // 那是录音应用天天在付的成本。代价是放弃 Android 8/9。
         minSdk = 29
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        targetSdk = 34
-        versionCode = 66
-        versionName = "4.9.0"
+        targetSdk = 35
+        versionCode = 67
+        versionName = "4.10.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "API_BASE", "\"${cfg("deepbrain.apiBase")}\"")
@@ -92,7 +92,7 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.9.1")
     // 冷启动闪屏。API 31 以下没有系统闪屏 API，这个库把两边接成一份代码。
     implementation("androidx.core:core-splashscreen:1.0.1")
-    implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+    implementation(platform("androidx.compose:compose-bom:2025.06.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")

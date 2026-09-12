@@ -162,8 +162,34 @@ internal val DarkColors = darkColorScheme(
  * 没有 SemiBold，会退成 Bold，所以不用 600。
  */
 private val Tnum = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
-private fun style(size: Int, line: Int, weight: FontWeight = FontWeight.Normal, tracking: Float = 0f, tnum: Boolean = false) =
+
+/*
+ * 拉丁字体与网页对齐（邱 2026-09-12 点头）：标题 Outfit（几何无衬线），正文 Plus Jakarta Sans。
+ * 中文字形这两套里没有，系统会自动退回中文字体——所以它们只影响数字、邮箱、英文名，
+ * 但这些恰恰是「像不像网页」最先被看见的地方（时间、积分、版本号）。
+ * 用可变字重的单文件：三档字重各声明一次，共 470 KB。
+ */
+/*
+ * 声明常规（400）和中等（500）两档并把 wght 轴钉住——Outfit 可变字体的默认实例是 Thin，
+ * 不钉轴「126」会发虚。**粗体故意不声明**：请求 Bold 时 Compose 找不到精确匹配就走合成
+ * （Typeface.create(tf, 700)），这条路系统会连**中文回退字形**一起加粗；一旦声明了 700 档，
+ * 拉丁是对了、中文标题却全变常规（2026-09-12 模拟器实录，三种写法都试过）。
+ */
+@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+private fun variable(res: Int, italic: Boolean = false) = listOf(FontWeight.Normal, FontWeight.Medium).map { w ->
+    androidx.compose.ui.text.font.Font(
+        res, w, if (italic) androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
+        variationSettings = androidx.compose.ui.text.font.FontVariation.Settings(androidx.compose.ui.text.font.FontVariation.weight(w.weight)),
+    )
+}
+private val Heading = androidx.compose.ui.text.font.FontFamily(variable(R.font.outfit))
+private val Body = androidx.compose.ui.text.font.FontFamily(
+    variable(R.font.plus_jakarta_sans) + variable(R.font.plus_jakarta_sans_italic, italic = true))
+
+private fun style(size: Int, line: Int, weight: FontWeight = FontWeight.Normal, tracking: Float = 0f, tnum: Boolean = false,
+                  family: androidx.compose.ui.text.font.FontFamily = Body) =
     TextStyle(
+        fontFamily = family,
         fontSize = size.sp, lineHeight = line.sp, fontWeight = weight,
         letterSpacing = tracking.sp,
         fontFeatureSettings = if (tnum) "tnum" else null,
@@ -176,13 +202,13 @@ private fun style(size: Int, line: Int, weight: FontWeight = FontWeight.Normal, 
 
 private val ShennaoTypography = Typography(
     /** 巨号。一屏最多一个，且它必须是那一屏的全部意义——目前只有录音时长。 */
-    headlineMedium = style(34, 40, FontWeight.Bold, tracking = -0.5f),
+    headlineMedium = style(34, 40, FontWeight.Bold, tracking = -0.5f, family = Heading),
     /** 页面标题。每屏一个。 */
-    headlineSmall  = style(28, 34, FontWeight.Bold, tracking = -0.3f),
+    headlineSmall  = style(28, 34, FontWeight.Bold, tracking = -0.3f, family = Heading),
     /** 分区标题：读出来的判断 / 分析。 */
-    titleLarge     = style(20, 28, FontWeight.Medium),
+    titleLarge     = style(20, 28, FontWeight.Medium, family = Heading),
     /** 卡片主行：人名、会议名。 */
-    titleMedium    = style(16, 22, FontWeight.Medium),
+    titleMedium    = style(16, 22, FontWeight.Medium, family = Heading),
     /** 列表行标题、tab。 */
     titleSmall     = style(15, 22, FontWeight.Medium),
 
