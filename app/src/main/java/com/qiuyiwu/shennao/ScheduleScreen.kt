@@ -9,6 +9,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import com.qiuyiwu.shennao.record.ListenSchedule
@@ -49,7 +54,10 @@ fun ScheduleScreen(onBack: () -> Unit) {
                         onClick = { cfg = cfg.copy(days = if (on) cfg.days - d else cfg.days + d) },
                         shape = CircleShape,
                         color = if (on) cs.primary else cs.surfaceVariant,
-                        modifier = Modifier.size(DS.Size.hit),
+                        // 圆里只有一个字，选没选全靠底色；读屏要念「周一，复选框，已勾选」
+                        modifier = Modifier.size(DS.Size.hit).semantics {
+                            role = Role.Checkbox; selected = on; contentDescription = "周$label"
+                        },
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(label, style = MaterialTheme.typography.titleSmall,
@@ -61,10 +69,10 @@ fun ScheduleScreen(onBack: () -> Unit) {
 
             SectionLabel("时段")
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TimeBox(ListenSchedule.clock(cfg.startMin), Modifier.weight(1f)) { picking = true }
+                TimeBox("开始时间", ListenSchedule.clock(cfg.startMin), Modifier.weight(1f)) { picking = true }
                 Text("–", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                      modifier = Modifier.padding(horizontal = DS.Rhythm.element))
-                TimeBox(ListenSchedule.clock(cfg.endMin), Modifier.weight(1f)) { picking = false }
+                TimeBox("结束时间", ListenSchedule.clock(cfg.endMin), Modifier.weight(1f)) { picking = false }
             }
             if (!cfg.valid) {
                 Spacer(Modifier.height(DS.Rhythm.tight))
@@ -116,8 +124,10 @@ fun ScheduleScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun TimeBox(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = DS.Radius.control, color = MaterialTheme.colorScheme.surfaceVariant, modifier = modifier) {
+private fun TimeBox(label: String, text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    // 框里只有「08:00」，读屏得知道这是开始还是结束、以及它能按
+    Surface(onClick = onClick, shape = DS.Radius.control, color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = modifier.semantics { role = Role.Button; contentDescription = "$label $text" }) {
         Box(Modifier.padding(DS.Pad.card), contentAlignment = Alignment.Center) {
             Text(text, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
         }

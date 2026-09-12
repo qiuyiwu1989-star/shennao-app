@@ -239,12 +239,19 @@ private fun CommitmentCard(c: Commitment, onSettle: (String, String) -> Unit, re
         Column(Modifier.padding(DS.Pad.card)) {
             // 头：谁、什么时候说的（紧贴成一组），右边一个词说期限
             Row(verticalAlignment = Alignment.Top) {
-                Column(Modifier.weight(1f)) {
-                    // 人名对得上档案就能点进人物页——那里有他的兑现率（012 P1-1）
-                    val pid = c.personId
+                // 人名对得上档案就能点进人物页——那里有他的兑现率（012 P1-1）。
+                // 可点的是「人名 + 元信息」这一列而不是单独那行字：一行 22dp 的字按不准，
+                // 而把它撑到 48 会把紧贴的副行推开；这一列本来就接近 48，撑一点看不出来。
+                val pid = c.personId
+                Column(
+                    Modifier.weight(1f).then(
+                        if (pid != null) Modifier.heightIn(min = DS.Size.hit)
+                            .clickable(role = androidx.compose.ui.semantics.Role.Button) { onOpenPerson(pid) }
+                        else Modifier
+                    ),
+                ) {
                     Text(c.speakerName, style = MaterialTheme.typography.titleMedium,
-                         color = if (pid != null) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface,
-                         modifier = if (pid != null) Modifier.clickable { onOpenPerson(pid) } else Modifier)
+                         color = if (pid != null) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface)
                     val meta = listOfNotNull(c.saidDate.takeIf { it.isNotBlank() }, c.context).joinToString(" · ")
                     if (meta.isNotEmpty()) {
                         Spacer(Modifier.height(DS.Rhythm.hair))
