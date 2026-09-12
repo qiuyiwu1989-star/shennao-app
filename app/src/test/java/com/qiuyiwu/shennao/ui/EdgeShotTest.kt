@@ -87,11 +87,11 @@ class EdgeShotTest {
 
     // 记录页 / 我的 / 会议 / 人物：不组合会自己取数的屏，直接喂「已加载态」（为什么见 ScreenshotTest）
     private val fixedNow = 1757073600000L   // 2026-09-05T12:00:00Z，周带钉在这一周
-    @Composable private fun records(client: DeepBrainClient, rows: List<LocalSession>) = HistoryLoaded(
+    @Composable private fun Records(client: DeepBrainClient, rows: List<LocalSession>) = HistoryLoaded(
         client, rows = rows, served = emptyList(), loaded = true, stale = null,
         card = CardStatus.read(), onRecord = {}, onOpen = {}, nowMs = { fixedNow },
     )
-    @Test fun `记录 空`() = shoot("records-empty") { records(offlineClient(), emptyList()) }
+    @Test fun `记录 空`() = shoot("records-empty") { Records(offlineClient(), emptyList()) }
     @Test fun `记录 卡住一条`() {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         val vault = com.qiuyiwu.shennao.record.FileVault(File(ctx.filesDir, "recordings"))
@@ -100,7 +100,7 @@ class EdgeShotTest {
         vault.writeMeta(s, vault.readMeta(s)!!)
         File(vault.segmentFile(s, com.qiuyiwu.shennao.record.Segment(0, 0, 796560, com.qiuyiwu.shennao.record.Segment.State.SEALED, ext = "opus")).path).writeBytes(ByteArray(10))
         val rows = scanLocal(File(ctx.filesDir, "recordings"))
-        shoot("records-stuck") { records(offlineClient(), rows) }
+        shoot("records-stuck") { Records(offlineClient(), rows) }
         vault.deleteSession(s)
     }
     @Test fun `我的 没网 长邮箱 大字号`() {
