@@ -340,7 +340,10 @@ fun MeetingLoaded(
                         Text(name, style = MaterialTheme.typography.bodyMedium,
                              fontWeight = FontWeight.Medium,
                              color = if (linked) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface,
-                             modifier = if (linked) Modifier.clickable { onOpenPerson!!(pid!!) } else Modifier)
+                             // 可点的人名要有 48dp 命中区：一行 21dp 的字在 FlowRow 里挨着排，按不准。
+                             // minimumInteractiveComponentSize 只把节点撑到 48，字还是那么大。
+                             modifier = if (linked) Modifier.minimumInteractiveComponentSize()
+                                 .clickable(role = androidx.compose.ui.semantics.Role.Button) { onOpenPerson!!(pid!!) } else Modifier)
                     }
                 }
             }

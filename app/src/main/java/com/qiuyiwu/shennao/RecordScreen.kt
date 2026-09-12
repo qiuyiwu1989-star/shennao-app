@@ -18,6 +18,10 @@ import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -307,12 +311,15 @@ fun RecordScreen(onBack: () -> Unit, onImport: () -> Unit = {}, onOpenHistory: (
 @Composable
 private fun RecordButton(recording: Boolean, stopping: Boolean, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
+    val label = if (stopping) "收尾中" else if (recording) "停止录音" else "开始录音"
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Surface(
             onClick = onClick,
             shape = CircleShape,
             color = if (recording) cs.error else cs.primary,
-            modifier = Modifier.size(DS.Size.recordButton),
+            // 圆里三种状态里有两种没有文字（方块、转圈），读屏只能靠这里的描述；
+            // 说「开始录音」不说「开始」——脱离画面听，「开始」不知道开始什么。
+            modifier = Modifier.size(DS.Size.recordButton).semantics { role = Role.Button; contentDescription = label },
         ) {
             Box(contentAlignment = Alignment.Center) {
                 when {
@@ -322,7 +329,7 @@ private fun RecordButton(recording: Boolean, stopping: Boolean, onClick: () -> U
                         Modifier.size(DS.Rhythm.inner)
                             .background(cs.onError, DS.Radius.tiny))
                     else -> androidx.compose.material3.Icon(
-                        MicOutlined, contentDescription = "开始", tint = cs.onPrimary,
+                        MicOutlined, contentDescription = null, tint = cs.onPrimary,   // 描述在 Surface 上
                         modifier = Modifier.size(DS.Size.iconLarge))
                 }
             }
@@ -643,7 +650,7 @@ private fun CaptureBoard(pending: Int, onOpenSchedule: (() -> Unit)?) {
                 val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
                     if (granted) RecordingService.listen(ctx)
                 }
-                androidx.compose.material3.Switch(checked = on, onCheckedChange = { want ->
+                DsSwitch("持续聆听", checked = on, onCheckedChange = { want ->
                     if (!want) RecordingService.stopListening(ctx)
                     else if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
                         RecordingService.listen(ctx)

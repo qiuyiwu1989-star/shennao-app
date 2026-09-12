@@ -541,7 +541,7 @@ private fun KnobRow(title: String, why: String, on: Boolean, onChange: (Boolean)
             Text(why, style = MaterialTheme.typography.bodySmall,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Switch(checked = on, onCheckedChange = onChange)
+        DsSwitch(title, checked = on, onCheckedChange = onChange)
     }
 }
 

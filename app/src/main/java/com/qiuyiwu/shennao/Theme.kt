@@ -1,6 +1,7 @@
 package com.qiuyiwu.shennao
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -60,14 +61,24 @@ private val NightGround  = Color(0xFF0F1115)
 private val NightCard    = Color(0xFF1C2029)
 private val NightInset   = Color(0xFF272C36)
 private val NightControl = Color(0xFF2F3541)
-private val NightLine    = Color(0xFF3C4351)
+// **控件边界档（暗色）。** 输入框的描边在深底上也得过 1.4.11 的 3:1：
+// 原 #3C4351 对 NightCard 只有 1.6，OutlinedTextField 的边框糊进底里，等于没画。
+// 提到 #6B7385 后对卡 3.4、对底 4.0。分隔线不走它（outlineVariant 仍是 NightInset），
+// 分隔线是装饰不是边界，可以淡。
+private val NightLine    = Color(0xFF6B7385)
+/**
+ * 暗色的次要文字。不用 ink-300：它在嵌块底 NightInset 上只有 4.3，在控件底 NightControl 上 3.8，
+ * 而次要文字有一半出现在嵌块和药丸里（正文档要 4.5）。提亮到 #9CA3B1 后三级底上分别 5.5 / 6.4 / 4.9，
+ * 又没亮到和主文字 ink-100 分不开（13.6 对 6.4，层级还在）。ContrastTest 钉着这几对。
+ */
+private val NightMuted   = Color(0xFF9CA3B1)
 /** 深底上的实心蓝：白字在它上面 4.1:1，够图标和按钮字。 */
 private val NightFocus     = Color(0xFF3D7BF0)
 /** 深底上的可点文字蓝：在 NightGround 上 8:1。实心和文字用两档是常规做法，一档兼顾不了。 */
 private val NightLink      = Color(0xFF8AB4F8)
 private val NightFocusSoft = Color(0xFF1B2A47)
 
-private val LightColors = lightColorScheme(
+internal val LightColors = lightColorScheme(
     /*
      * 主色 = 品牌蓝。以前是 ink-900（跟网页），但手机上只有一个实心按钮——
      * 「开始录」和右下角的话筒——它们该是同一个品牌色，黑的实心圆在一屏灰白里像个洞。
@@ -93,7 +104,9 @@ private val LightColors = lightColorScheme(
     surface            = Color.White,
     onSurface          = Ink800,
     onSurfaceVariant   = Ink400,      // 次要文字。全 App 用得最多的一个角色
-    outline            = Ink200,      // 输入框描边
+    // 输入框描边。ink-200 对白只有 1.4，边框看不见就没有别的线索告诉人「这里能打字」；
+    // ink-300 就是为这一档压出来的（见上面的注释），对白 3.2、对页面底 3.0，过 1.4.11。
+    outline            = Ink300,
     outlineVariant     = Ink100,      // 分隔线、卡片发丝边
     error              = RiskSolid,
     onError            = Color.White,
@@ -105,7 +118,7 @@ private val LightColors = lightColorScheme(
  * 暗色。**Web 端刻意不做暗色，移动端不能不做** —— 系统里有那个开关，
  * 用户切了之后期待 App 跟着变，不跟就是 App 的问题，不是用户的。
  */
-private val DarkColors = darkColorScheme(
+internal val DarkColors = darkColorScheme(
     primary            = NightFocus,
     onPrimary          = Color.White,
     primaryContainer   = NightFocusSoft,
@@ -124,7 +137,7 @@ private val DarkColors = darkColorScheme(
     onBackground       = Ink100,
     surface            = NightCard,
     onSurface          = Ink100,
-    onSurfaceVariant   = Ink300,
+    onSurfaceVariant   = NightMuted,  // 不是 ink-300，原因见 NightMuted
     outline            = NightLine,
     outlineVariant     = NightInset,
     error              = Color(0xFFF28B8B),
@@ -244,11 +257,17 @@ enum class Tone { NEUTRAL, OK, WARN, RISK, INFO, ACCENT }
 data class ToneColors(val bg: Color, val fg: Color)
 
 @Composable
-fun Tone.colors(): ToneColors {
-    val dark = LocalDark.current
-    val cs = MaterialTheme.colorScheme
+fun Tone.colors(): ToneColors = colors(LocalDark.current, MaterialTheme.colorScheme)
+
+/**
+ * 同一张表的纯函数版。拆出来是为了让 ContrastTest 不起 Compose 就能把每一对底/字算一遍——
+ * 对比度是色值的性质，不该非得渲染一次才能检查。
+ */
+fun Tone.colors(dark: Boolean, cs: ColorScheme): ToneColors {
     return when (this) {
-        Tone.NEUTRAL -> ToneColors(cs.surfaceVariant, cs.onSurfaceVariant)
+        // 中性字不用 onSurfaceVariant：浅色下 ink-400 对 ink-100 只有 4.4，NoticeBox 里的正文差一点到 4.5。
+        // ink-500 对 ink-100 是 5.7；暗色的 onSurfaceVariant（NightMuted）对控件底 4.9，够了。
+        Tone.NEUTRAL -> ToneColors(cs.surfaceVariant, if (dark) cs.onSurfaceVariant else Ink.c500)
         Tone.ACCENT  -> ToneColors(cs.secondaryContainer, cs.onSecondaryContainer)
         Tone.OK      -> if (dark) ToneColors(Color(0xFF13291F), Color(0xFF6EE7B7)) else ToneColors(StateColor.okSurface, StateColor.okText)
         Tone.WARN    -> if (dark) ToneColors(Color(0xFF2E2410), Color(0xFFFCD34D)) else ToneColors(StateColor.warnSurface, StateColor.warnText)

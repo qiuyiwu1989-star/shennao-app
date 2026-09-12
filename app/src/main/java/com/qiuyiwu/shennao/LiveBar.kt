@@ -7,6 +7,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import com.qiuyiwu.shennao.record.AlwaysOn
 import com.qiuyiwu.shennao.record.RecordingService
 import kotlinx.coroutines.delay
@@ -38,7 +41,9 @@ fun LiveBar(onClick: () -> Unit) {
         onClick = onClick, shape = DS.Radius.card,
         color = if (live) cs.primaryContainer else cs.surface,
         border = if (live || LocalDark.current) null else androidx.compose.foundation.BorderStroke(DS.Size.hairline, cs.outlineVariant),
-        modifier = Modifier.fillMaxWidth().padding(DS.Pad.screen).padding(top = DS.Rhythm.element),
+        // Surface(onClick) 不报角色；这一条整个是个按钮，读屏得知道
+        modifier = Modifier.fillMaxWidth().padding(DS.Pad.screen).padding(top = DS.Rhythm.element)
+            .semantics { role = Role.Button },
     ) {
         Row(Modifier.padding(DS.Pad.row), verticalAlignment = Alignment.CenterVertically) {
             Box(

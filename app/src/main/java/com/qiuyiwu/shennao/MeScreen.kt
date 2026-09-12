@@ -205,7 +205,7 @@ fun MeContent(
                     val ask = androidx.activity.compose.rememberLauncherForActivityResult(
                         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
                     ) { granted -> if (granted) com.qiuyiwu.shennao.record.RecordingService.listen(ctx) }
-                    Switch(checked = on, onCheckedChange = { want ->
+                    DsSwitch("全时聆听", checked = on, onCheckedChange = { want ->
                         if (!want) com.qiuyiwu.shennao.record.RecordingService.stopListening(ctx)
                         else if (androidx.core.content.ContextCompat.checkSelfPermission(
                                 ctx, android.Manifest.permission.RECORD_AUDIO

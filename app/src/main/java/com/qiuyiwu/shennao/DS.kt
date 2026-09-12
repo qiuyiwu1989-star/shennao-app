@@ -16,6 +16,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -168,7 +174,9 @@ fun DsRow(
 ) {
     val base = Modifier.fillMaxWidth().heightIn(min = DS.Size.hit)
     Row(
-        (if (onClick != null) base.clickable(onClick = onClick) else base).padding(DS.Pad.row),
+        // role = Button：clickable 会把整行合成一个读屏节点，但不说它是什么；
+        // 没有角色，TalkBack 只念标题和副标题，用户不知道这一行能按。
+        (if (onClick != null) base.clickable(role = Role.Button, onClick = onClick) else base).padding(DS.Pad.row),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (leading != null) { leading(); Spacer(Modifier.width(DS.Rhythm.element)) }
@@ -205,7 +213,9 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier, top: Boolean = tru
     Text(
         text, style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.sp),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.padding(top = if (top) DS.Rhythm.section else 0.dp, bottom = DS.Rhythm.tight),
+        // heading()：读屏用户靠「按标题跳」在长列表里找分区，没标成标题就只能一行一行往下听。
+        modifier = modifier.padding(top = if (top) DS.Rhythm.section else 0.dp, bottom = DS.Rhythm.tight)
+            .semantics { heading() },
     )
 }
 
@@ -213,7 +223,7 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier, top: Boolean = tru
 @Composable
 fun SectionHead(title: String, hint: String? = null) {
     Column(Modifier.padding(top = DS.Rhythm.section, bottom = DS.Rhythm.tight)) {
-        Text(title, style = MaterialTheme.typography.titleLarge)
+        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
         if (hint != null) {
             Spacer(Modifier.height(DS.Rhythm.hair))
             Text(hint, style = MaterialTheme.typography.bodyMedium,
@@ -359,6 +369,18 @@ fun IconAction(icon: ImageVector, label: String, onClick: () -> Unit, enabled: B
     }
 }
 
+/**
+ * 开关。`label` 是给读屏的：Switch 自己只会念「开 / 关」，不带它所属那一行的标题，
+ * 三个开关连着听就是「开、关、开」，不知道哪个是哪个。
+ */
+@Composable
+fun DsSwitch(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: Boolean = true) {
+    Switch(
+        checked = checked, onCheckedChange = onCheckedChange, enabled = enabled,
+        modifier = Modifier.semantics { contentDescription = label },
+    )
+}
+
 // ── 选择 ─────────────────────────────────────────────────────
 
 /**
@@ -372,7 +394,9 @@ fun DsChip(selected: Boolean, onClick: () -> Unit, label: String, modifier: Modi
     val fg = if (selected) cs.onSecondaryContainer else cs.onSurface
     Surface(
         onClick = onClick, shape = DS.Radius.pill, color = bg,
-        modifier = modifier.heightIn(min = 36.dp),
+        // 视觉 36dp，命中区由 Surface(onClick) 自带的 minimumInteractiveComponentSize 补到 48。
+        // 读屏：Surface 不报角色也不报选中态，选没选只靠底色——和 FilterChip 一样报成复选框。
+        modifier = modifier.heightIn(min = 36.dp).semantics { role = Role.Checkbox; this.selected = selected },
     ) {
         Box(Modifier.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
             Text(label, style = MaterialTheme.typography.labelLarge, color = fg,

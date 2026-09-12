@@ -10,6 +10,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import java.util.Calendar
 import java.util.TimeZone
@@ -68,8 +72,19 @@ fun WeekStrip(
             val on = k == selected
             val has = k in marked
             val isToday = k == todayKey
+            val day = Week.dayOfMonth(ms, zone)
             Column(
-                Modifier.clickable { onSelect(if (on) null else k) }.padding(vertical = DS.Rhythm.hair),
+                // 圆是 32dp，但命中区得有 48：七个圆挨着排，指头按在两个之间会点错天。
+                // 读屏：整列合成一个节点，说清「周几、几号、有没有录音、选没选」，别让它念三段散的数字。
+                Modifier
+                    .widthIn(min = DS.Size.hit)
+                    .semantics {
+                        contentDescription = "周${Week.weekdayLabel(i)} ${day} 日" +
+                            (if (isToday) "，今天" else "") + (if (has) "，有录音" else "")
+                        this.selected = on
+                    }
+                    .clickable(role = Role.Button) { onSelect(if (on) null else k) }
+                    .padding(vertical = DS.Rhythm.hair),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(Week.weekdayLabel(i), style = MaterialTheme.typography.labelMedium,
@@ -79,7 +94,7 @@ fun WeekStrip(
                     Modifier.size(DS.Size.iconLarge).background(if (on) cs.primary else cs.surfaceVariant, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(Week.dayOfMonth(ms, zone).toString(), style = MaterialTheme.typography.labelMedium,
+                    Text(day.toString(), style = MaterialTheme.typography.labelMedium,
                          color = if (on) cs.onPrimary else if (has) cs.onSurface else cs.onSurfaceVariant)
                 }
                 Spacer(Modifier.height(DS.Rhythm.hair))
@@ -104,7 +119,8 @@ object RecordsViewPref {
 @Composable
 fun TimelineRow(s: SessionCard, whenLabel: String?, onOpen: (String) -> Unit) {
     val open: (() -> Unit)? = s.transcriptId?.let { id -> { onOpen(id) } }
-    Column(Modifier.fillMaxWidth().then(if (open != null) Modifier.clickable(onClick = open) else Modifier)) {
+    // role = Button：一整行合成一个读屏节点后还得告诉人「这能按」
+    Column(Modifier.fillMaxWidth().then(if (open != null) Modifier.clickable(role = Role.Button, onClick = open) else Modifier)) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 val title = SessionTitles.display(s.title, whenLabel)

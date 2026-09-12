@@ -339,7 +339,8 @@ fun ServedRow(s: SessionCard, onOpen: (String) -> Unit, onDelete: ((String) -> U
     val open: (() -> Unit)? = s.transcriptId?.let { id -> { onOpen(id) } }
     Column(
         Modifier.fillMaxWidth()
-            .then(if (open != null) Modifier.clickable(onClick = open) else Modifier),
+            // role = Button：clickable 合并了整行的读屏节点，但不带角色，TalkBack 不会说「可按」
+            .then(if (open != null) Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = open) else Modifier),
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
