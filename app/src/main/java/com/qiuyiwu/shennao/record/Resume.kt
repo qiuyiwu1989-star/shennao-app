@@ -27,9 +27,9 @@ object Resume {
      */
     val lock = Any()
 
-    fun kick(ctx: Context) = synchronized(lock) {
+    fun kick(ctx: Context): Map<String, DrainResult> = synchronized(lock) {
         val vault = FileVault(File(ctx.filesDir, "recordings"))
-        if (vault.sessions().isEmpty()) return@synchronized
+        if (vault.sessions().isEmpty()) return@synchronized emptyMap()
         // 正在录音时不碰孤儿回收：它会去动当前这场还开着的文件。
         // 但推送照常——录音期间也要边录边传。
         if (!RecordingService.recording) Recorder(vault) {}.recoverOrphans()?.let { OrphanNotice.record(ctx, it) }
@@ -37,6 +37,18 @@ object Resume {
             Session.authFor(ctx, force)
         }.drainAll()
     }
+
+    /**
+     * WorkManager 要不要再来一次。
+     *
+     * 只数没传的段是不够的：段全传完、stop / finalize 撞上 503 时，段数是 0，
+     * Worker 就 success 了，收尾要等用户下次打开 App（2026-09-12 审计 A2）。
+     * 所以还要看这一轮的结果：还在推进（Progress）或可重试的失败，都得再来。纯逻辑，JVM 可测。
+     */
+    fun shouldRetry(results: Map<String, DrainResult>, pendingSegments: Int): Boolean =
+        pendingSegments > 0 || results.values.any {
+            it is DrainResult.Progress || (it is DrainResult.Failed && it.retryable)
+        }
 
     /** 还有多少段没送到深脑。给界面显示、也给 WorkManager 判断要不要再来一次。 */
     fun pending(ctx: Context): Int {

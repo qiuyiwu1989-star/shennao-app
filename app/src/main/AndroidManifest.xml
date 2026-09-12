@@ -19,6 +19,9 @@
          31 以下扫描仍然要定位权限——**这是最常被忘的一条**，
          漏了它扫描会返回空列表而不是报错，看起来就像「附近没有设备」。
          我们不用蓝牙推断位置，所以声明 neverForLocation。 -->
+    <!-- 安卓 10/11（API 29/30）还认旧的两条；没有它们连接直接失败（2026-09-12 审计 A4） -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />

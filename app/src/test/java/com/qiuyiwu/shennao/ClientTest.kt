@@ -92,6 +92,55 @@ class ClientTest {
         assertTrue("续 token 不该反复试，实际 $refreshes 次", refreshes <= 2)
     }
 
+    @Test fun `两条线程同时撞上 401——只续一次，后到的直接用先到的续好的`() {
+        // refresh token 是轮换的：续两次 = 第二次把第一次换回来的作废。2026-09-12 审计
+        val refreshes = java.util.concurrent.atomic.AtomicInteger()
+        val gate = java.util.concurrent.CountDownLatch(1)
+        val http = FakeHttp { _, url, h, _ ->
+            when {
+                url.contains("grant_type=refresh_token") -> {
+                    val n = refreshes.incrementAndGet()
+                    gate.await(2, java.util.concurrent.TimeUnit.SECONDS)   // 让两条线程都排到锁前
+                    HttpResponse(200, """{"access_token":"at$n","refresh_token":"rt$n"}""")
+                }
+                url.endsWith("/api/mobile/today") ->
+                    if (h["Authorization"] == "Bearer at0") HttpResponse(401, "") else HttpResponse(200, okToday)
+                else -> HttpResponse(404, "")
+            }
+        }
+        val store = MemStore(Credentials("rt0", "org-1", "a@b.c"))
+        val c = client(http, store)
+        val results = java.util.concurrent.ConcurrentLinkedQueue<ApiResult<*>>()
+        val t1 = Thread { results += c.today() }
+        val t2 = Thread { results += c.today() }
+        t1.start(); t2.start()
+        Thread.sleep(200); gate.countDown()
+        t1.join(5_000); t2.join(5_000)
+        assertTrue(results.all { it is ApiResult.Ok })
+        assertEquals("只该续一次", 1, refreshes.get())
+        assertEquals("存的是那一次换回来的", "rt1", store.c?.refreshToken)
+    }
+
+    @Test fun `续期飞着的时候退出登录——迟到的应答不能把上一个账号写回来`() {
+        // 2026-09-12 审计 A3
+        val gate = java.util.concurrent.CountDownLatch(1)
+        val http = FakeHttp { _, url, _, _ ->
+            if (url.contains("grant_type=refresh_token")) {
+                gate.await(3, java.util.concurrent.TimeUnit.SECONDS)
+                HttpResponse(200, """{"access_token":"at-late","refresh_token":"rt-late"}""")
+            } else HttpResponse(404, "")
+        }
+        val store = MemStore(Credentials("rt0", "org-1", "a@b.c"))
+        val c = client(http, store)
+        val t = Thread { c.validAccessToken() }
+        t.start(); Thread.sleep(150)
+        c.signOut()
+        assertNull(store.c)
+        gate.countDown(); t.join(5_000)
+        assertNull("退出之后什么都不该写回", store.c)
+        assertNull(c.validAccessToken())
+    }
+
     @Test fun `refresh token 轮换后要存新的——否则下次登不上`() {
         val store = MemStore(Credentials("old-rt", "org-1", "a@b.c"))
         val http = FakeHttp { _, url, _, _ ->

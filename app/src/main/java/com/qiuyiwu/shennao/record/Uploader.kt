@@ -191,6 +191,12 @@ class Uploader(
             "POST", "$apiBase/api/recordings/$sid/stop", h,
             JSONObject(mapOf("durationMs" to totalMs, "expectedChunkCount" to ready.size)).toString(),
         )
+        /*
+         * status 0 = 请求根本没送出去（UrlHttp 把所有异常收成 0）。它不是 >= 400，
+         * 以前会一路当成功走到 finalize、再把本地目录删掉——飞机模式下停一场录音，
+         * 深脑那边没冻结、手机这边音频已经没了（2026-09-12 审计）。
+         */
+        if (stop.status == 0) return DrainResult.Failed("网络不通，收尾等有网再做", true)
 
         /*
          * 服务端说清单不全时，**它会告诉我们缺哪几片**（missingSequences）。
@@ -221,6 +227,7 @@ class Uploader(
             return DrainResult.Failed("收尾没成（${stop.status}）", stop.status >= 500)
         }
         val fin = http.request("POST", "$apiBase/api/recordings/$sid/finalize", h, "{}")
+        if (fin.status == 0) return DrainResult.Failed("网络不通，收尾等有网再做", true)
         if (fin.status >= 400 && !fin.body.contains("INVALID_STATE")) {
             return DrainResult.Failed("收尾没成（${fin.status}）", fin.status >= 500)
         }
@@ -353,7 +360,7 @@ class Uploader(
 
         val put = if (file != null) http.requestFile("PUT", url, mapOf("Content-Type" to seg.mimeType), file)
                   else http.requestBytes("PUT", url, mapOf("Content-Type" to seg.mimeType), bytes!!)
-        if (put.status >= 400) {
+        if (put.status == 0 || put.status >= 400) {
             return StepResult.Err("第 ${seg.sequence} 段传到一半断了（${put.status}）", true)
         }
 
@@ -361,6 +368,8 @@ class Uploader(
             "POST", "$apiBase/api/recordings/$sid/chunks/${seg.sequence}/complete", h, "{}",
         )
         if (ok.status == 401) return StepResult.Err("登录失效了", true, authExpired = true)
+        // 0 = 没送出去。字节在不在深脑不知道，改名就是赌——下一轮 ticket 会给 409 已验证或重新发。
+        if (ok.status == 0) return StepResult.Err("第 ${seg.sequence} 段传完了但没确认上（网络不通）", true)
         if (ok.status >= 400) {
             return StepResult.Err("第 ${seg.sequence} 段传完了但没确认上（${ok.status}）", ok.status >= 500)
         }

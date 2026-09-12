@@ -422,15 +422,21 @@ class RecordingService : Service() {
     private suspend fun drainUntilEmpty() {
         repeat(40) {                       // 最多试 40 轮（约 10 分钟），之后交给下次启动
             drainOnce()
-            if (pendingSegments == 0) {
-                pump?.cancel()
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-                return
-            }
+            if (pendingSegments == 0) { finishIfIdle(); return }
             delay(15_000)
         }
-        pump?.cancel()
+        finishIfIdle()
+    }
+
+    /**
+     * 传完了：没在听就退出服务；在听就只把录音泵收掉，服务留着。
+     *
+     * 2026-09-12 审计：全时聆听收掉第一场之后走的也是这条路，以前这里无条件 stopSelf()，
+     * 服务一死 onDestroy 就把聆听关了——「全时」只活到第一句话传完。
+     */
+    private fun finishIfIdle() {
+        pump?.cancel(); pump = null
+        if (alwaysOn != null) return
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

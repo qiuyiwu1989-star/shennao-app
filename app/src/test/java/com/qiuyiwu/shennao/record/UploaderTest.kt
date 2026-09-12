@@ -251,6 +251,44 @@ class UploaderTest {
         assertEquals("必须还停在待上传", Segment.State.SEALED, v.segments("s").single().state)
     }
 
+    // ---- 网络没通（status 0）不是成功。2026-09-12 审计 ----
+
+    private fun dropAt(step: String) = ScriptHttp { _, url, _ ->
+        when {
+            url.endsWith(step) -> HttpResponse(0, "网络错误")
+            url.endsWith("/api/recordings") -> HttpResponse(200, CREATED)
+            url.contains("/chunks/ticket") -> HttpResponse(200, TICKET)
+            url.startsWith("https://cos.test") -> HttpResponse(200, "")
+            url.endsWith("/complete") -> HttpResponse(200, "{}")
+            url.endsWith("/stop") -> HttpResponse(200, "{}")
+            url.endsWith("/finalize") -> HttpResponse(200, "{}")
+            else -> HttpResponse(404, "")
+        }
+    }
+
+    @Test fun `确认那一步网络没通——不许改名，留着下轮再试`() {
+        val v = MemVault().apply { metas["s"] = meta(finished = true); put("s", seg(0, Segment.State.SEALED)) }
+        val r = uploader(v, dropAt("/complete")).drain("s")
+        assertTrue("$r", r is DrainResult.Failed && r.retryable)
+        assertEquals(Segment.State.SEALED, v.segments("s").single().state)
+    }
+
+    @Test fun `stop 那一步网络没通——不能接着 finalize、更不能删本地`() {
+        val v = MemVault().apply { metas["s"] = meta(finished = true); put("s", seg(0, Segment.State.SEALED)) }
+        val h = dropAt("/stop")
+        val r = uploader(v, h).drain("s")
+        assertTrue("$r", r is DrainResult.Failed && r.retryable)
+        assertFalse("没 stop 成就不该 finalize", h.log.any { it.endsWith("/finalize") })
+        assertTrue("本地必须还在", v.deleted.isEmpty())
+    }
+
+    @Test fun `finalize 那一步网络没通——本地必须还在`() {
+        val v = MemVault().apply { metas["s"] = meta(finished = true); put("s", seg(0, Segment.State.SEALED)) }
+        val r = uploader(v, dropAt("/finalize")).drain("s")
+        assertTrue("$r", r is DrainResult.Failed && r.retryable)
+        assertTrue(v.deleted.isEmpty())
+    }
+
     @Test fun `死在 finalize 之后、删本地之前——重跑认出已收尾，清干净而不是报错`() {
         val v = MemVault().apply {
             metas["s"] = meta(finished = true, sid = "sess-1")

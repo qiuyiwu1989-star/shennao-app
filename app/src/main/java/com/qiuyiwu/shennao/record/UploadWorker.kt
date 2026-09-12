@@ -20,9 +20,9 @@ import java.util.concurrent.TimeUnit
 class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
 
     override suspend fun doWork(): Result {
-        val pending = try {
-            Resume.kick(applicationContext)
-            Resume.pending(applicationContext)
+        val again = try {
+            val results = Resume.kick(applicationContext)
+            Resume.shouldRetry(results, Resume.pending(applicationContext))
         } catch (e: Exception) {
             // 抛出来当可重试处理。WorkManager 会按退避再来一次，
             // 而失败返回 Result.failure() 是永久放弃——那会把录音留在手机上没人管。
@@ -30,7 +30,7 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
         }
         // 还有剩就让 WorkManager 按退避再来。不自己循环重试：
         // 自己转圈会在没网时一直占着唤醒锁，而系统比我们更清楚什么时候该重试。
-        return if (pending > 0) Result.retry() else Result.success()
+        return if (again) Result.retry() else Result.success()
     }
 
     companion object {

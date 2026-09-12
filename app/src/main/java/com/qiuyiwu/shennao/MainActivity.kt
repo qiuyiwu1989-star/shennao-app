@@ -429,6 +429,10 @@ private fun App(client: DeepBrainClient) {
                             },
                             onSignOut = {
                                 client.signOut()
+                                // 网页版那页的 cookie 罐里是一整份登录态，退出必须一起倒掉：
+                                // 不然换个账号登进来，「网页版」打开的还是上一个人（2026-09-12 审计）
+                                runCatching { android.webkit.CookieManager.getInstance().removeAllCookies(null) }
+                                runCatching { android.webkit.WebStorage.getInstance().deleteAllData() }
                                 // 换账号不能带着上一个账号的东西：离线缓存、「已经通知过的判断」、
                                 // 「今天提醒过」都清掉（012 P0-10）。凭证之外的本机记忆都归这里。
                                 cache.clear()

@@ -6,6 +6,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 
 /*
@@ -29,7 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 @Composable
 fun SkeletonList(rows: Int = 3) {
     Column(
-        Modifier.fillMaxWidth().padding(DS.Pad.screen),
+        Modifier.fillMaxWidth().padding(DS.Pad.screen).testTag("loading"),
         verticalArrangement = Arrangement.spacedBy(DS.Rhythm.element),
     ) {
         repeat(rows) { i ->
@@ -60,7 +61,8 @@ private fun Bar(fraction: Float) {
 
 @Composable
 fun Loading() {
-    Box(Modifier.fillMaxWidth().padding(DS.Rhythm.block), Alignment.Center) {
+    // testTag：截图测试等它消失再拍。取数在 IO 线程上，不等就会拍到半截（2026-09-12 一张基准图就是这么错的）
+    Box(Modifier.fillMaxWidth().padding(DS.Rhythm.block).testTag("loading"), Alignment.Center) {
         CircularProgressIndicator(strokeWidth = DS.Size.rule)
     }
 }

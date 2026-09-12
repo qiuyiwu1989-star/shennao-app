@@ -67,7 +67,9 @@ class DeepBrainClient(
     private val supabaseAnonKey: String,
 ) {
     /** 当前这次会话的 access token。进程内缓存，不落盘——它几十分钟就过期。 */
-    private var accessToken: String? = null
+    @Volatile private var accessToken: String? = null
+    /** 登录代际。退出登录 +1；正在飞的续期回来时代际不对，就当没发生（2026-09-12 审计 A3：迟到的续期把退出撤销了）。 */
+    @Volatile private var epoch = 0
 
     /**
      * 用邮箱密码换 refresh token。
@@ -123,16 +125,29 @@ class DeepBrainClient(
         return arr.optJSONObject(0)?.optString("org_id")?.takeIf { it.isNotBlank() }
     }
 
-    /** 用 refresh token 换一个新的 access token。 */
-    private fun refresh(): Boolean {
+    /**
+     * 用 refresh token 换一个新的 access token。
+     *
+     * 加锁，而且拿到锁之后先看一眼：界面和上传器可能同时撞上 401，各自来续。
+     * refresh token 是轮换的——两个线程拿同一个旧 token 去续，第二个会把第一个换回来的作废，
+     * 表现是「用着用着突然要重新登录」（2026-09-12 审计）。先到的续，后到的直接用它续好的。
+     */
+    @Synchronized
+    private fun refresh(stale: String? = null): Boolean {
         val c = store.load() ?: return false
+        val cur = accessToken
+        if (cur != null && cur != stale) return true
+        val gen = epoch
         val r = http.request(
             "POST", "$supabaseUrl/auth/v1/token?grant_type=refresh_token",
             mapOf("apikey" to supabaseAnonKey, "Content-Type" to "application/json"),
             JSONObject(mapOf("refresh_token" to c.refreshToken)).toString(),
         )
-        if (r.status >= 400) return false
-        val o = runCatching { JSONObject(r.body) }.getOrNull() ?: return false
+        // 请求飞着的时候用户退出了：这份应答是上一个账号的，一个字都不能写回
+        if (gen != epoch) return false
+        // 续不上：把作废的那个丢掉，别让调用方拿着它再撞一次 401
+        if (r.status >= 400) { if (accessToken == stale) accessToken = null; return false }
+        val o = runCatching { JSONObject(r.body) }.getOrNull() ?: run { if (accessToken == stale) accessToken = null; return false }
         accessToken = o.optString("access_token").takeIf { it.isNotBlank() }
         // refresh token 会轮换。服务端换了新的还用旧的，下次就登不上了。
         o.optString("refresh_token").takeIf { it.isNotBlank() }?.let {
@@ -170,7 +185,7 @@ class DeepBrainClient(
         )
         var r = once()
         if (r.status == 401) {
-            if (!refresh()) return ApiResult.Unauthorized
+            if (!refresh(stale = accessToken)) return ApiResult.Unauthorized
             r = once()
         }
         if (r.status >= 400) return ApiResult.Failed("热词没存上（${r.status}）")
@@ -205,7 +220,7 @@ class DeepBrainClient(
             ), "{}",
         )
         var r = once()
-        if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
+        if (r.status == 401) { if (!refresh(stale = accessToken)) return ApiResult.Unauthorized; r = once() }
         // 409 = 还没分析完。说清楚，用户会去等，而不是反复点。
         if (r.status == 409) return ApiResult.Failed("这场会还没分析完，分析完才能分享")
         if (r.status >= 400) return ApiResult.Failed("生成链接失败（${r.status}）")
@@ -293,7 +308,7 @@ class DeepBrainClient(
             JSONObject(mapOf("refreshToken" to c.refreshToken)).toString(),
         )
         var r = once()
-        if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
+        if (r.status == 401) { if (!refresh(stale = accessToken)) return ApiResult.Unauthorized; r = once() }
         if (r.status >= 400) return ApiResult.Failed("打不开网页版（${r.status}）")
         return runCatching {
             val t = JSONObject(r.body).optString("ticket")
@@ -359,7 +374,7 @@ class DeepBrainClient(
             JSONObject().put("title", title).toString(),
         )
         var r = once()
-        if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
+        if (r.status == 401) { if (!refresh(stale = accessToken)) return ApiResult.Unauthorized; r = once() }
         if (r.status == 0) return ApiResult.Failed("网络不通")
         if (r.status == 404 || r.status == 405) return ApiResult.Failed("改名要等深脑升级后才能用")
         if (r.status >= 400) return ApiResult.Failed("没改上（${r.status}）")
@@ -394,7 +409,7 @@ class DeepBrainClient(
                   "Content-Type" to "application/json"), body,
         )
         var r = once()
-        if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
+        if (r.status == 401) { if (!refresh(stale = accessToken)) return ApiResult.Unauthorized; r = once() }
         if (r.status == 0) return ApiResult.Failed("网络不通")
         if (r.status >= 400) {
             val why = runCatching {
@@ -418,7 +433,7 @@ class DeepBrainClient(
             ), "{}",
         )
         var r = once()
-        if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
+        if (r.status == 401) { if (!refresh(stale = accessToken)) return ApiResult.Unauthorized; r = once() }
         if (r.status >= 400) {
             val why = runCatching { JSONObject(r.body).optString("error") }.getOrNull()
             return ApiResult.Failed(why?.takeIf { it.isNotBlank() } ?: "排不上（${r.status}）")
@@ -440,7 +455,7 @@ class DeepBrainClient(
             mapOf("Authorization" to "Bearer ${accessToken ?: ""}", "x-deepbrain-org-id" to c.orgId),
         )
         var r = once()
-        if (r.status == 401) { if (!refresh()) return ApiResult.Unauthorized; r = once() }
+        if (r.status == 401) { if (!refresh(stale = accessToken)) return ApiResult.Unauthorized; r = once() }
         // 404 = 已经不在了，也算达成目的
         return if (r.status < 400 || r.status == 404) ApiResult.Ok(Unit)
                else ApiResult.Failed("删不掉（${r.status}）")
@@ -474,7 +489,7 @@ class DeepBrainClient(
         )
         var r = once()
         if (r.status == 401) {
-            if (!refresh()) return ApiResult.Unauthorized
+            if (!refresh(stale = accessToken)) return ApiResult.Unauthorized
             r = once()
         }
         if (r.status == 409) return ApiResult.Failed("这条已经记过了")
@@ -504,7 +519,7 @@ class DeepBrainClient(
         )
         var r = once()
         if (r.status == 401) {
-            if (!refresh()) return ApiResult.Unauthorized
+            if (!refresh(stale = accessToken)) return ApiResult.Unauthorized
             r = once()
         }
         return when {
@@ -526,8 +541,8 @@ class DeepBrainClient(
     fun validAccessToken(force: Boolean = false): String? {
         // force=true 是「刚才那个被服务端拒了」。必须先丢掉旧的再续——
         // 不丢的话下面那个判空会直接把已经作废的 token 又还回去。
-        if (force) accessToken = null
-        if (accessToken == null) refresh()
+        if (force) refresh(stale = accessToken)
+        else if (accessToken == null) refresh()
         return accessToken
     }
 
@@ -536,7 +551,7 @@ class DeepBrainClient(
     fun credentials(): Credentials? = store.load()
 
     fun signedInEmail(): String? = store.load()?.email
-    fun signOut() { accessToken = null; store.clear() }
+    fun signOut() { epoch++; accessToken = null; store.clear() }
 
     /**
      * 这个账号加入的所有组织。走 Supabase REST：memberships 自己能读（memberships_self_select），
