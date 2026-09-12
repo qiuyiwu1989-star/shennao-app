@@ -6,3 +6,6 @@ local.properties
 *.aab
 .idea/
 dist/
+
+# Kotlin 2.x 编译守护进程的本地状态/错误日志
+.kotlin/
