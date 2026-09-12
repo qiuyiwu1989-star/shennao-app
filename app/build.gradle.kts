@@ -29,8 +29,8 @@ android {
         minSdk = 29
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         targetSdk = 35
-        versionCode = 67
-        versionName = "4.10.0"
+        versionCode = 68
+        versionName = "4.10.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "API_BASE", "\"${cfg("deepbrain.apiBase")}\"")
@@ -54,8 +54,17 @@ android {
     }
 
     buildTypes {
+        debug {
+            // 本机冒烟用：`./gradlew installDebug -PsmokeMinify` 装一个开了 R8 的调试包，
+            // 在夹具模式把每一屏走一遍——正式包的混淆问题在这里先撞出来（V5 §5）。
+            isMinifyEnabled = project.hasProperty("smokeMinify")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
         release {
-            isMinifyEnabled = false
+            // 2026-09-12 开 R8：规则在 proguard-rules.pro；夹具模式冒烟过，真机真实账号回归由邱做
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // 没配密钥时不要静默退回 debug 签名——那种 APK 发出去，
             // 下次换了正式签名所有人都得卸载重装。宁可构建失败。
             signingConfig = if (cfg("shennao.ksPath").isNotBlank())

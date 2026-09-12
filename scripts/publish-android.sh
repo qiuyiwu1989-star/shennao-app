@@ -53,6 +53,9 @@ ok "签名与线上一致"
 # ── 4. 清单 ─────────────────────────────────────────────────────────
 OUT="$ROOT/dist"; mkdir -p "$OUT"
 cp "$APK" "$OUT/$FILE"
+# R8 开了之后崩溃栈是混淆过的：每版的 mapping 留在 dist/（不进仓，不上传），反馈问题时拿它还原
+MAPPING="$ROOT/app/build/outputs/mapping/release/mapping.txt"
+[ -f "$MAPPING" ] && cp "$MAPPING" "$OUT/mapping-$VERSION_NAME.txt"
 SIZE=$(stat -f %z "$OUT/$FILE")
 SHA=$(shasum -a 256 "$OUT/$FILE" | awk '{print $1}')
 cat > "$OUT/latest.json" <<JSON
