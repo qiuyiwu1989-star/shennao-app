@@ -61,6 +61,8 @@ class AlwaysOn(
     private val gate = VoiceGate(frameMs = frameMs, hangoverMs = hangoverMs, minSpeechMs = minSpeechMs)
     /** 上一场是到 60 分钟切掉的，不是说完了：下一场一开口就起，不再等 20 秒 */
     @Volatile private var rollover = false
+    /** 正录着的这一场是接着上一场切过来的：门没熬满 20 秒时的 DISCARD 不算数，只认 CLOSE */
+    @Volatile private var continuedFromRollover = false
     private val running = AtomicBoolean(false)
     private var thread: Thread? = null
 
@@ -146,6 +148,9 @@ class AlwaysOn(
                 if (e == VoiceGate.Event.DISCARD) ring.clear()   // 一声咳嗽，忘掉它
                 // 起录的条件不是「开口了」，是「开口了并且说够了」。
                 if (gate.state == VoiceGate.State.SPEAKING && (gate.voicedMsSoFar >= minSpeechMs || rollover)) {
+                    // 到点切下一场起的那一场，门还没熬过 20 秒：它随后的 DISCARD 不能把这场收掉——
+                    // 2026-09-13 实录：60 分钟切场后紧跟一场 7 秒的，就是被 DISCARD 收的。
+                    continuedFromRollover = rollover
                     rollover = false
                     handedOver = handOver(mic, ring)
                     return
@@ -192,7 +197,7 @@ class AlwaysOn(
         var left = ms
         while (left > 0 && !shouldEnd) {
             val e = gate.feed(lvl)
-            if (e == VoiceGate.Event.CLOSE || e == VoiceGate.Event.DISCARD) shouldEnd = true
+            if (e == VoiceGate.Event.CLOSE || (e == VoiceGate.Event.DISCARD && !continuedFromRollover)) shouldEnd = true
             left -= frameMs
         }
     }
@@ -208,6 +213,7 @@ class AlwaysOn(
         recorder.onFrame = null
         if (recorder.isRecording) end()      // 静够了（或到点了）：收这一场，它自己会传上去
         shouldEnd = false
+        continuedFromRollover = false
         phase = Phase.LISTENING
     }
 
