@@ -91,10 +91,16 @@ class CardStatusTest {
         assertEquals("灵魂卡 · 已连接，没有待同步的", of(com.qiuyiwu.shennao.ble.BleState.READY).line)
     }
 
-    @Test fun `真失败才用警示色，并且带原因`() {
-        val c = of(com.qiuyiwu.shennao.ble.BleState.FAILED, err = "蓝牙没开")
+    @Test fun `用户自己连才算失败：警示色，一句该做什么，不带代码`() {
+        val c = of(com.qiuyiwu.shennao.ble.BleState.FAILED, err = "连接超时（8）")
         assertTrue(c.attention)
-        assertTrue(c.line.contains("蓝牙没开"))
+        assertTrue(c.line, c.line.contains("没连上") && !c.line.contains("8"))
+    }
+
+    @Test fun `后台自动找卡没找到不算失败：灰字「不在附近」`() {
+        val c = of(com.qiuyiwu.shennao.ble.BleState.FAILED, err = null)
+        assertFalse(c.attention)
+        assertTrue(c.line, c.line.contains("不在附近"))
     }
 }
 

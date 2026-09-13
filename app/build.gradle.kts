@@ -29,8 +29,8 @@ android {
         minSdk = 29
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         targetSdk = 35
-        versionCode = 73
-        versionName = "4.12.0"
+        versionCode = 74
+        versionName = "4.12.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "API_BASE", "\"${cfg("deepbrain.apiBase")}\"")

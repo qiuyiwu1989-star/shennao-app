@@ -472,7 +472,8 @@ fun SessionRow(s: LocalSession, onRetry: (() -> Unit)? = null, onDelete: () -> U
                      modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(DS.Rhythm.element))
                 when {
-                    s.recording > 0 -> Pill("正在录", Tone.ACCENT)
+                    s.recording > 0 && s.dir == com.qiuyiwu.shennao.record.RecordingService.currentLocalSession -> Pill("正在录", Tone.ACCENT)
+                    s.recording > 0 -> Pill("收尾中", Tone.INFO)
                     stuck != null -> Pill("卡住了", Tone.WARN)
                     s.meta.finished -> Pill("在传", Tone.INFO)
                     else -> Pill("等待收尾")
@@ -558,8 +559,11 @@ data class CardStatus(val line: String, val busy: Boolean, val attention: Boolea
             syncTotal: Int,
             lastError: String?,
         ): CardStatus = when {
+            // 只有用户自己点了连接才算「没连上」；后台自动找不到卡是常态，灰字一句「不在附近」就够
+            conn == com.qiuyiwu.shennao.ble.BleState.FAILED && lastError != null ->
+                CardStatus("灵魂卡 · 没连上，点一下再试", busy = false, attention = true)
             conn == com.qiuyiwu.shennao.ble.BleState.FAILED ->
-                CardStatus("灵魂卡 · " + (lastError ?: "连不上"), busy = false, attention = true)
+                CardStatus("灵魂卡 · 不在附近", busy = false, attention = false)
             conn == com.qiuyiwu.shennao.ble.BleState.SCANNING ||
                 conn == com.qiuyiwu.shennao.ble.BleState.CONNECTING ->
                 CardStatus("正在找灵魂卡…", busy = true, attention = false)

@@ -108,8 +108,11 @@ class BleImportService : Service() {
         fun resume(ctx: Context) = send(ctx, ACTION_RESUME)
 
         fun scan(ctx: Context) = send(ctx, ACTION_SCAN)
-        fun connect(ctx: Context, address: String) =
-            send(ctx, ACTION_CONNECT) { it.putExtra(EXTRA_ADDRESS, address) }
+        fun connect(ctx: Context, address: String, quiet: Boolean = false) =
+            send(ctx, ACTION_CONNECT) { it.putExtra(EXTRA_ADDRESS, address); it.putExtra(EXTRA_QUIET, quiet) }
+        private const val EXTRA_QUIET = "quiet"
+        /** 这次连接是后台自动发起的：失败不算事故，不留 lastError，不给红字 */
+        @Volatile private var quietAttempt = false
         fun list(ctx: Context) = send(ctx, ACTION_LIST)
         fun download(ctx: Context, name: String) =
             send(ctx, ACTION_DOWNLOAD) { it.putExtra(EXTRA_FILE, name) }
@@ -160,6 +163,10 @@ class BleImportService : Service() {
         importer = imp
         gatt.observeState {
             conn = it; lastError = gatt.lastError
+            if (it == BleState.FAILED && quietAttempt) {
+                // 后台自动找卡没找到（走远了、休眠了）：静静退回去，不让记录页顶上冒红字（邱 2026-09-13）
+                lastError = null; conn = BleState.IDLE; quietAttempt = false
+            } else if (it == BleState.READY) quietAttempt = false
             if (it == BleState.READY) {
                 // 刚连上：先对表，再问三个数。
                 // 对表是因为灵魂卡的文件名带录音时刻，它的钟偏了整条时间轴都跟着偏。
@@ -203,6 +210,7 @@ class BleImportService : Service() {
             }
             ACTION_CONNECT -> {
                 gatt.stopScan()
+                quietAttempt = intent.getBooleanExtra(EXTRA_QUIET, false)
                 intent.getStringExtra(EXTRA_ADDRESS)?.let {
                     connectedAddress = it
                     gatt.connect(it)

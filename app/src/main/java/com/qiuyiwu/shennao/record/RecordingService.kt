@@ -58,6 +58,8 @@ class RecordingService : Service() {
          */
         @Volatile private var recorderRef: Recorder? = null
         val elapsedMs: Long get() = recorderRef?.elapsedMs ?: 0L
+        /** 正在录的那场的本地目录名。记录页据此只给它一个「正在录」，别的没封完的叫「收尾中」 */
+        val currentLocalSession: String? get() = recorderRef?.currentSession
 
         /** 当前音量 0..1。给声波用——它是「确实在录到声音」的唯一直观证据。 */
         val level: Float get() = recorderRef?.level ?: 0f
@@ -415,6 +417,10 @@ class RecordingService : Service() {
     }
 
     private fun drainOnce() {
+        // 结束了的场留下的没封的尾段，每轮先补封（recoverOrphans 会跳过正在录的那场）。
+        // 以前只在开始录音时补一次；聆听一开就是一天，中途结束的场留下的尾段没人管，
+        // 记录页上三场同时「正在录」、昨晚那场卡在「等待收尾」，都是它（邱 2026-09-13 截图）。
+        runCatching { synchronized(Resume.lock) { recorder.recoverOrphans() } }
         // 走同一把锁：WorkManager 那条路也在推同一批文件
         // 崩了要留痕迹：以前这里静默返回，一场传不上去的录音在日志里一个字都没有。
         val results = runCatching { synchronized(Resume.lock) { uploader.drainAll() } }

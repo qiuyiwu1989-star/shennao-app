@@ -185,7 +185,7 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
             BleState.CONNECTING -> "正在连接…"
             BleState.READY -> "已连上"
             BleState.DISCONNECTED -> "连接断了"
-            BleState.FAILED -> "连不上"
+            BleState.FAILED -> "没连上"
             else -> "长按卡上的 ON/OFF 一秒开机，然后点「查找灵魂卡」"
         },
         isEmpty = false,
@@ -323,12 +323,10 @@ fun BleScreen(onDone: () -> Unit, client: DeepBrainClient? = null) {
             }
             // 连接失败的真实原因。Android 的 GATT 只给一个 status 数字，
             // 不翻出来的话用户只知道「连不上」，而 133 和 8 要做的事完全不同。
-            if (conn == BleState.FAILED) BleImportService.lastError?.let { e -> item {
-                Surface(color = MaterialTheme.colorScheme.errorContainer, shape = DS.Radius.card) {
-                    Text(e, Modifier.padding(DS.Pad.tight),
-                         style = MaterialTheme.typography.bodySmall,
-                         color = MaterialTheme.colorScheme.onErrorContainer)
-                }
+            // 没连上就说一句该做什么，不解释代码（邱 2026-09-13：不要给用户展示复杂的解释）。
+            // 具体原因（133 / 8 之类）进诊断包，反馈问题时能看到。
+            if (conn == BleState.FAILED) BleImportService.lastError?.let { item {
+                NoticeBox("没连上。把卡放近一点，按一下它的按键，再点「查找灵魂卡」。", Tone.WARN)
             } }
 
             // 只列我们的设备；别人的收起来（邱 2026-09-12）。判据见 OurDevices。

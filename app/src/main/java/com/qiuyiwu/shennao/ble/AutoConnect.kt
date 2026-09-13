@@ -63,7 +63,7 @@ object AutoConnect {
                 if (BleImportService.running) return null   // 用户自己进灵魂卡页在操作：让开
                 pick(known, found.values.toList())?.let { addr ->
                     gatt.stopScan()
-                    BleImportService.connect(ctx, addr)
+                    BleImportService.connect(ctx, addr, quiet = true)
                     return addr
                 }
             }
