@@ -248,6 +248,8 @@ data class SessionCard(
      * 同一条录音在手机上说「已分析」、在网页上说「没沉下判断」。
      */
     val progress: Progress? = null,
+    /** 内容类型：conversation / monologue / ai_chat / no_speech。服务端转写后判的；老服务端没有 → null（2026-09-13） */
+    val kind: String? = null,
 )
 
 data class MeetingAtom(
@@ -329,6 +331,7 @@ object SessionsParser {
                         label = h.optString("label").ifBlank { "这一条" },
                     )
                 },
+                kind = o.optString("kind").takeIf { it.isNotBlank() && it != "null" },
                 progress = o.optJSONObject("progress")?.let { g ->
                     val label = g.optString("label").takeIf { it.isNotBlank() } ?: return@let null
                     Progress(

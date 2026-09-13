@@ -101,4 +101,16 @@ class DesignSystemTest {
         assertNull(skippedShort(card(Stage.ANALYZED, 45_000)))
         assertNull(skippedShort(card(Stage.DELIVERED, 45_000)))
     }
+
+    // ── 内容类型（2026-09-13）──
+    @Test fun `服务端判成和 AI 的对话——不管多长都说默认没分析，药丸叫「和 AI 的对话」`() {
+        val s = SessionCard("s", "x", null, 1_500_000, Stage.TRANSCRIBED, null, "t", kind = "ai_chat")
+        val p = skippedShort(s)!!
+        assertTrue(p.label, p.label.startsWith("像是和 AI 的对话")); assertTrue(p.retriable)
+        assertEquals("和 AI 的对话", Kinds.pill("ai_chat"))
+    }
+    @Test fun `判成对话的长录音照常「分析中」`() {
+        assertNull(skippedShort(SessionCard("s", "x", null, 1_500_000, Stage.TRANSCRIBED, null, "t", kind = "conversation")))
+        assertNull(Kinds.pill("conversation")); assertNull(Kinds.pill(null))
+    }
 }

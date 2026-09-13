@@ -146,8 +146,8 @@ fun TimelineRow(s: SessionCard, whenLabel: String?, onOpen: (String) -> Unit) {
                     Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            // 太短没分析的不叫「分析中」（V5 1.6 的判据）
-            (if (skippedShort(s) != null) "没分析" to Tone.NEUTRAL else stagePill(s.stage))
+            // 太短 / 一个人说 / 和 AI 的对话：默认没分析的不叫「分析中」
+            (if (skippedShort(s) != null) (Kinds.pill(s.kind) ?: "没分析") to Tone.NEUTRAL else stagePill(s.stage))
                 ?.let { (label, tone) -> Spacer(Modifier.width(DS.Rhythm.element)); Pill(label, tone) }
         }
         val summary = s.highlight?.text?.takeIf { it.isNotBlank() }
@@ -173,7 +173,7 @@ object LatestLine {
         val where = when (s.stage) {
             Stage.RECORDED -> "等转写"
             Stage.DELIVERED -> "转写中"
-            Stage.TRANSCRIBED -> if (skippedShort(s) != null) "没分析（太短）" else "分析中"
+            Stage.TRANSCRIBED -> if (skippedShort(s) != null) "没分析（${Kinds.pill(s.kind) ?: "太短"}）" else "分析中"
             Stage.ANALYZED -> "分析完了"
             Stage.FAILED -> "失败了"
             Stage.UNKNOWN -> "送到了"

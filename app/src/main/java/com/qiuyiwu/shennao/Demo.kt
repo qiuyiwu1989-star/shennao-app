@@ -74,6 +74,7 @@ object Demo {
       {"sessionId":"s3","title":"飞书导出 · 客户访谈","startedAt":"2026-09-03T08:10:00Z","durationMs":2400000,"stage":"delivered","transcriptId":null,"captureClient":"android","source":"share","highlight":{"kind":"contradiction","text":"客户说预算充足，但采购流程要走到 11 月。","speaker":null,"label":"有分歧"},"progress":{"stage":"uploading","label":"传了 62%","ratio":0.62,"retriable":false}},
       {"sessionId":"s5","title":"艺术家周会","startedAt":"2026-09-02T05:51:00Z","durationMs":2900000,"stage":"analyzed","transcriptId":"t1","captureClient":"android","source":"card","highlight":{"kind":"summary","text":"围绕 AI 绘画工具迭代、主题画作评审、团队近期工作排布明确落地要求。","speaker":null,"label":"总结"}},
       {"sessionId":"s4","title":"手机录音","startedAt":"2026-09-01T01:00:00Z","durationMs":45000,"stage":"transcribed","transcriptId":"t4","captureClient":"android","source":"phone"},
+      {"sessionId":"s7","title":"随手录 9月1日 10:20","startedAt":"2026-09-01T02:20:00Z","durationMs":1500000,"stage":"transcribed","transcriptId":"t7","captureClient":"android","source":"phone","kind":"ai_chat"},
       {"sessionId":"s6","title":"note20260829-140354","startedAt":"2026-08-29T06:03:00Z","durationMs":796000,"stage":"failed","problem":"这场录音传上来的音频读不出时长，多半是传到一半断了。重录一次，或者从灵魂卡再导一次。","transcriptId":null,"captureClient":"android","source":"card"}]}
     """.trimIndent()
 

@@ -416,9 +416,29 @@ internal fun toCardItem(s: SessionCard): MaterialCardItem = MaterialCardItem(
  * 服务端带了 progress 就用服务端的（V5 1.6）。纯逻辑，JVM 可测。
  */
 internal fun skippedShort(s: SessionCard): Progress? {
+    if (s.stage != Stage.TRANSCRIBED || s.transcriptId == null) return null
+    // 服务端判了类型的先按类型说（2026-09-13 邱：AI 对话、自言自语默认不分析）
+    Kinds.skipReason(s.kind)?.let { return Progress(stage = "skipped", label = "${it}要的话点一下，会用积分。", ratio = null, retriable = true) }
     val d = s.durationMs ?: return null
-    if (s.stage != Stage.TRANSCRIBED || s.transcriptId == null || d <= 0 || d >= SHORT_MS) return null
+    if (d <= 0 || d >= SHORT_MS) return null
     return Progress(stage = "skipped", label = "不到 5 分钟，默认没分析。要的话点一下，会用积分。", ratio = null, retriable = true)
+}
+
+/** 内容类型怎么称呼。纯逻辑，JVM 可测。 */
+internal object Kinds {
+    /** 时间线 / 最近一次那里用的短词；conversation 和不知道的不标 */
+    fun pill(kind: String?): String? = when (kind) {
+        "monologue" -> "一个人说"
+        "ai_chat" -> "和 AI 的对话"
+        "no_speech" -> "没人声"
+        else -> null
+    }
+    /** 默认没分析的原因，一句话，后面接「要的话点一下」 */
+    fun skipReason(kind: String?): String? = when (kind) {
+        "monologue" -> "只有一个人在说，默认没分析。"
+        "ai_chat" -> "像是和 AI 的对话，默认没分析。"
+        else -> null
+    }
 }
 internal const val SHORT_MS = 5 * 60_000L
 
