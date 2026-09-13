@@ -49,7 +49,7 @@ class AlwaysOnTest {
 
     // ── 起录与收尾的判据 ──────────────────────────────────────
 
-    /** 全时聆听用的那套参数：100 毫秒一帧、说满 20 秒才起、静 10 分钟算说完（邱 2026-09-12：别切太碎） */
+    /** 全时聆听用的那套参数：100 毫秒一帧、说满 20 秒才起、静 20 分钟算说完（邱 2026-09-12：别切太碎） */
     private fun gate() = VoiceGate(frameMs = 100, hangoverMs = AlwaysOn.HANGOVER_MS, minSpeechMs = AlwaysOn.MIN_SPEECH_MS)
 
     private fun feed(g: VoiceGate, level: Float, ms: Int) {
@@ -81,22 +81,22 @@ class AlwaysOnTest {
         assertFalse("两秒的停顿是句子内部的停顿，不是说完了", ended)
     }
 
-    @Test fun `静够十分钟才收尾——中间去倒杯水不算说完`() {
+    @Test fun `静够二十分钟才收尾——中间去倒杯水不算说完`() {
         val g = gate()
         feed(g, 0.02f, 2_000)
         feed(g, 0.6f, 30_000)
         var closedAt = -1
-        for (i in 1..7_000) {
+        for (i in 1..13_000) {
             if (g.feed(0.02f) == VoiceGate.Event.CLOSE) { closedAt = i * 100; break }
         }
-        assertEquals("应该正好在静 10 分钟时收尾", AlwaysOn.HANGOVER_MS, closedAt)
+        assertEquals("应该正好在静 20 分钟时收尾", AlwaysOn.HANGOVER_MS, closedAt)
     }
 
     @Test fun `收尾之后能再起一场，不是一次性的`() {
         val g = gate()
         feed(g, 0.02f, 2_000)
         feed(g, 0.6f, 30_000)
-        repeat(6_000) { g.feed(0.02f) }          // 静 10 分钟，收尾
+        repeat(12_000) { g.feed(0.02f) }         // 静 20 分钟，收尾
         assertEquals(VoiceGate.State.SILENT, g.state)
         feed(g, 0.6f, 21_000)                     // 又有人说话
         assertEquals(VoiceGate.State.SPEAKING, g.state)
@@ -107,16 +107,16 @@ class AlwaysOnTest {
         val g = gate()
         feed(g, 0.02f, 2_000)                     // 安静两秒：不计
         feed(g, 0.6f, 30_000)                     // 说 30 秒
-        repeat(6_000) { g.feed(0.02f) }           // 静 10 分钟收尾：静音不计
+        repeat(12_000) { g.feed(0.02f) }          // 静 20 分钟收尾：静音不计
         // 计的是「出声 + 前置缓冲」，前置缓冲那段音频确实留下并转写了
-        assertTrue("应该在 30 秒上下，不是 10 分半", g.speechMs in 30_000..31_000)
+        assertTrue("应该在 30 秒上下，不是 20 分半", g.speechMs in 30_000..31_000)
     }
 
     @Test fun `咳嗽不计费`() {
         val g = gate()
         feed(g, 0.02f, 2_000)
         feed(g, 0.6f, 3_000)
-        repeat(6_000) { g.feed(0.02f) }           // 静够，这一段判为噪声
+        repeat(12_000) { g.feed(0.02f) }          // 静够，这一段判为噪声
         assertEquals("一声咳嗽不该收钱", 0L, g.speechMs)
     }
 

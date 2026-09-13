@@ -43,17 +43,22 @@ class AlwaysOn(
     private val begin: (adopt: AudioRecord, preroll: ByteArray) -> String?,
     /** 收一场录音。由调用方去走停止、上传那一路 */
     private val end: () -> Unit,
-    /** 静多久算这一场结束。邱 2026-09-12：「一分钟一分钟地录没意义，切得太碎」——从 40 秒改成 10 分钟 */
+    /** 静多久算这一场结束。邱 2026-09-12：「切得太碎」，40 秒 → 10 分钟；09-13 再定 20 分钟 */
     hangoverMs: Int = HANGOVER_MS,
     /** 连续说满多久才起一场。咳嗽、关门、单句应答不再开场 */
     private val minSpeechMs: Int = MIN_SPEECH_MS,
-    /** 一场最长多久，到点自动切下一场（接着录，不丢话头） */
+    /** 一场最长多久，到点自动切下一场（接着录，不丢话头）。现在不封顶，这条路留着 */
     private val maxSessionMs: Long = MAX_SESSION_MS,
 ) {
     companion object {
-        const val HANGOVER_MS = 10 * 60_000
+        /** 邱 2026-09-13 定：安静 20 分钟算一场结束 */
+        const val HANGOVER_MS = 20 * 60_000
         const val MIN_SPEECH_MS = 20_000
-        const val MAX_SESSION_MS = 60 * 60_000L
+        /**
+         * 邱 2026-09-13 定：一场不封顶。代价是很长的一场要等它整个结束才开始转写分析；
+         * 服务端转写按分件跑，几个小时的一场能处理，但出稿会晚。
+         */
+        const val MAX_SESSION_MS = Long.MAX_VALUE
     }
     /** 听着的时候多久读一次。100 毫秒：前置缓冲的颗粒度，也是判开口的颗粒度 */
     private val frameMs = 100
